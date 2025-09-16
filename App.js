@@ -1,10 +1,14 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View } from 'react-native';
 import ContainerBurger from "./components/ContainerBurger";
+import Header from "./components/Header";
 
 export default function App() {
   return (
     <View style={styles.container}>
+        <View style={styles.header}>
+            <Header />
+        </View>
         <View style={[styles.flex_row, styles.gap_sm]}>
             <ContainerBurger/>
             <ContainerBurger/>
