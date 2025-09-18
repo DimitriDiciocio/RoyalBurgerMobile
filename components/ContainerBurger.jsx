@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, StyleSheet, Image, Text } from 'react-native';
-import DivisorDot from 'assets/divisor_dot.svg'
 
 export default function ContainerBurger({ }) {
   return (
@@ -15,7 +14,6 @@ export default function ContainerBurger({ }) {
           <Text style={styles.price}>R$50,00</Text>
           <View style={styles.flex_row}>
             <Text style={styles.time}>40 - 50 min</Text>
-            <DivisorDot></DivisorDot>
           </View>
         </View>
       </View>
