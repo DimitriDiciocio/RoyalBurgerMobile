@@ -1,15 +1,14 @@
 import React from 'react';
 import {TouchableOpacity, View, Text, StyleSheet, Image} from 'react-native';
 
-export default function LoginButton({navigation}) {
-    const handlePress = () => {
-        navigation.navigate('Login');
-    };
+export default function LoginButton({ navigation }) {
+//    const handlePress = () => {
+//        navigation.navigate('Login');
+//    };
 
     return (
         <TouchableOpacity
             style={styles.bigButton}
-            onPress={handlePress}
         >
             <View style={styles.buttonContent}>
                 <Image
@@ -52,6 +51,7 @@ const styles = StyleSheet.create({
     buttonContentText: {
         flex: 1,
         justifyContent: 'flex-start',
+        marginLeft: 12,
     },
     buttonText: {
         color: '#101010',
