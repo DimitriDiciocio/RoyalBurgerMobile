@@ -1,9 +1,10 @@
-import {StatusBar} from 'expo-status-bar';
-import {StyleSheet, View, ScrollView} from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { StyleSheet, View } from 'react-native';
 import Header from "./components/Header";
 import CarouselImg from "./components/CarouselImg";
 import LoginButton from "./components/ButtonView";
 import ViewCardItem from "./components/ViewCardItem";
+import MenuCategory from "./components/MenuCategory";
 
 export default function App() {
     const mostOrderedData = [
@@ -13,9 +14,10 @@ export default function App() {
             price: "R$ 25,90",
             deliveryTime: "30 - 40 min",
             deliveryPrice: "R$ 5,00",
-            imageSource: {uri: "https://exemplo.com/burger1.jpg"}
+            imageSource: { uri: "https://exemplo.com/burger1.jpg" }
         },
     ];
+
     const promotionsData = [
         {
             title: "Combo Especial",
@@ -23,9 +25,10 @@ export default function App() {
             price: "R$ 28,90",
             deliveryTime: "35 - 45 min",
             deliveryPrice: "R$ 4,00",
-            imageSource: {uri: "https://exemplo.com/combo1.jpg"}
+            imageSource: { uri: "https://exemplo.com/combo1.jpg" }
         },
     ];
+
     const comboData = [
         {
             title: "Combo Especial",
@@ -33,7 +36,7 @@ export default function App() {
             price: "R$ 28,90",
             deliveryTime: "35 - 45 min",
             deliveryPrice: "R$ 4,00",
-            imageSource: {uri: "https://exemplo.com/combo1.jpg"}
+            imageSource: { uri: "https://exemplo.com/combo1.jpg" }
         },
         {
             title: "Hambúrguer Clássico",
@@ -41,62 +44,66 @@ export default function App() {
             price: "R$ 25,90",
             deliveryTime: "30 - 40 min",
             deliveryPrice: "R$ 5,00",
-            imageSource: {uri: "https://exemplo.com/burger1.jpg"}
+            imageSource: { uri: "https://exemplo.com/burger1.jpg" }
         },
     ];
 
-    // Configurar quando a promoção termina
     const promoEndTime = new Date();
-    promoEndTime.setHours(promoEndTime.getHours() + 1); // Expira em 2 horas
+    promoEndTime.setHours(promoEndTime.getHours() + 1);
 
-    // Função para quando a promoção expirar
     const handlePromoExpire = () => {
         console.log('Promoção expirou!');
-        // Aqui você pode esconder a seção, atualizar dados, etc.
     };
+
+    // ✅ Conteúdo sections
+    const renderPromotionalHeader = () => (
+        <View style={styles.promotionalContent}>
+            <View style={styles.carouselImg}>
+                <CarouselImg />
+            </View>
+
+            <ViewCardItem
+                title="Os mais pedidos"
+                data={mostOrderedData}
+            />
+
+            <ViewCardItem
+                title="Em promoção"
+                data={promotionsData}
+                promoTimer={{
+                    endTime: promoEndTime,
+                    onExpire: handlePromoExpire
+                }}
+            />
+
+            <ViewCardItem
+                title="Combos"
+                data={comboData}
+            />
+        </View>
+    );
 
     return (
         <View style={styles.container}>
+            {/* ✅ Header principal fixo */}
             <View style={styles.header}>
-                <Header/>
+                <Header />
             </View>
-            <ScrollView
-                style={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContainer}
-            >
-                <View style={styles.carouselImg}>
-                    <CarouselImg/>
-                </View>
 
-                {/* Seção "Os mais pedidos" */}
-                <ViewCardItem
-                    title="Os mais pedidos"
-                    data={mostOrderedData}
+            {/* ✅ MenuCategory ocupa o espaço disponível */}
+            <View style={styles.menuContainer}>
+                <MenuCategory
+                    ListHeaderComponent={renderPromotionalHeader}
+                    showFixedButton={true}
                 />
+            </View>
 
-                {/* Seção "Promoções" */}
-                <ViewCardItem
-                    title="Em promoção"
-                    data={promotionsData}
-                    promoTimer={{
-                        endTime: promoEndTime,
-                        onExpire: handlePromoExpire
-                    }}
-                />
-
-                {/* Seção combos */}
-                <ViewCardItem
-                    title="Combos"
-                    data={comboData}
-                />
-
-                <View style={styles.bottomPadding}/>
-            </ScrollView>
+            {/* ✅ Botão fixo */}
             <View style={styles.fixedButtonContainer}>
-                <LoginButton/>
+                <LoginButton />
             </View>
-            <StatusBar style="auto"/>
+
+            <StatusBar style="auto" />
         </View>
     );
 }
@@ -105,24 +112,27 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F6F6F6',
-    }, scrollContent: {
-        flex: 1,
-    }, scrollContainer: {
-        gap: 10,
-        paddingTop: 10,
-    }, header: {
-        position: 'fixed',
-        zIndex: 1,
+    },
+    header: {
+        position: 'absolute',
+        zIndex: 1001,
         top: 0,
         left: 0,
         right: 0,
-    }, flex_row: {
-        flexDirection: 'row',
-    }, gap_sm: {
-        gap: 10,
-    }, bottomPadding: {
-        height: 100,
-    }, fixedButtonContainer: {
+    },
+    menuContainer: {
+        flex: 1,
+        marginTop: 105,
+    },
+    promotionalContent: {
+        backgroundColor: '#F6F6F6',
+        paddingTop: 10,
+    },
+    carouselImg: {
+        marginTop: -50,
+        marginBottom: 10,
+    },
+    fixedButtonContainer: {
         position: 'absolute',
         bottom: 10,
         left: 0,
@@ -131,5 +141,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
         paddingBottom: 20,
+        zIndex: 999,
     },
 });
