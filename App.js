@@ -1,12 +1,18 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Header from "./components/Header";
 import CarouselImg from "./components/CarouselImg";
 import LoginButton from "./components/ButtonView";
 import ViewCardItem from "./components/ViewCardItem";
 import MenuCategory from "./components/MenuCategory";
+import Login from "./screens/login";
+import Cadastro from "./screens/cadastro";
 
-export default function App() {
+const Stack = createNativeStackNavigator();
+
+function HomeScreen({ navigation }) {
     const mostOrderedData = [
         {
             title: "Hambúrguer Clássico",
@@ -55,7 +61,7 @@ export default function App() {
         console.log('Promoção expirou!');
     };
 
-    // ✅ Conteúdo sections
+    // Conteúdo sections
     const renderPromotionalHeader = () => (
         <View style={styles.promotionalContent}>
             <View style={styles.carouselImg}>
@@ -85,12 +91,27 @@ export default function App() {
 
     return (
         <View style={styles.container}>
-            {/* ✅ Header principal fixo */}
+            {/* Header principal fixo */}
             <View style={styles.header}>
-                <Header />
+                <Header 
+                    navigation={navigation} 
+                    type="home"
+                    // Exemplo de como seria para usuário logado:
+                    // type="logged"
+                    // userInfo={{
+                    //     name: "João Silva",
+                    //     points: "1,250",
+                    //     avatar: require('./assets/img/user-avatar.png')
+                    // }}
+                    // rightButton={
+                    //     <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+                    //         <Text>Sair</Text>
+                    //     </TouchableOpacity>
+                    // }
+                />
             </View>
 
-            {/* ✅ MenuCategory ocupa o espaço disponível */}
+            {/* MenuCategory ocupa o espaço disponível */}
             <View style={styles.menuContainer}>
                 <MenuCategory
                     ListHeaderComponent={renderPromotionalHeader}
@@ -98,13 +119,37 @@ export default function App() {
                 />
             </View>
 
-            {/* ✅ Botão fixo */}
+            {/* Botão fixo */}
             <View style={styles.fixedButtonContainer}>
-                <LoginButton />
+                <LoginButton navigation={navigation} />
             </View>
 
             <StatusBar style="auto" />
         </View>
+    );
+}
+
+export default function App() {
+    return (
+        <NavigationContainer>
+            <Stack.Navigator initialRouteName="Home">
+                <Stack.Screen 
+                    name="Home" 
+                    component={HomeScreen}
+                    options={{ headerShown: false }}
+                />
+                <Stack.Screen 
+                    name="Login" 
+                    component={Login}
+                    options={{ headerShown: false }}
+                />
+                <Stack.Screen 
+                    name="Cadastro" 
+                    component={Cadastro}
+                    options={{ headerShown: false }}
+                />
+            </Stack.Navigator>
+        </NavigationContainer>
     );
 }
 

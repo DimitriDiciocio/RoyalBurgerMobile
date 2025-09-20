@@ -2,13 +2,14 @@ import React from 'react';
 import {TouchableOpacity, View, Text, StyleSheet, Image} from 'react-native';
 
 export default function LoginButton({ navigation }) {
-//    const handlePress = () => {
-//        navigation.navigate('Login');
-//    };
+    const handlePress = () => {
+        navigation.navigate('Login');
+    };
 
     return (
         <TouchableOpacity
             style={styles.bigButton}
+            onPress={handlePress}
         >
             <View style={styles.buttonContent}>
                 <Image

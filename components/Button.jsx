@@ -1,9 +1,9 @@
 import {StyleSheet, View, Text, TouchableOpacity} from 'react-native';
 
-export default function ButtonDark({ texto }) {
+export default function ButtonDark({ texto, onPress }) {
     return (
         <View>
-            <TouchableOpacity style={[styles.buttonDark]} onPress={() => {}}>
+            <TouchableOpacity style={[styles.buttonDark]} onPress={onPress}>
                 <Text style={[styles.textoBnt]} > {texto} </Text>
             </TouchableOpacity>
         </View>

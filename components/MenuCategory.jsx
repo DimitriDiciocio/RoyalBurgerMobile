@@ -190,18 +190,34 @@ export default function MenuCategory({
         );
 
         if (headerIndex !== -1) {
-            flatListRef.current?.scrollToIndex({
-                index: headerIndex,
-                animated: true,
-                viewOffset: 70,
-            });
+            try {
+                flatListRef.current?.scrollToIndex({
+                    index: headerIndex,
+                    animated: true,
+                    viewOffset: 70,
+                });
+            } catch (error) {
+                // Fallback para scrollToOffset se scrollToIndex falhar
+                flatListRef.current?.scrollToOffset({
+                    offset: headerIndex * 200, // Estimativa aproximada
+                    animated: true,
+                });
+            }
         }
 
-        categoryListRef.current?.scrollToIndex({
-            index: categoryIndex,
-            animated: true,
-            viewPosition: 0.5,
-        });
+        try {
+            categoryListRef.current?.scrollToIndex({
+                index: categoryIndex,
+                animated: true,
+                viewPosition: 0.5,
+            });
+        } catch (error) {
+            // Fallback para scrollToOffset se scrollToIndex falhar
+            categoryListRef.current?.scrollToOffset({
+                offset: categoryIndex * 120, // Estimativa aproximada
+                animated: true,
+            });
+        }
     };
 
     // Detectar quando mostrar header sticky com animação
@@ -224,6 +240,18 @@ export default function MenuCategory({
         }
     };
 
+    // Função para tratar falhas no scrollToIndex
+    const onScrollToIndexFailed = (info) => {
+        const wait = new Promise(resolve => setTimeout(resolve, 500));
+        wait.then(() => {
+            flatListRef.current?.scrollToIndex({
+                index: info.index,
+                animated: true,
+                viewOffset: 70,
+            });
+        });
+    };
+
     // Detectar mudança de categoria automaticamente
     const handleViewableItemsChanged = ({ viewableItems }) => {
         if (viewableItems.length > 0) {
@@ -237,11 +265,19 @@ export default function MenuCategory({
                     setActiveCategory(newActiveCategory);
 
                     // Animação suave na mudança de categoria
-                    categoryListRef.current?.scrollToIndex({
-                        index: newActiveCategory,
-                        animated: true,
-                        viewPosition: 0.5
-                    });
+                    try {
+                        categoryListRef.current?.scrollToIndex({
+                            index: newActiveCategory,
+                            animated: true,
+                            viewPosition: 0.5
+                        });
+                    } catch (error) {
+                        // Fallback para scrollToOffset se scrollToIndex falhar
+                        categoryListRef.current?.scrollToOffset({
+                            offset: newActiveCategory * 120, // Estimativa aproximada
+                            animated: true,
+                        });
+                    }
                 }
             }
         }
@@ -330,7 +366,7 @@ export default function MenuCategory({
 
     return (
         <View style={styles.container}>
-            {/* ✅ Lista principal */}
+            {/* Lista principal */}
             <FlatList
                 ref={flatListRef}
                 data={flattenedData}
@@ -339,6 +375,7 @@ export default function MenuCategory({
                 onScroll={handleScroll}
                 scrollEventThrottle={16}
                 onViewableItemsChanged={handleViewableItemsChanged}
+                onScrollToIndexFailed={onScrollToIndexFailed}
                 ListHeaderComponent={ListHeaderComponent}
                 contentContainerStyle={[
                     styles.listContent,
@@ -350,7 +387,7 @@ export default function MenuCategory({
                 showsVerticalScrollIndicator={false}
             />
 
-            {/* ✅ Header sticky animado */}
+            {/* Header sticky animado */}
             <AnimatedStickyHeader />
         </View>
     );
@@ -392,7 +429,7 @@ const styles = StyleSheet.create({
         marginRight: 15,
         minWidth: 100,
         borderRadius: 20,
-        // ✅ Transição suave
+        // Transição suave
         backgroundColor: 'transparent',
     },
     activeCategoryTab: {
