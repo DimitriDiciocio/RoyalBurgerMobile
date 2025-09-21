@@ -3,6 +3,8 @@
     import { SvgXml } from 'react-native-svg';
     import Header from "../components/Header";
     import Input from "../components/Input";
+    import IngredienteMenu from "../components/IngredienteMenuSemLogin";
+    import LoginButton from "../components/ButtonView";
 
     const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M5.29385 9.29365C4.90322 9.68428 4.90322 10.3187 5.29385 10.7093L11.2938 16.7093C11.6845 17.0999 12.3188 17.0999 12.7095 16.7093C13.1001 16.3187 13.1001 15.6843 12.7095 15.2937L7.41572 9.9999L12.7063 4.70615C13.097 4.31553 13.097 3.68115 12.7063 3.29053C12.3157 2.8999 11.6813 2.8999 11.2907 3.29053L5.29072 9.29053L5.29385 9.29365Z" fill="black"/>
@@ -42,7 +44,7 @@
                     />
                 </View>
 
-                <ScrollView>
+                <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
                     <View style={styles.headerRow}>
                         <TouchableOpacity
                             style={styles.backButton}
@@ -109,8 +111,45 @@
                      
                      <View style={styles.customizeContainer}>
                          <Text style={styles.produtoTitle}>Monte do seu jeito!</Text>
+                         
+                         <IngredienteMenu
+                             nome="Pão Superior"
+                             valorExtra={0.00}
+                             imagem={require('../assets/img/hamburguerIcon.png')}
+                         />
+                         
+                         <IngredienteMenu
+                             nome="Bacon"
+                             valorExtra={0.00}
+                             imagem={require('../assets/img/baconIcon.png')}
+                         />
+                         
+                         <IngredienteMenu
+                             nome="Queijo Cheedar"
+                             valorExtra={0}
+                             imagem={require('../assets/img/chedarIcon.png')}
+                         />
+                        <IngredienteMenu
+                             nome="Carne"
+                             valorExtra={0}
+                             imagem={require('../assets/img/carneIcon.png')}
+                         />
+                        <IngredienteMenu
+                             nome="Ketchup"
+                             valorExtra={0}
+                             imagem={require('../assets/img/ketchupIcon.png')}
+                         />
+                        <IngredienteMenu
+                             nome="Pão Inferior"
+                             valorExtra={0}
+                             imagem={require('../assets/img/paoIcon.png')}
+                         />
                      </View>
-                    </ScrollView>
+                     </ScrollView>
+                     
+                    <View style={styles.fixedButtonContainer}>
+                        <LoginButton navigation={navigation} />
+                    </View>
                 <View>
                     
                 </View>
@@ -177,7 +216,7 @@
          },
          arrowContainer: {
              marginLeft: 10,
-             marginTop: 2,
+             marginTop: 12,
          },
          arrowRight: {
              transform: [{ scaleX: -1 }],
@@ -189,8 +228,25 @@
              width: '100%',
              height: 20,
          },
-         customizeContainer: {
-             margin: 20,
-             marginTop: 10,
-         },
+        customizeContainer: {
+            margin: 20,
+            marginTop: 10,
+        },
+        scrollView: {
+            flex: 1,
+        },
+        scrollContent: {
+            paddingBottom: 100,
+        },
+        fixedButtonContainer: {
+            position: 'absolute',
+            bottom: 10,
+            left: 0,
+            right: 0,
+            backgroundColor: 'transparent',
+            paddingHorizontal: 16,
+            paddingVertical: 12,
+            paddingBottom: 20,
+            zIndex: 999,
+        },
     });
