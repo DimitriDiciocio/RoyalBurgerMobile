@@ -7,8 +7,15 @@ export default function ViewCardItem({
                                          title = "Seção",
                                          data = [],
                                          showTitle = true,
-                                         promoTimer = null
+                                         promoTimer = null,
+                                         navigation = null
                                      }) {
+    const handleCardPress = (item) => {
+        if (navigation) {
+            navigation.navigate('Produto', { produto: item });
+        }
+    };
+
     const renderCard = ({item}) => (
         <CardItemVertical
             title={item.title}
@@ -17,6 +24,7 @@ export default function ViewCardItem({
             deliveryTime={item.deliveryTime}
             deliveryPrice={item.deliveryPrice}
             imageSource={item.imageSource}
+            onPress={() => handleCardPress(item)}
         />
     );
 

@@ -208,7 +208,7 @@ export default function Cadastro({navigation}) {
     return (
         <KeyboardAvoidingView 
             style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
             <Image
@@ -303,7 +303,7 @@ export default function Cadastro({navigation}) {
                     </View>
 
                     <Input
-                        label="Confirmar senha"
+                        label="Confirmar senhaenha"
                         type="password"
                         value={confirmarSenha}
                         onChangeText={handleConfirmarSenhaChange}
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         paddingHorizontal: 35,
         paddingVertical: 20,
-        paddingBottom: 50, // Espaço extra para o teclado
+        paddingBottom: 20, // Espaço extra para o teclado
         alignItems: 'center',
         justifyContent: 'center',
     },

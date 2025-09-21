@@ -1,5 +1,5 @@
 import React from 'react';
-import {View, StyleSheet, Image, Text} from 'react-native';
+import {View, StyleSheet, Image, Text, TouchableOpacity} from 'react-native';
 
 export default function CardItemVertical({
                                      title = "Nome produto",
@@ -7,10 +7,11 @@ export default function CardItemVertical({
                                      price = "R$50,00",
                                      deliveryTime = "40 - 50 min",
                                      deliveryPrice = "R$5,00",
-                                     imageSource = null
+                                     imageSource = null,
+                                     onPress = () => {}
                                  }) {
     return (
-        <View style={styles.container}>
+        <TouchableOpacity style={styles.container} onPress={onPress}>
             <View style={styles.imageWrapper}>
                 <Image
                     style={styles.image}
@@ -19,9 +20,9 @@ export default function CardItemVertical({
                 />
             </View>
             <View style={styles.container2}>
-                <Text style={styles.title} numberOfLines={1} numberOfLines={1}
+                <Text style={styles.title} numberOfLines={1}
                       ellipsizeMode="tail">{title}</Text>
-                <Text style={styles.description} numberOfLines={2} numberOfLines={1}
+                <Text style={styles.description} numberOfLines={2}
                       ellipsizeMode="tail">{description}</Text>
                 <Text style={styles.price}>{price}</Text>
                 <View style={styles.containerDelevery}>
@@ -30,7 +31,7 @@ export default function CardItemVertical({
                     <Text style={styles.descriptionDel}>{deliveryPrice}</Text>
                 </View>
             </View>
-        </View>
+        </TouchableOpacity>
     );
 }
 

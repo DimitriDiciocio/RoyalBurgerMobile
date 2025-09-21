@@ -9,6 +9,7 @@ import ViewCardItem from "./components/ViewCardItem";
 import MenuCategory from "./components/MenuCategory";
 import Login from "./screens/login";
 import Cadastro from "./screens/cadastro";
+import Produto from "./screens/produto";
 
 const Stack = createNativeStackNavigator();
 
@@ -71,6 +72,7 @@ function HomeScreen({ navigation }) {
             <ViewCardItem
                 title="Os mais pedidos"
                 data={mostOrderedData}
+                navigation={navigation}
             />
 
             <ViewCardItem
@@ -80,11 +82,13 @@ function HomeScreen({ navigation }) {
                     endTime: promoEndTime,
                     onExpire: handlePromoExpire
                 }}
+                navigation={navigation}
             />
 
             <ViewCardItem
                 title="Combos"
                 data={comboData}
+                navigation={navigation}
             />
         </View>
     );
@@ -146,6 +150,11 @@ export default function App() {
                 <Stack.Screen 
                     name="Cadastro" 
                     component={Cadastro}
+                    options={{ headerShown: false }}
+                />
+                <Stack.Screen 
+                    name="Produto" 
+                    component={Produto}
                     options={{ headerShown: false }}
                 />
             </Stack.Navigator>
