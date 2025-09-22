@@ -71,34 +71,6 @@
                              Phasellus ultricies elementum tristique. Nullam ante leo, eleifend blandit tempus nec, viverra at nulla. 
                              Donec tincidunt lacus nisi, non sollicitudin mi suscipit luctus. Proin ac arcu pellentesque, bibendum massa nec, 
                              varius arcu.</Text>
-                          <View style={styles.infoHeader}>
-                              <Text style={styles.produtoInfo}>Informações Nutricionais</Text>
-                              <TouchableOpacity 
-                                  activeOpacity={0.7}
-                                  onPress={handleArrowPress}
-                              >
-                                  <Animated.View
-                                      style={[
-                                          styles.arrowContainer,
-                                          {
-                                              transform: [{
-                                                  rotate: rotateValue.interpolate({
-                                                      inputRange: [0, 1],
-                                                      outputRange: ['0deg', '90deg']
-                                                  })
-                                              }]
-                                          }
-                                      ]}
-                                  >
-                                      <SvgXml
-                                          xml={backArrowSvg}
-                                          width={22}
-                                          height={22}
-                                          style={styles.arrowRight}
-                                      />
-                                  </Animated.View>
-                              </TouchableOpacity>
-                          </View>
                      </View>
                      
                      <View style={styles.divisionContainer}>
@@ -205,22 +177,6 @@
             color: '#525252',
             marginBottom: 10,
         },
-         infoHeader: {
-             flexDirection: 'row',
-             alignItems: 'center',
-             marginBottom: 10,
-         },
-         produtoInfo: {
-             fontSize: 18,
-             marginTop: 10,
-         },
-         arrowContainer: {
-             marginLeft: 10,
-             marginTop: 12,
-         },
-         arrowRight: {
-             transform: [{ scaleX: -1 }],
-         },
          divisionContainer: {
              alignItems: 'center',
          },

@@ -125,8 +125,8 @@ export default function MenuCategory({
                 },
                 {
                     id: 303,
-                    title: "Sorvete de merda",
-                    description: "Coco",
+                    title: "Sorvete de Ricota",
+                    description: "Um delicioso sorvete de Ricota com Chocolate",
                     price: "R$ 10,90",
                     deliveryTime: "10-15 min",
                     deliveryPrice: "R$ 3,50",

@@ -320,7 +320,7 @@ export default function Cadastro({navigation}) {
                     </View>
 
                     <Input
-                        label="Confirmar senhaenha"
+                        label="Confirmar senha"
                         type="password"
                         value={confirmarSenha}
                         onChangeText={handleConfirmarSenhaChange}
