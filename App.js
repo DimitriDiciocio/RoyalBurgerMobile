@@ -115,7 +115,7 @@ function HomeScreen({ navigation }) {
                 />
             </View>
 
-            {/* MenuCategory ocupa o espaço disponível */}
+            {/* MenuCategory */}
             <View style={styles.menuContainer}>
                 <MenuCategory
                     ListHeaderComponent={renderPromotionalHeader}

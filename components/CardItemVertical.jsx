@@ -22,7 +22,7 @@ export default function CardItemVertical({
             <View style={styles.container2}>
                 <Text style={styles.title} numberOfLines={1}
                       ellipsizeMode="tail">{title}</Text>
-                <Text style={styles.description} numberOfLines={2}
+                <Text style={styles.description} numberOfLines={1}
                       ellipsizeMode="tail">{description}</Text>
                 <Text style={styles.price}>{price}</Text>
                 <View style={styles.containerDelevery}>
@@ -38,7 +38,7 @@ export default function CardItemVertical({
 const styles = StyleSheet.create({
     container: {
         width: 140,
-        height: 180,
+        height: 200,
         backgroundColor: '#fff',
         borderRadius: 5,
         shadowColor: '#000',
@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
             width: 0,
             height: 1,
         },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.15,
         shadowRadius: 2,
         elevation: 2,
     },

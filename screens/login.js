@@ -188,8 +188,6 @@ const styles = StyleSheet.create({
     scrollContent: {
         flexGrow: 1,
         paddingHorizontal: 35,
-        paddingVertical: 20,
-        paddingBottom: 20, // Espaço extra para o teclado
         alignItems: 'center',
         justifyContent: 'center',
     },

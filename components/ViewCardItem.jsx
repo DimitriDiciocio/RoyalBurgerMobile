@@ -69,7 +69,9 @@ const styles = StyleSheet.create({
     },
     containerCard: {
         marginVertical: 15,
-        paddingRight: 15,
+        paddingHorizontal:5,
+        height:'100%',
+        width:'100%',
     },
     separator: {
         width: 15,

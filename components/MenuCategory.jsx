@@ -122,6 +122,17 @@ export default function MenuCategory({
                     imageSource: { uri: 'https://via.placeholder.com/120x100' },
                     categoryId: 3,
                     isAvailable: true
+                },
+                {
+                    id: 303,
+                    title: "Sorvete de merda",
+                    description: "Coco",
+                    price: "R$ 10,90",
+                    deliveryTime: "10-15 min",
+                    deliveryPrice: "R$ 3,50",
+                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
+                    categoryId: 3,
+                    isAvailable: true
                 }
             ]
         },
@@ -429,7 +440,6 @@ const styles = StyleSheet.create({
         marginRight: 15,
         minWidth: 100,
         borderRadius: 20,
-        // Transição suave
         backgroundColor: 'transparent',
     },
     activeCategoryTab: {
@@ -461,6 +471,8 @@ const styles = StyleSheet.create({
     listContent: {
         paddingTop: 70,
         paddingBottom: 20,
+        paddingRight: 10,
+
     },
     listWithButton: {
         paddingBottom: 100,
