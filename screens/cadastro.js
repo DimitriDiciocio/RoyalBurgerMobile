@@ -2,6 +2,7 @@ import React, {useState} from 'react';
 import {StyleSheet, View, Text, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform} from 'react-native';
 import Header from "../components/Header";
 import Input from "../components/Input";
+import {registerCustomer} from "../services";
 
 export default function Cadastro({navigation}) {
     const [nomeCompleto, setNomeCompleto] = useState('');
@@ -18,6 +19,10 @@ export default function Cadastro({navigation}) {
     const [telefoneError, setTelefoneError] = useState('');
     const [senhaError, setSenhaError] = useState('');
     const [confirmarSenhaError, setConfirmarSenhaError] = useState('');
+
+    const [submitError, setSubmitError] = useState('');
+    const [submitSuccess, setSubmitSuccess] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Estados para validação de senha em tempo real
     const [passwordRequirements, setPasswordRequirements] = useState({
@@ -69,8 +74,10 @@ export default function Cadastro({navigation}) {
         return hasUppercase && hasNumber && hasSpecialChar && hasMinLength;
     };
 
-    const handleCadastro = () => {
+    const handleCadastro = async () => {
         // Resetar erros
+        setSubmitError('');
+        setSubmitSuccess('');
         setNomeError('');
         setEmailError('');
         setDataError('');
@@ -138,11 +145,21 @@ export default function Cadastro({navigation}) {
             return;
         }
 
-        // Se chegou aqui, as validações passaram
-        console.log('Cadastro válido:', { nomeCompleto, email, dataNascimento, telefone, senha });
-        
-        // Aqui você fará o cadastro real
-        // navigation.navigate('Home'); // Navegação após cadastro
+        setIsSubmitting(true);
+        try {
+            const response = await registerCustomer({nomeCompleto, email, dataNascimento, telefone, senha, confirmarSenha});
+            setSubmitSuccess(response?.message || 'Cadastro realizado com sucesso.');
+            // Redireciona para login após breve confirmação
+            setTimeout(() => {
+                navigation.navigate('Login');
+            }, 800);
+        } catch (error) {
+            const message = error?.message || 'Erro ao realizar cadastro.';
+            setSubmitError(message);
+        } finally {
+            setIsSubmitting(false);
+        }
+
     };
 
     const handleLoginRedirect = () => {
@@ -310,9 +327,17 @@ export default function Cadastro({navigation}) {
                         error={confirmarSenhaError}
                     />
 
+                    {!!submitError && (
+                        <Text style={{ color: '#D32F2F', marginBottom: 8 }}>{submitError}</Text>
+                    )}
+                    {!!submitSuccess && (
+                        <Text style={{ color: '#2E7D32', marginBottom: 8 }}>{submitSuccess}</Text>
+                    )}
+
                     <TouchableOpacity
                         style={styles.loginRedirectButton}
                         onPress={handleLoginRedirect}
+                        disabled={isSubmitting}
                     >
                         <Text style={styles.loginRedirectText}>Já possui uma conta? Entre aqui!</Text>
                     </TouchableOpacity>
@@ -320,8 +345,9 @@ export default function Cadastro({navigation}) {
                     <TouchableOpacity
                         style={styles.cadastroButton}
                         onPress={handleCadastro}
+                        disabled={isSubmitting}
                     >
-                        <Text style={styles.cadastroButtonText}>Cadastrar</Text>
+                        <Text style={styles.cadastroButtonText}>{isSubmitting ? 'Enviando...' : 'Cadastrar'}</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>

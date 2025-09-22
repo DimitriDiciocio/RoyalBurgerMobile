@@ -2,12 +2,15 @@ import React, {useState} from 'react';
 import {StyleSheet, View, Text, TouchableOpacity, Image, TextInput, ScrollView, KeyboardAvoidingView, Platform} from 'react-native';
 import Header from "../components/Header";
 import Input from "../components/Input";
+import {login, registerCustomer} from "../services";
 
 export default function Login({navigation}) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [emailError, setEmailError] = useState('');
     const [passwordError, setPasswordError] = useState('');
+    const [submitError, setSubmitError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Função para validar email
     const validateEmail = (email) => {
@@ -21,10 +24,11 @@ export default function Login({navigation}) {
         return password.length >= 6;
     };
 
-    const handleLogin = () => {
+    const handleLogin = async () => {
         // Resetar erros
         setEmailError('');
         setPasswordError('');
+        setSubmitError('');
 
         let hasError = false;
 
@@ -50,17 +54,23 @@ export default function Login({navigation}) {
             return;
         }
 
-        // Se chegou aqui, as validações passaram
-        console.log('Login válido:', { email, password });
-        
-        // Aqui você fará a autenticação real
-        // navigation.navigate('Home'); // Navegação após login
+        setIsSubmitting(true);
+        try {
+            const result = await login({ email, password });
+            if (result.ok) {
+                navigation.navigate('Home');
+            } else {
+                setSubmitError(result.error || 'Não foi possível fazer login.');
+            }
+        } catch (e) {
+            setSubmitError('Erro inesperado ao fazer login.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleForgotPassword = () => {
         // Implementar a lógica de recuperação de senha
-        console.log('Esqueci minha senha');
-        // navigation.navigate('ForgotPassword'); // Exemplo
     };
 
     const handleRegisterTextd = () => {
@@ -129,6 +139,9 @@ export default function Login({navigation}) {
                         onChangeText={handlePasswordChange}
                         error={passwordError}
                     />
+                    {!!submitError && (
+                        <Text style={{ color: '#D32F2F', marginBottom: 8 }}>{submitError}</Text>
+                    )}
                     <TouchableOpacity
                         style={styles.forgotPasswordButton}
                         onPress={handleForgotPassword}
@@ -138,14 +151,16 @@ export default function Login({navigation}) {
                     <TouchableOpacity
                         style={styles.registerText}
                         onPress={handleRegisterTextd}
+                        disabled={isSubmitting}
                     >
                         <Text style={styles.jobDescription}>Ainda não tem uma conta? Cadastre-se já!</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.loginButton}
                         onPress={handleLogin}
+                        disabled={isSubmitting}
                     >
-                        <Text style={styles.loginButtonText}>Entrar</Text>
+                        <Text style={styles.loginButtonText}>{isSubmitting ? 'Entrando...' : 'Entrar'}</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>

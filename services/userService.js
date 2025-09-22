@@ -16,36 +16,47 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
  * Autentica o usuário e salva o token.
  * @param {string} email - Email do usuário
  * @param {string} password - Senha do usuário
- * @returns {Promise<object>} - Dados do usuário e token de acesso
+ * @returns {Promise<{ok: boolean, data?: object, error?: string, status?: number}>}
  */
 export const login = async (userData) => {
   try {
     // Faz a requisição já com userData (que deve ter { email, password })
+    console.log(userData);
     const response = await api.post("/users/login", userData);
 
-    if (response.data.access_token) {
-      await AsyncStorage.setItem("user_token", response.data.access_token);
+    const { access_token, user, full_name, roles } = response.data || {};
 
-      // Verificar se existem dados do usuário na resposta
-      if (response.data.user) {
-        await AsyncStorage.setItem(
-          "user_data",
-          JSON.stringify(response.data.user)
-        );
-      } else {
-        // Se não houver dados do usuário, criar um objeto básico
-        const basicUserData = {
-          email: userData.email,
-          full_name: response.data.full_name || "Usuário",
-          role: "customer",
-        };
-        await AsyncStorage.setItem("user_data", JSON.stringify(basicUserData));
-      }
+    if (!access_token) {
+      return { ok: false, error: "Token de acesso não recebido." };
     }
 
-    return response.data;
+    await AsyncStorage.setItem("user_token", access_token);
+
+    // Se a API devolveu o objeto do usuário, salva direto; senão, monta um básico
+    const toStoreUser = user || {
+      email: userData?.email,
+      full_name: full_name || "Usuário",
+      role: Array.isArray(roles) && roles.length > 0 ? roles[0] : "customer",
+    };
+
+    await AsyncStorage.setItem("user_data", JSON.stringify(toStoreUser));
+
+    return {
+      ok: true,
+      data: {
+        token: access_token,
+        user: toStoreUser,
+      },
+    };
   } catch (error) {
-    throw error;
+    const status = error?.response?.status;
+    const apiMsg =
+      error?.response?.data?.msg ||
+      error?.response?.data?.error ||
+      error?.response?.data?.message;
+    const message = apiMsg || error?.message || "Não foi possível efetuar o login.";
+
+    return { ok: false, error: message, status };
   }
 };
 

@@ -9,44 +9,8 @@
 // Serviço de API base
 export { default as api } from "./api";
 
-// Serviço de usuários e autenticação
-export * from "./userService";
-
-// Serviço de clientes
-export * from "./customerService";
-
-// Serviço de produtos
-export * from "./productService";
-
-// Serviço de pedidos
-export * from "./orderService";
-
-// Serviço de ingredientes
+// Serviço de ingredientes (não possui bloco por categoria)
 export * from "./ingredientService";
-
-// Serviço de menu
-export * from "./menuService";
-
-// Serviço de notificações
-export * from "./notificationService";
-
-// Serviço de chat
-export * from "./chatService";
-
-// Serviço de dashboard
-export * from "./dashboardService";
-
-// Serviço financeiro
-export * from "./financialService";
-
-// Serviço de relatórios
-export * from "./reportsService";
-
-// Serviço de configurações
-export * from "./settingsService";
-
-// Serviço de estoque
-export * from "./stockService";
 
 /**
  * ========================================
@@ -78,8 +42,6 @@ export {
   updateCustomer,
   deactivateCustomer,
   activateCustomer,
-  getCustomerStats,
-  getCustomerOrderHistory,
   getCustomerAddresses,
   addCustomerAddress,
   updateCustomerAddress,
@@ -123,7 +85,6 @@ export {
   getOrderTracking,
   updateOrderTracking,
   getNearbyOrders,
-  getOrderReport,
 } from "./orderService";
 
 // Menu
@@ -165,8 +126,6 @@ export {
   getNotificationsByType,
   getNotificationsByStatus,
   getRecentNotifications,
-  getNotificationSettings,
-  updateNotificationSettings,
   registerPushToken,
   unregisterPushToken,
   sendTestNotification,
@@ -206,7 +165,7 @@ export {
 export {
   getDashboardData,
   getSalesStats,
-  getOrderStats,
+  getOrderStats as getDashboardOrderStats,
   getCustomerStats,
   getProductStats,
   getSalesByPeriod,
@@ -236,7 +195,6 @@ export {
   getRevenue,
   getExpenses,
   getProfitLoss,
-  getFinancialReport,
 } from "./financialService";
 
 // Relatórios

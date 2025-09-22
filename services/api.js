@@ -1,9 +1,41 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE_URL } from "@env";
+import { Platform } from "react-native";
+import Constants from "expo-constants";
 
-// URL base da API obtida das variáveis de ambiente
-const BASE_URL = API_BASE_URL || "http://10.0.2.2:5000/api";
+// Resolve dinamicamente a URL base da API conforme o ambiente (emulador/dispositivo)
+function resolveBaseUrl() {
+  // 1) Se vier via .env, prioriza
+  if (API_BASE_URL && typeof API_BASE_URL === "string" && API_BASE_URL.trim().length > 0) {
+    return API_BASE_URL.trim();
+  }
+
+  // 2) Tenta inferir pelo host do Metro/Expo (funciona para dispositivo físico na mesma rede)
+  const hostUri = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoClient?.hostUri || Constants.manifest?.hostUri;
+  const inferredHost = hostUri ? hostUri.split(":")[0] : null;
+  if (inferredHost && inferredHost !== "127.0.0.1" && inferredHost !== "localhost") {
+    return `http://${inferredHost}:5000/api`;
+  }
+
+  // 3) Fallbacks por plataforma (emuladores)
+  if (Platform.OS === "android") {
+    // Emulador Android (AVD)
+    return "http://10.0.2.2:5000/api";
+  }
+
+  // iOS Simulator
+  return "http://localhost:5000/api";
+}
+
+// URL base da API obtida das variáveis de ambiente ou heurística
+const BASE_URL = resolveBaseUrl();
+
+// Log para facilitar o diagnóstico em desenvolvimento
+if (__DEV__) {
+  // eslint-disable-next-line no-console
+  console.log(`[API] BASE_URL: ${BASE_URL}`);
+}
 
 // Cria uma instância do Axios com configurações padrão
 const api = axios.create({
