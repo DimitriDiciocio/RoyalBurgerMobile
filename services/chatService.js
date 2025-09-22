@@ -19,11 +19,10 @@ import api from "./api";
  */
 export const getChatHistory = async (orderId, filters = {}) => {
   try {
-    console.log("💬 Obtendo histórico de chat do pedido:", orderId);
+    "💬 Obtendo histórico de chat do pedido:", orderId;
     const response = await api.get(`/chat/${orderId}`, { params: filters });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter histórico de chat:", error);
     throw error;
   }
 };
@@ -43,7 +42,7 @@ export const sendMessage = async (
   metadata = {}
 ) => {
   try {
-    console.log("📤 Enviando mensagem no chat do pedido:", orderId);
+    "📤 Enviando mensagem no chat do pedido:", orderId;
     const response = await api.post(`/chat/${orderId}/message`, {
       message,
       type,
@@ -51,7 +50,6 @@ export const sendMessage = async (
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao enviar mensagem:", error);
     throw error;
   }
 };
@@ -64,13 +62,12 @@ export const sendMessage = async (
  */
 export const markMessagesAsRead = async (orderId, messageIds) => {
   try {
-    console.log("✅ Marcando mensagens como lidas:", messageIds);
+    "✅ Marcando mensagens como lidas:", messageIds;
     const response = await api.put(`/chat/${orderId}/mark-read`, {
       message_ids: messageIds,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao marcar mensagens como lidas:", error);
     throw error;
   }
 };
@@ -82,11 +79,10 @@ export const markMessagesAsRead = async (orderId, messageIds) => {
  */
 export const getUnreadMessages = async (orderId) => {
   try {
-    console.log("🔔 Obtendo mensagens não lidas do pedido:", orderId);
+    "🔔 Obtendo mensagens não lidas do pedido:", orderId;
     const response = await api.get(`/chat/${orderId}/unread`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter mensagens não lidas:", error);
     throw error;
   }
 };
@@ -98,14 +94,10 @@ export const getUnreadMessages = async (orderId) => {
  */
 export const getUnreadMessageCount = async (orderId) => {
   try {
-    console.log(
-      "🔢 Obtendo contagem de mensagens não lidas do pedido:",
-      orderId
-    );
+    "🔢 Obtendo contagem de mensagens não lidas do pedido:", orderId;
     const response = await api.get(`/chat/${orderId}/unread-count`);
     return response.data.count;
   } catch (error) {
-    console.error("❌ Erro ao obter contagem de mensagens não lidas:", error);
     throw error;
   }
 };
@@ -117,11 +109,10 @@ export const getUnreadMessageCount = async (orderId) => {
  */
 export const getActiveConversations = async (filters = {}) => {
   try {
-    console.log("💬 Obtendo conversas ativas");
+    ("💬 Obtendo conversas ativas");
     const response = await api.get("/chat/conversations", { params: filters });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter conversas ativas:", error);
     throw error;
   }
 };
@@ -134,13 +125,12 @@ export const getActiveConversations = async (filters = {}) => {
  */
 export const getConversation = async (conversationId, filters = {}) => {
   try {
-    console.log("💬 Obtendo conversa:", conversationId);
+    "💬 Obtendo conversa:", conversationId;
     const response = await api.get(`/chat/conversations/${conversationId}`, {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter conversa:", error);
     throw error;
   }
 };
@@ -152,11 +142,10 @@ export const getConversation = async (conversationId, filters = {}) => {
  */
 export const createConversation = async (conversationData) => {
   try {
-    console.log("➕ Criando nova conversa:", conversationData);
+    "➕ Criando nova conversa:", conversationData;
     const response = await api.post("/chat/conversations", conversationData);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao criar conversa:", error);
     throw error;
   }
 };
@@ -169,7 +158,7 @@ export const createConversation = async (conversationData) => {
  */
 export const closeConversation = async (conversationId, reason = "") => {
   try {
-    console.log("🔒 Encerrando conversa:", conversationId, "motivo:", reason);
+    "🔒 Encerrando conversa:", conversationId, "motivo:", reason;
     const response = await api.put(
       `/chat/conversations/${conversationId}/close`,
       {
@@ -178,7 +167,6 @@ export const closeConversation = async (conversationId, reason = "") => {
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao encerrar conversa:", error);
     throw error;
   }
 };
@@ -190,13 +178,12 @@ export const closeConversation = async (conversationId, reason = "") => {
  */
 export const reopenConversation = async (conversationId) => {
   try {
-    console.log("🔓 Reabrindo conversa:", conversationId);
+    "🔓 Reabrindo conversa:", conversationId;
     const response = await api.put(
       `/chat/conversations/${conversationId}/reopen`
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao reabrir conversa:", error);
     throw error;
   }
 };
@@ -209,7 +196,7 @@ export const reopenConversation = async (conversationId) => {
  */
 export const getConversationMessages = async (conversationId, filters = {}) => {
   try {
-    console.log("💬 Obtendo mensagens da conversa:", conversationId);
+    "💬 Obtendo mensagens da conversa:", conversationId;
     const response = await api.get(
       `/chat/conversations/${conversationId}/messages`,
       {
@@ -218,7 +205,6 @@ export const getConversationMessages = async (conversationId, filters = {}) => {
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter mensagens da conversa:", error);
     throw error;
   }
 };
@@ -238,7 +224,7 @@ export const sendConversationMessage = async (
   metadata = {}
 ) => {
   try {
-    console.log("📤 Enviando mensagem na conversa:", conversationId);
+    "📤 Enviando mensagem na conversa:", conversationId;
     const response = await api.post(
       `/chat/conversations/${conversationId}/messages`,
       {
@@ -249,7 +235,6 @@ export const sendConversationMessage = async (
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao enviar mensagem na conversa:", error);
     throw error;
   }
 };
@@ -261,13 +246,12 @@ export const sendConversationMessage = async (
  */
 export const getConversationParticipants = async (conversationId) => {
   try {
-    console.log("👥 Obtendo participantes da conversa:", conversationId);
+    "👥 Obtendo participantes da conversa:", conversationId;
     const response = await api.get(
       `/chat/conversations/${conversationId}/participants`
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter participantes da conversa:", error);
     throw error;
   }
 };
@@ -285,12 +269,10 @@ export const addConversationParticipant = async (
   role = "member"
 ) => {
   try {
-    console.log(
-      "➕ Adicionando participante à conversa:",
+    "➕ Adicionando participante à conversa:",
       conversationId,
       "usuário:",
-      userId
-    );
+      userId;
     const response = await api.post(
       `/chat/conversations/${conversationId}/participants`,
       {
@@ -300,7 +282,6 @@ export const addConversationParticipant = async (
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao adicionar participante à conversa:", error);
     throw error;
   }
 };
@@ -313,18 +294,15 @@ export const addConversationParticipant = async (
  */
 export const removeConversationParticipant = async (conversationId, userId) => {
   try {
-    console.log(
-      "➖ Removendo participante da conversa:",
+    "➖ Removendo participante da conversa:",
       conversationId,
       "usuário:",
-      userId
-    );
+      userId;
     const response = await api.delete(
       `/chat/conversations/${conversationId}/participants/${userId}`
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao remover participante da conversa:", error);
     throw error;
   }
 };
@@ -336,11 +314,10 @@ export const removeConversationParticipant = async (conversationId, userId) => {
  */
 export const getMessageStatus = async (messageId) => {
   try {
-    console.log("📊 Obtendo status da mensagem:", messageId);
+    "📊 Obtendo status da mensagem:", messageId;
     const response = await api.get(`/chat/messages/${messageId}/status`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter status da mensagem:", error);
     throw error;
   }
 };
@@ -353,13 +330,12 @@ export const getMessageStatus = async (messageId) => {
  */
 export const editMessage = async (messageId, newMessage) => {
   try {
-    console.log("✏️ Editando mensagem:", messageId);
+    "✏️ Editando mensagem:", messageId;
     const response = await api.put(`/chat/messages/${messageId}`, {
       message: newMessage,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao editar mensagem:", error);
     throw error;
   }
 };
@@ -371,11 +347,10 @@ export const editMessage = async (messageId, newMessage) => {
  */
 export const deleteMessage = async (messageId) => {
   try {
-    console.log("🗑️ Removendo mensagem:", messageId);
+    "🗑️ Removendo mensagem:", messageId;
     const response = await api.delete(`/chat/messages/${messageId}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao remover mensagem:", error);
     throw error;
   }
 };
@@ -387,11 +362,10 @@ export const deleteMessage = async (messageId) => {
  */
 export const getChatStats = async (filters = {}) => {
   try {
-    console.log("📊 Obtendo estatísticas de chat");
+    ("📊 Obtendo estatísticas de chat");
     const response = await api.get("/chat/stats", { params: filters });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter estatísticas de chat:", error);
     throw error;
   }
 };
@@ -404,13 +378,12 @@ export const getChatStats = async (filters = {}) => {
  */
 export const getConversationsByStatus = async (status, filters = {}) => {
   try {
-    console.log("💬 Obtendo conversas por status:", status);
+    "💬 Obtendo conversas por status:", status;
     const response = await api.get(`/chat/conversations/status/${status}`, {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter conversas por status:", error);
     throw error;
   }
 };
@@ -423,13 +396,12 @@ export const getConversationsByStatus = async (status, filters = {}) => {
  */
 export const getRecentConversations = async (limit = 10, filters = {}) => {
   try {
-    console.log("💬 Obtendo conversas recentes (limite:", limit, ")");
+    "💬 Obtendo conversas recentes (limite:", limit, ")";
     const response = await api.get("/chat/conversations/recent", {
       params: { limit, ...filters },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter conversas recentes:", error);
     throw error;
   }
 };

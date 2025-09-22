@@ -19,11 +19,10 @@ import api from "./api";
  */
 export const getFullMenu = async (filters = {}) => {
   try {
-    console.log("🍽️ Obtendo menu completo com filtros:", filters);
+    "🍽️ Obtendo menu completo com filtros:", filters;
     const response = await api.get("/menu", { params: filters });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter menu completo:", error);
     throw error;
   }
 };
@@ -36,13 +35,12 @@ export const getFullMenu = async (filters = {}) => {
  */
 export const getMenuBySection = async (sectionId, filters = {}) => {
   try {
-    console.log("📂 Obtendo menu da seção:", sectionId);
+    "📂 Obtendo menu da seção:", sectionId;
     const response = await api.get(`/menu/section/${sectionId}`, {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter menu da seção:", error);
     throw error;
   }
 };
@@ -54,13 +52,12 @@ export const getMenuBySection = async (sectionId, filters = {}) => {
  */
 export const getFeaturedProducts = async (limit = 6) => {
   try {
-    console.log("⭐ Obtendo produtos em destaque (limite:", limit, ")");
+    "⭐ Obtendo produtos em destaque (limite:", limit, ")";
     const response = await api.get("/menu/featured", {
       params: { limit },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos em destaque:", error);
     throw error;
   }
 };
@@ -72,13 +69,12 @@ export const getFeaturedProducts = async (limit = 6) => {
  */
 export const getPromotionalProducts = async (filters = {}) => {
   try {
-    console.log("🏷️ Obtendo produtos em promoção");
+    ("🏷️ Obtendo produtos em promoção");
     const response = await api.get("/menu/promotions", {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos em promoção:", error);
     throw error;
   }
 };
@@ -91,19 +87,16 @@ export const getPromotionalProducts = async (filters = {}) => {
  */
 export const getBestSellingProducts = async (limit = 10, period = "month") => {
   try {
-    console.log(
-      "🏆 Obtendo produtos mais vendidos (limite:",
+    "🏆 Obtendo produtos mais vendidos (limite:",
       limit,
       "período:",
       period,
-      ")"
-    );
+      ")";
     const response = await api.get("/menu/best-selling", {
       params: { limit, period },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos mais vendidos:", error);
     throw error;
   }
 };
@@ -116,13 +109,12 @@ export const getBestSellingProducts = async (limit = 10, period = "month") => {
  */
 export const getRecommendedProducts = async (userId, limit = 5) => {
   try {
-    console.log("💡 Obtendo produtos recomendados para usuário:", userId);
+    "💡 Obtendo produtos recomendados para usuário:", userId;
     const response = await api.get(`/menu/recommendations/${userId}`, {
       params: { limit },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos recomendados:", error);
     throw error;
   }
 };
@@ -135,13 +127,12 @@ export const getRecommendedProducts = async (userId, limit = 5) => {
  */
 export const searchMenuProducts = async (searchTerm, filters = {}) => {
   try {
-    console.log("🔍 Buscando produtos no menu:", searchTerm);
+    "🔍 Buscando produtos no menu:", searchTerm;
     const response = await api.get("/menu/search", {
       params: { q: searchTerm, ...filters },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao buscar produtos no menu:", error);
     throw error;
   }
 };
@@ -153,13 +144,12 @@ export const searchMenuProducts = async (searchTerm, filters = {}) => {
  */
 export const getMenuCategories = async (filters = {}) => {
   try {
-    console.log("📂 Obtendo categorias do menu");
+    ("📂 Obtendo categorias do menu");
     const response = await api.get("/menu/categories", {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter categorias do menu:", error);
     throw error;
   }
 };
@@ -171,11 +161,10 @@ export const getMenuCategories = async (filters = {}) => {
  */
 export const getMenuProduct = async (productId) => {
   try {
-    console.log("🍔 Obtendo produto do menu:", productId);
+    "🍔 Obtendo produto do menu:", productId;
     const response = await api.get(`/menu/products/${productId}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produto do menu:", error);
     throw error;
   }
 };
@@ -187,11 +176,10 @@ export const getMenuProduct = async (productId) => {
  */
 export const getMenuProductIngredients = async (productId) => {
   try {
-    console.log("🥬 Obtendo ingredientes do produto:", productId);
+    "🥬 Obtendo ingredientes do produto:", productId;
     const response = await api.get(`/menu/products/${productId}/ingredients`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter ingredientes do produto:", error);
     throw error;
   }
 };
@@ -203,13 +191,12 @@ export const getMenuProductIngredients = async (productId) => {
  */
 export const getProductCustomizationOptions = async (productId) => {
   try {
-    console.log("⚙️ Obtendo opções de personalização do produto:", productId);
+    "⚙️ Obtendo opções de personalização do produto:", productId;
     const response = await api.get(
       `/menu/products/${productId}/customizations`
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter opções de personalização:", error);
     throw error;
   }
 };
@@ -222,13 +209,12 @@ export const getProductCustomizationOptions = async (productId) => {
  */
 export const getSimilarProducts = async (productId, limit = 4) => {
   try {
-    console.log("🔄 Obtendo produtos similares ao produto:", productId);
+    "🔄 Obtendo produtos similares ao produto:", productId;
     const response = await api.get(`/menu/products/${productId}/similar`, {
       params: { limit },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos similares:", error);
     throw error;
   }
 };
@@ -246,18 +232,12 @@ export const getProductsByPriceRange = async (
   filters = {}
 ) => {
   try {
-    console.log(
-      "💰 Obtendo produtos por faixa de preço:",
-      minPrice,
-      "-",
-      maxPrice
-    );
+    "💰 Obtendo produtos por faixa de preço:", minPrice, "-", maxPrice;
     const response = await api.get("/menu/price-range", {
       params: { min_price: minPrice, max_price: maxPrice, ...filters },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos por faixa de preço:", error);
     throw error;
   }
 };
@@ -270,13 +250,12 @@ export const getProductsByPriceRange = async (
  */
 export const getProductsByIngredient = async (ingredient, filters = {}) => {
   try {
-    console.log("🥬 Obtendo produtos por ingrediente:", ingredient);
+    "🥬 Obtendo produtos por ingrediente:", ingredient;
     const response = await api.get("/menu/by-ingredient", {
       params: { ingredient, ...filters },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos por ingrediente:", error);
     throw error;
   }
 };
@@ -292,13 +271,12 @@ export const getProductsWithoutIngredient = async (
   filters = {}
 ) => {
   try {
-    console.log("🚫 Obtendo produtos sem ingrediente:", ingredient);
+    "🚫 Obtendo produtos sem ingrediente:", ingredient;
     const response = await api.get("/menu/without-ingredient", {
       params: { ingredient, ...filters },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos sem ingrediente:", error);
     throw error;
   }
 };
@@ -310,13 +288,12 @@ export const getProductsWithoutIngredient = async (
  */
 export const getVegetarianProducts = async (filters = {}) => {
   try {
-    console.log("🥬 Obtendo produtos vegetarianos");
+    ("🥬 Obtendo produtos vegetarianos");
     const response = await api.get("/menu/vegetarian", {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos vegetarianos:", error);
     throw error;
   }
 };
@@ -328,13 +305,12 @@ export const getVegetarianProducts = async (filters = {}) => {
  */
 export const getVeganProducts = async (filters = {}) => {
   try {
-    console.log("🌱 Obtendo produtos veganos");
+    ("🌱 Obtendo produtos veganos");
     const response = await api.get("/menu/vegan", {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos veganos:", error);
     throw error;
   }
 };
@@ -346,13 +322,12 @@ export const getVeganProducts = async (filters = {}) => {
  */
 export const getGlutenFreeProducts = async (filters = {}) => {
   try {
-    console.log("🌾 Obtendo produtos sem glúten");
+    ("🌾 Obtendo produtos sem glúten");
     const response = await api.get("/menu/gluten-free", {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos sem glúten:", error);
     throw error;
   }
 };
@@ -364,13 +339,12 @@ export const getGlutenFreeProducts = async (filters = {}) => {
  */
 export const getLactoseFreeProducts = async (filters = {}) => {
   try {
-    console.log("🥛 Obtendo produtos sem lactose");
+    ("🥛 Obtendo produtos sem lactose");
     const response = await api.get("/menu/lactose-free", {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos sem lactose:", error);
     throw error;
   }
 };
@@ -383,13 +357,12 @@ export const getLactoseFreeProducts = async (filters = {}) => {
  */
 export const getProductsBySpiceLevel = async (spiceLevel, filters = {}) => {
   try {
-    console.log("🌶️ Obtendo produtos por nível de picância:", spiceLevel);
+    "🌶️ Obtendo produtos por nível de picância:", spiceLevel;
     const response = await api.get("/menu/spice-level", {
       params: { spice_level: spiceLevel, ...filters },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos por nível de picância:", error);
     throw error;
   }
 };
@@ -402,17 +375,12 @@ export const getProductsBySpiceLevel = async (spiceLevel, filters = {}) => {
  */
 export const getProductsByPrepTime = async (maxPrepTime, filters = {}) => {
   try {
-    console.log(
-      "⏱️ Obtendo produtos por tempo de preparo:",
-      maxPrepTime,
-      "min"
-    );
+    "⏱️ Obtendo produtos por tempo de preparo:", maxPrepTime, "min";
     const response = await api.get("/menu/prep-time", {
       params: { max_prep_time: maxPrepTime, ...filters },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos por tempo de preparo:", error);
     throw error;
   }
 };

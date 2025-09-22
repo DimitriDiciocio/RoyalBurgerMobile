@@ -19,11 +19,11 @@ import api from "./api";
  */
 export const getAllProducts = async (filters = {}) => {
   try {
-    console.log("🍔 Obtendo todos os produtos com filtros:", filters);
+    "🍔 Obtendo todos os produtos com filtros:", filters;
     const response = await api.get("/products", { params: filters });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos:", error);
+    "❌ Erro ao obter produtos:", error;
     throw error;
   }
 };
@@ -35,11 +35,11 @@ export const getAllProducts = async (filters = {}) => {
  */
 export const getProductById = async (productId) => {
   try {
-    console.log("🍔 Obtendo produto por ID:", productId);
+    "🍔 Obtendo produto por ID:", productId;
     const response = await api.get(`/products/${productId}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produto:", error);
+    "❌ Erro ao obter produto:", error;
     throw error;
   }
 };
@@ -51,11 +51,11 @@ export const getProductById = async (productId) => {
  */
 export const createProduct = async (productData) => {
   try {
-    console.log("➕ Criando produto:", productData);
+    "➕ Criando produto:", productData;
     const response = await api.post("/products", productData);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao criar produto:", error);
+    "❌ Erro ao criar produto:", error;
     throw error;
   }
 };
@@ -68,11 +68,11 @@ export const createProduct = async (productData) => {
  */
 export const updateProduct = async (productId, productData) => {
   try {
-    console.log("✏️ Atualizando produto:", productId, productData);
+    "✏️ Atualizando produto:", productId, productData;
     const response = await api.put(`/products/${productId}`, productData);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao atualizar produto:", error);
+    "❌ Erro ao atualizar produto:", error;
     throw error;
   }
 };
@@ -84,11 +84,11 @@ export const updateProduct = async (productId, productData) => {
  */
 export const deleteProduct = async (productId) => {
   try {
-    console.log("🗑️ Removendo produto:", productId);
+    "🗑️ Removendo produto:", productId;
     const response = await api.delete(`/products/${productId}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao remover produto:", error);
+    "❌ Erro ao remover produto:", error;
     throw error;
   }
 };
@@ -101,18 +101,13 @@ export const deleteProduct = async (productId) => {
  */
 export const toggleProductStatus = async (productId, isActive) => {
   try {
-    console.log(
-      "🔄 Alterando status do produto:",
-      productId,
-      "para:",
-      isActive
-    );
+    "🔄 Alterando status do produto:", productId, "para:", isActive;
     const response = await api.put(`/products/${productId}/status`, {
       is_active: isActive,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao alterar status do produto:", error);
+    "❌ Erro ao alterar status do produto:", error;
     throw error;
   }
 };
@@ -125,13 +120,13 @@ export const toggleProductStatus = async (productId, isActive) => {
  */
 export const getProductsBySection = async (sectionId, filters = {}) => {
   try {
-    console.log("📂 Obtendo produtos da seção:", sectionId);
+    "📂 Obtendo produtos da seção:", sectionId;
     const response = await api.get(`/products/section/${sectionId}`, {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter produtos da seção:", error);
+    "❌ Erro ao obter produtos da seção:", error;
     throw error;
   }
 };
@@ -144,13 +139,13 @@ export const getProductsBySection = async (sectionId, filters = {}) => {
  */
 export const searchProducts = async (searchTerm, filters = {}) => {
   try {
-    console.log("🔍 Buscando produtos com termo:", searchTerm);
+    "🔍 Buscando produtos com termo:", searchTerm;
     const response = await api.get("/products/search", {
       params: { q: searchTerm, ...filters },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao buscar produtos:", error);
+    "❌ Erro ao buscar produtos:", error;
     throw error;
   }
 };
@@ -162,11 +157,11 @@ export const searchProducts = async (searchTerm, filters = {}) => {
  */
 export const getProductIngredients = async (productId) => {
   try {
-    console.log("🥬 Obtendo ingredientes do produto:", productId);
+    "🥬 Obtendo ingredientes do produto:", productId;
     const response = await api.get(`/products/${productId}/ingredients`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter ingredientes do produto:", error);
+    "❌ Erro ao obter ingredientes do produto:", error;
     throw error;
   }
 };
@@ -179,13 +174,13 @@ export const getProductIngredients = async (productId) => {
  */
 export const updateProductIngredients = async (productId, ingredients) => {
   try {
-    console.log("🥬 Atualizando ingredientes do produto:", productId);
+    "🥬 Atualizando ingredientes do produto:", productId;
     const response = await api.put(`/products/${productId}/ingredients`, {
       ingredients,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao atualizar ingredientes:", error);
+    "❌ Erro ao atualizar ingredientes:", error;
     throw error;
   }
 };
@@ -196,11 +191,11 @@ export const updateProductIngredients = async (productId, ingredients) => {
  */
 export const getAllSections = async () => {
   try {
-    console.log("📂 Obtendo todas as seções");
+    ("📂 Obtendo todas as seções");
     const response = await api.get("/sections");
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter seções:", error);
+    "❌ Erro ao obter seções:", error;
     throw error;
   }
 };
@@ -212,11 +207,11 @@ export const getAllSections = async () => {
  */
 export const createSection = async (sectionData) => {
   try {
-    console.log("➕ Criando seção:", sectionData);
+    "➕ Criando seção:", sectionData;
     const response = await api.post("/sections", sectionData);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao criar seção:", error);
+    "❌ Erro ao criar seção:", error;
     throw error;
   }
 };
@@ -229,11 +224,11 @@ export const createSection = async (sectionData) => {
  */
 export const updateSection = async (sectionId, sectionData) => {
   try {
-    console.log("✏️ Atualizando seção:", sectionId, sectionData);
+    "✏️ Atualizando seção:", sectionId, sectionData;
     const response = await api.put(`/sections/${sectionId}`, sectionData);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao atualizar seção:", error);
+    "❌ Erro ao atualizar seção:", error;
     throw error;
   }
 };
@@ -245,11 +240,11 @@ export const updateSection = async (sectionId, sectionData) => {
  */
 export const deleteSection = async (sectionId) => {
   try {
-    console.log("🗑️ Removendo seção:", sectionId);
+    "🗑️ Removendo seção:", sectionId;
     const response = await api.delete(`/sections/${sectionId}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao remover seção:", error);
+    "❌ Erro ao remover seção:", error;
     throw error;
   }
 };

@@ -18,14 +18,6 @@ const api = axios.create({
 api.interceptors.request.use(
   async (config) => {
     try {
-      console.log(
-        `🚀 Fazendo requisição: ${config.method?.toUpperCase()} ${
-          config.baseURL
-        }${config.url}`
-      );
-      console.log("📤 Dados enviados:", config.data);
-      console.log("🔗 URL completa:", `${config.baseURL}${config.url}`);
-
       // Lista de rotas que não precisam de token
       const publicRoutes = [
         "/users/login",
@@ -39,29 +31,21 @@ api.interceptors.request.use(
         config.url?.includes(route)
       );
 
-      console.log("🔓 Rota pública?", isPublicRoute);
-
       // Se não for uma rota pública, adiciona o token
       if (!isPublicRoute) {
         const token = await AsyncStorage.getItem("user_token");
 
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
-          console.log("🔑 Token adicionado ao header");
-        } else {
-          console.log("⚠️ Nenhum token encontrado");
         }
-      } else {
-        console.log("🌐 Rota pública - sem token necessário");
       }
     } catch (error) {
-      console.warn("Erro ao obter token do AsyncStorage:", error);
+      // Erro silencioso ao obter token
     }
 
     return config;
   },
   (error) => {
-    console.error("❌ Erro no interceptor de request:", error);
     return Promise.reject(error);
   }
 );
@@ -69,37 +53,16 @@ api.interceptors.request.use(
 // Interceptor: Roda DEPOIS de cada resposta ser recebida
 api.interceptors.response.use(
   (response) => {
-    console.log(
-      `✅ Resposta recebida: ${
-        response.status
-      } ${response.config.method?.toUpperCase()} ${response.config.url}`
-    );
-    console.log("📥 Dados recebidos:", response.data);
     return response;
   },
   async (error) => {
-    console.error(
-      `❌ Erro na resposta: ${
-        error.response?.status || "Network Error"
-      } ${error.config?.method?.toUpperCase()} ${error.config?.url}`
-    );
-    console.error("📥 Dados do erro:", error.response?.data || error.message);
-    console.error("🔍 Detalhes do erro:", {
-      code: error.code,
-      message: error.message,
-      stack: error.stack?.substring(0, 200),
-    });
-
     // Se receber erro 401 (não autorizado), remove o token e redireciona para login
     if (error.response?.status === 401) {
       try {
         await AsyncStorage.removeItem("user_token");
         // Aqui você pode adicionar lógica para redirecionar para a tela de login
-        console.log(
-          "Token expirado ou inválido. Usuário deve fazer login novamente."
-        );
       } catch (storageError) {
-        console.warn("Erro ao remover token do AsyncStorage:", storageError);
+        // Erro silencioso ao remover token
       }
     }
 

@@ -18,11 +18,10 @@ import api from "./api";
  */
 export const getAllIngredients = async (filters = {}) => {
   try {
-    console.log("🥬 Obtendo todos os ingredientes com filtros:", filters);
+    "🥬 Obtendo todos os ingredientes com filtros:", filters;
     const response = await api.get("/ingredients", { params: filters });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter ingredientes:", error);
     throw error;
   }
 };
@@ -34,11 +33,10 @@ export const getAllIngredients = async (filters = {}) => {
  */
 export const getIngredientById = async (ingredientId) => {
   try {
-    console.log("🥬 Obtendo ingrediente por ID:", ingredientId);
+    "🥬 Obtendo ingrediente por ID:", ingredientId;
     const response = await api.get(`/ingredients/${ingredientId}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter ingrediente:", error);
     throw error;
   }
 };
@@ -50,11 +48,10 @@ export const getIngredientById = async (ingredientId) => {
  */
 export const createIngredient = async (ingredientData) => {
   try {
-    console.log("➕ Criando ingrediente:", ingredientData);
+    "➕ Criando ingrediente:", ingredientData;
     const response = await api.post("/ingredients", ingredientData);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao criar ingrediente:", error);
     throw error;
   }
 };
@@ -67,14 +64,13 @@ export const createIngredient = async (ingredientData) => {
  */
 export const updateIngredient = async (ingredientId, ingredientData) => {
   try {
-    console.log("✏️ Atualizando ingrediente:", ingredientId, ingredientData);
+    "✏️ Atualizando ingrediente:", ingredientId, ingredientData;
     const response = await api.put(
       `/ingredients/${ingredientId}`,
       ingredientData
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao atualizar ingrediente:", error);
     throw error;
   }
 };
@@ -86,11 +82,10 @@ export const updateIngredient = async (ingredientId, ingredientData) => {
  */
 export const deleteIngredient = async (ingredientId) => {
   try {
-    console.log("🗑️ Removendo ingrediente:", ingredientId);
+    "🗑️ Removendo ingrediente:", ingredientId;
     const response = await api.delete(`/ingredients/${ingredientId}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao remover ingrediente:", error);
     throw error;
   }
 };
@@ -102,11 +97,10 @@ export const deleteIngredient = async (ingredientId) => {
  */
 export const getIngredientsByStockStatus = async (status) => {
   try {
-    console.log("📦 Obtendo ingredientes por status de estoque:", status);
+    "📦 Obtendo ingredientes por status de estoque:", status;
     const response = await api.get(`/ingredients/stock-status/${status}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter ingredientes por status:", error);
     throw error;
   }
 };
@@ -118,17 +112,12 @@ export const getIngredientsByStockStatus = async (status) => {
  */
 export const getLowStockIngredients = async (threshold = 10) => {
   try {
-    console.log(
-      "⚠️ Obtendo ingredientes com estoque baixo (limite:",
-      threshold,
-      ")"
-    );
+    "⚠️ Obtendo ingredientes com estoque baixo (limite:", threshold, ")";
     const response = await api.get("/ingredients/low-stock", {
       params: { threshold },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter ingredientes com estoque baixo:", error);
     throw error;
   }
 };
@@ -139,11 +128,10 @@ export const getLowStockIngredients = async (threshold = 10) => {
  */
 export const getOutOfStockIngredients = async () => {
   try {
-    console.log("❌ Obtendo ingredientes em falta");
+    ("❌ Obtendo ingredientes em falta");
     const response = await api.get("/ingredients/out-of-stock");
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter ingredientes em falta:", error);
     throw error;
   }
 };
@@ -161,21 +149,18 @@ export const updateIngredientStock = async (
   operation = "set"
 ) => {
   try {
-    console.log(
-      "📦 Atualizando estoque do ingrediente:",
+    "📦 Atualizando estoque do ingrediente:",
       ingredientId,
       "quantidade:",
       quantity,
       "operação:",
-      operation
-    );
+      operation;
     const response = await api.put(`/ingredients/${ingredientId}/stock`, {
       quantity,
       operation,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao atualizar estoque do ingrediente:", error);
     throw error;
   }
 };
@@ -188,15 +173,12 @@ export const updateIngredientStock = async (
  */
 export const addIngredientStock = async (ingredientId, quantity) => {
   try {
-    console.log(
-      "➕ Adicionando estoque ao ingrediente:",
+    "➕ Adicionando estoque ao ingrediente:",
       ingredientId,
       "quantidade:",
-      quantity
-    );
+      quantity;
     return await updateIngredientStock(ingredientId, quantity, "add");
   } catch (error) {
-    console.error("❌ Erro ao adicionar estoque:", error);
     throw error;
   }
 };
@@ -209,15 +191,12 @@ export const addIngredientStock = async (ingredientId, quantity) => {
  */
 export const removeIngredientStock = async (ingredientId, quantity) => {
   try {
-    console.log(
-      "➖ Removendo estoque do ingrediente:",
+    "➖ Removendo estoque do ingrediente:",
       ingredientId,
       "quantidade:",
-      quantity
-    );
+      quantity;
     return await updateIngredientStock(ingredientId, quantity, "subtract");
   } catch (error) {
-    console.error("❌ Erro ao remover estoque:", error);
     throw error;
   }
 };
@@ -230,10 +209,7 @@ export const removeIngredientStock = async (ingredientId, quantity) => {
  */
 export const getIngredientStockHistory = async (ingredientId, filters = {}) => {
   try {
-    console.log(
-      "📊 Obtendo histórico de estoque do ingrediente:",
-      ingredientId
-    );
+    "📊 Obtendo histórico de estoque do ingrediente:", ingredientId;
     const response = await api.get(
       `/ingredients/${ingredientId}/stock-history`,
       {
@@ -242,7 +218,6 @@ export const getIngredientStockHistory = async (ingredientId, filters = {}) => {
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter histórico de estoque:", error);
     throw error;
   }
 };
@@ -255,13 +230,12 @@ export const getIngredientStockHistory = async (ingredientId, filters = {}) => {
  */
 export const searchIngredients = async (searchTerm, filters = {}) => {
   try {
-    console.log("🔍 Buscando ingredientes:", searchTerm);
+    "🔍 Buscando ingredientes:", searchTerm;
     const response = await api.get("/ingredients/search", {
       params: { q: searchTerm, ...filters },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao buscar ingredientes:", error);
     throw error;
   }
 };
@@ -274,13 +248,12 @@ export const searchIngredients = async (searchTerm, filters = {}) => {
  */
 export const getIngredientsByCategory = async (category, filters = {}) => {
   try {
-    console.log("📂 Obtendo ingredientes por categoria:", category);
+    "📂 Obtendo ingredientes por categoria:", category;
     const response = await api.get(`/ingredients/category/${category}`, {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter ingredientes por categoria:", error);
     throw error;
   }
 };
@@ -291,11 +264,10 @@ export const getIngredientsByCategory = async (category, filters = {}) => {
  */
 export const getIngredientCategories = async () => {
   try {
-    console.log("📂 Obtendo categorias de ingredientes");
+    ("📂 Obtendo categorias de ingredientes");
     const response = await api.get("/ingredients/categories");
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter categorias de ingredientes:", error);
     throw error;
   }
 };
@@ -307,20 +279,12 @@ export const getIngredientCategories = async () => {
  */
 export const getIngredientsNearExpiry = async (days = 7) => {
   try {
-    console.log(
-      "⏰ Obtendo ingredientes próximos do vencimento (dias:",
-      days,
-      ")"
-    );
+    "⏰ Obtendo ingredientes próximos do vencimento (dias:", days, ")";
     const response = await api.get("/ingredients/near-expiry", {
       params: { days },
     });
     return response.data;
   } catch (error) {
-    console.error(
-      "❌ Erro ao obter ingredientes próximos do vencimento:",
-      error
-    );
     throw error;
   }
 };
@@ -331,11 +295,10 @@ export const getIngredientsNearExpiry = async (days = 7) => {
  */
 export const getExpiredIngredients = async () => {
   try {
-    console.log("⚠️ Obtendo ingredientes vencidos");
+    ("⚠️ Obtendo ingredientes vencidos");
     const response = await api.get("/ingredients/expired");
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter ingredientes vencidos:", error);
     throw error;
   }
 };
@@ -347,13 +310,12 @@ export const getExpiredIngredients = async () => {
  */
 export const getIngredientStats = async (filters = {}) => {
   try {
-    console.log("📊 Obtendo estatísticas de ingredientes");
+    ("📊 Obtendo estatísticas de ingredientes");
     const response = await api.get("/ingredients/stats", {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter estatísticas de ingredientes:", error);
     throw error;
   }
 };
@@ -366,19 +328,16 @@ export const getIngredientStats = async (filters = {}) => {
  */
 export const getMostUsedIngredients = async (limit = 10, period = "month") => {
   try {
-    console.log(
-      "🏆 Obtendo ingredientes mais utilizados (limite:",
+    "🏆 Obtendo ingredientes mais utilizados (limite:",
       limit,
       "período:",
       period,
-      ")"
-    );
+      ")";
     const response = await api.get("/ingredients/most-used", {
       params: { limit, period },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter ingredientes mais utilizados:", error);
     throw error;
   }
 };
@@ -391,13 +350,12 @@ export const getMostUsedIngredients = async (limit = 10, period = "month") => {
  */
 export const getIngredientsBySupplier = async (supplierId, filters = {}) => {
   try {
-    console.log("🏪 Obtendo ingredientes por fornecedor:", supplierId);
+    "🏪 Obtendo ingredientes por fornecedor:", supplierId;
     const response = await api.get(`/ingredients/supplier/${supplierId}`, {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter ingredientes por fornecedor:", error);
     throw error;
   }
 };
@@ -410,13 +368,12 @@ export const getIngredientsBySupplier = async (supplierId, filters = {}) => {
  */
 export const getIngredientsByUnit = async (unit, filters = {}) => {
   try {
-    console.log("📏 Obtendo ingredientes por unidade:", unit);
+    "📏 Obtendo ingredientes por unidade:", unit;
     const response = await api.get(`/ingredients/unit/${unit}`, {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter ingredientes por unidade:", error);
     throw error;
   }
 };

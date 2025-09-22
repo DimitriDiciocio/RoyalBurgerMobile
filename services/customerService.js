@@ -18,8 +18,6 @@ import api from "./api";
  */
 export const registerCustomer = async (userData) => {
   try {
-    console.log("👤 Register customer service - Dados recebidos:", userData);
-
     // Mapear os dados do formulário para o formato esperado pela API
     const apiData = {
       full_name: userData.nomeCompleto,
@@ -30,9 +28,7 @@ export const registerCustomer = async (userData) => {
       password_confirmation: userData.confirmarSenha,
     };
 
-    console.log("📤 Enviando para API:", apiData);
     const response = await api.post("/customers", apiData);
-    console.log("📥 Resposta da API:", response.data);
 
     // Retornar dados estruturados
     return {
@@ -41,11 +37,6 @@ export const registerCustomer = async (userData) => {
       message: "Cadastro realizado com sucesso",
     };
   } catch (error) {
-    console.error(
-      "❌ Erro no registro:",
-      error.response?.data || error.message
-    );
-
     // Estruturar erro de forma consistente
     const structuredError = {
       success: false,
@@ -68,11 +59,9 @@ export const registerCustomer = async (userData) => {
  */
 export const getAllCustomers = async (filters = {}) => {
   try {
-    console.log("👥 Obtendo todos os clientes com filtros:", filters);
     const response = await api.get("/customers", { params: filters });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter clientes:", error);
     throw error;
   }
 };
@@ -84,11 +73,9 @@ export const getAllCustomers = async (filters = {}) => {
  */
 export const getCustomerById = async (customerId) => {
   try {
-    console.log("👤 Obtendo cliente por ID:", customerId);
     const response = await api.get(`/customers/${customerId}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter cliente:", error);
     throw error;
   }
 };
@@ -101,11 +88,9 @@ export const getCustomerById = async (customerId) => {
  */
 export const updateCustomer = async (customerId, customerData) => {
   try {
-    console.log("✏️ Atualizando cliente:", customerId, customerData);
     const response = await api.put(`/customers/${customerId}`, customerData);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao atualizar cliente:", error);
     throw error;
   }
 };
@@ -117,11 +102,9 @@ export const updateCustomer = async (customerId, customerData) => {
  */
 export const deactivateCustomer = async (customerId) => {
   try {
-    console.log("🚫 Desativando cliente:", customerId);
     const response = await api.delete(`/customers/${customerId}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao desativar cliente:", error);
     throw error;
   }
 };
@@ -133,11 +116,9 @@ export const deactivateCustomer = async (customerId) => {
  */
 export const activateCustomer = async (customerId) => {
   try {
-    console.log("✅ Reativando cliente:", customerId);
     const response = await api.put(`/customers/${customerId}/activate`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao reativar cliente:", error);
     throw error;
   }
 };
@@ -148,11 +129,9 @@ export const activateCustomer = async (customerId) => {
  */
 export const getCustomerStats = async () => {
   try {
-    console.log("📊 Obtendo estatísticas de clientes");
     const response = await api.get("/customers/stats");
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter estatísticas:", error);
     throw error;
   }
 };
@@ -165,13 +144,11 @@ export const getCustomerStats = async () => {
  */
 export const getCustomerOrderHistory = async (customerId, filters = {}) => {
   try {
-    console.log("📋 Obtendo histórico de pedidos do cliente:", customerId);
     const response = await api.get(`/customers/${customerId}/orders`, {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter histórico de pedidos:", error);
     throw error;
   }
 };
@@ -183,11 +160,9 @@ export const getCustomerOrderHistory = async (customerId, filters = {}) => {
  */
 export const getCustomerAddresses = async (customerId) => {
   try {
-    console.log("🏠 Obtendo endereços do cliente:", customerId);
     const response = await api.get(`/customers/${customerId}/addresses`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter endereços:", error);
     throw error;
   }
 };
@@ -200,14 +175,12 @@ export const getCustomerAddresses = async (customerId) => {
  */
 export const addCustomerAddress = async (customerId, addressData) => {
   try {
-    console.log("➕ Adicionando endereço para cliente:", customerId);
     const response = await api.post(
       `/customers/${customerId}/addresses`,
       addressData
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao adicionar endereço:", error);
     throw error;
   }
 };
@@ -225,19 +198,12 @@ export const updateCustomerAddress = async (
   addressData
 ) => {
   try {
-    console.log(
-      "✏️ Atualizando endereço:",
-      addressId,
-      "do cliente:",
-      customerId
-    );
     const response = await api.put(
       `/customers/${customerId}/addresses/${addressId}`,
       addressData
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao atualizar endereço:", error);
     throw error;
   }
 };
@@ -250,13 +216,11 @@ export const updateCustomerAddress = async (
  */
 export const removeCustomerAddress = async (customerId, addressId) => {
   try {
-    console.log("🗑️ Removendo endereço:", addressId, "do cliente:", customerId);
     const response = await api.delete(
       `/customers/${customerId}/addresses/${addressId}`
     );
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao remover endereço:", error);
     throw error;
   }
 };

@@ -19,11 +19,10 @@ import api from "./api";
  */
 export const createOrder = async (orderData) => {
   try {
-    console.log("🛒 Criando pedido:", orderData);
+    "🛒 Criando pedido:", orderData;
     const response = await api.post("/orders", orderData);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao criar pedido:", error);
     throw error;
   }
 };
@@ -35,11 +34,10 @@ export const createOrder = async (orderData) => {
  */
 export const getMyOrders = async (filters = {}) => {
   try {
-    console.log("📋 Obtendo meus pedidos com filtros:", filters);
+    "📋 Obtendo meus pedidos com filtros:", filters;
     const response = await api.get("/orders", { params: filters });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter pedidos:", error);
     throw error;
   }
 };
@@ -51,11 +49,10 @@ export const getMyOrders = async (filters = {}) => {
  */
 export const getAllOrders = async (filters = {}) => {
   try {
-    console.log("📋 Obtendo todos os pedidos com filtros:", filters);
+    "📋 Obtendo todos os pedidos com filtros:", filters;
     const response = await api.get("/orders/all", { params: filters });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter todos os pedidos:", error);
     throw error;
   }
 };
@@ -67,11 +64,10 @@ export const getAllOrders = async (filters = {}) => {
  */
 export const getOrderById = async (orderId) => {
   try {
-    console.log("🛒 Obtendo pedido por ID:", orderId);
+    "🛒 Obtendo pedido por ID:", orderId;
     const response = await api.get(`/orders/${orderId}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter pedido:", error);
     throw error;
   }
 };
@@ -85,14 +81,13 @@ export const getOrderById = async (orderId) => {
  */
 export const updateOrderStatus = async (orderId, status, notes = "") => {
   try {
-    console.log("🔄 Atualizando status do pedido:", orderId, "para:", status);
+    "🔄 Atualizando status do pedido:", orderId, "para:", status;
     const response = await api.put(`/orders/${orderId}/status`, {
       status,
       notes,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao atualizar status do pedido:", error);
     throw error;
   }
 };
@@ -105,13 +100,12 @@ export const updateOrderStatus = async (orderId, status, notes = "") => {
  */
 export const cancelOrder = async (orderId, reason = "") => {
   try {
-    console.log("❌ Cancelando pedido:", orderId, "motivo:", reason);
+    "❌ Cancelando pedido:", orderId, "motivo:", reason;
     const response = await api.put(`/orders/${orderId}/cancel`, {
       reason,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao cancelar pedido:", error);
     throw error;
   }
 };
@@ -124,13 +118,12 @@ export const cancelOrder = async (orderId, reason = "") => {
  */
 export const getCustomerOrderHistory = async (customerId, filters = {}) => {
   try {
-    console.log("📊 Obtendo histórico de pedidos do cliente:", customerId);
+    "📊 Obtendo histórico de pedidos do cliente:", customerId;
     const response = await api.get(`/orders/customer/${customerId}`, {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter histórico de pedidos:", error);
     throw error;
   }
 };
@@ -143,13 +136,12 @@ export const getCustomerOrderHistory = async (customerId, filters = {}) => {
  */
 export const getOrdersByStatus = async (status, filters = {}) => {
   try {
-    console.log("📋 Obtendo pedidos com status:", status);
+    "📋 Obtendo pedidos com status:", status;
     const response = await api.get(`/orders/status/${status}`, {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter pedidos por status:", error);
     throw error;
   }
 };
@@ -161,13 +153,12 @@ export const getOrdersByStatus = async (status, filters = {}) => {
  */
 export const getTodayOrders = async (filters = {}) => {
   try {
-    console.log("📅 Obtendo pedidos de hoje");
+    ("📅 Obtendo pedidos de hoje");
     const response = await api.get("/orders/today", {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter pedidos de hoje:", error);
     throw error;
   }
 };
@@ -179,13 +170,12 @@ export const getTodayOrders = async (filters = {}) => {
  */
 export const getOrderStats = async (filters = {}) => {
   try {
-    console.log("📊 Obtendo estatísticas de pedidos");
+    ("📊 Obtendo estatísticas de pedidos");
     const response = await api.get("/orders/stats", {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter estatísticas de pedidos:", error);
     throw error;
   }
 };
@@ -197,11 +187,10 @@ export const getOrderStats = async (filters = {}) => {
  */
 export const getOrderItems = async (orderId) => {
   try {
-    console.log("🛍️ Obtendo itens do pedido:", orderId);
+    "🛍️ Obtendo itens do pedido:", orderId;
     const response = await api.get(`/orders/${orderId}/items`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter itens do pedido:", error);
     throw error;
   }
 };
@@ -214,11 +203,10 @@ export const getOrderItems = async (orderId) => {
  */
 export const addOrderItem = async (orderId, itemData) => {
   try {
-    console.log("➕ Adicionando item ao pedido:", orderId);
+    "➕ Adicionando item ao pedido:", orderId;
     const response = await api.post(`/orders/${orderId}/items`, itemData);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao adicionar item ao pedido:", error);
     throw error;
   }
 };
@@ -231,11 +219,10 @@ export const addOrderItem = async (orderId, itemData) => {
  */
 export const removeOrderItem = async (orderId, itemId) => {
   try {
-    console.log("🗑️ Removendo item do pedido:", orderId, "item:", itemId);
+    "🗑️ Removendo item do pedido:", orderId, "item:", itemId;
     const response = await api.delete(`/orders/${orderId}/items/${itemId}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao remover item do pedido:", error);
     throw error;
   }
 };
@@ -249,18 +236,12 @@ export const removeOrderItem = async (orderId, itemId) => {
  */
 export const updateOrderItemQuantity = async (orderId, itemId, quantity) => {
   try {
-    console.log(
-      "✏️ Atualizando quantidade do item:",
-      itemId,
-      "para:",
-      quantity
-    );
+    "✏️ Atualizando quantidade do item:", itemId, "para:", quantity;
     const response = await api.put(`/orders/${orderId}/items/${itemId}`, {
       quantity,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao atualizar quantidade do item:", error);
     throw error;
   }
 };
@@ -272,11 +253,10 @@ export const updateOrderItemQuantity = async (orderId, itemId, quantity) => {
  */
 export const getOrderTracking = async (orderId) => {
   try {
-    console.log("📍 Obtendo rastreamento do pedido:", orderId);
+    "📍 Obtendo rastreamento do pedido:", orderId;
     const response = await api.get(`/orders/${orderId}/tracking`);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter rastreamento:", error);
     throw error;
   }
 };
@@ -289,11 +269,10 @@ export const getOrderTracking = async (orderId) => {
  */
 export const updateOrderTracking = async (orderId, trackingData) => {
   try {
-    console.log("📍 Atualizando rastreamento do pedido:", orderId);
+    "📍 Atualizando rastreamento do pedido:", orderId;
     const response = await api.put(`/orders/${orderId}/tracking`, trackingData);
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao atualizar rastreamento:", error);
     throw error;
   }
 };
@@ -306,13 +285,12 @@ export const updateOrderTracking = async (orderId, trackingData) => {
  */
 export const getNearbyOrders = async (location, radius = 5) => {
   try {
-    console.log("📍 Obtendo pedidos próximos:", location, "raio:", radius);
+    "📍 Obtendo pedidos próximos:", location, "raio:", radius;
     const response = await api.get("/orders/nearby", {
       params: { ...location, radius },
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter pedidos próximos:", error);
     throw error;
   }
 };
@@ -324,13 +302,12 @@ export const getNearbyOrders = async (location, radius = 5) => {
  */
 export const getOrderReport = async (filters = {}) => {
   try {
-    console.log("📊 Gerando relatório de pedidos");
+    ("📊 Gerando relatório de pedidos");
     const response = await api.get("/orders/report", {
       params: filters,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao gerar relatório:", error);
     throw error;
   }
 };

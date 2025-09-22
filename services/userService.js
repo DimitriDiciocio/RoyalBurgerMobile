@@ -20,7 +20,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
  */
 export const login = async (userData) => {
   try {
-
     // Faz a requisição já com userData (que deve ter { email, password })
     const response = await api.post("/users/login", userData);
 
@@ -46,7 +45,6 @@ export const login = async (userData) => {
 
     return response.data;
   } catch (error) {
-    console.error("❌ Erro no login:", error);
     throw error;
   }
 };
@@ -57,17 +55,14 @@ export const login = async (userData) => {
  */
 export const logout = async () => {
   try {
-    console.log("🚪 Logout service");
     // Tenta invalidar o token no backend
     await api.post("/users/logout");
   } catch (error) {
     // Mesmo se der erro no backend, remove o token localmente
-    console.warn("⚠️ Erro ao fazer logout no backend:", error);
   } finally {
     // Remove os dados do usuário do armazenamento local
     await AsyncStorage.removeItem("user_token");
     await AsyncStorage.removeItem("user_data");
-    console.log("✅ Logout realizado com sucesso");
   }
 };
 
@@ -80,7 +75,6 @@ export const isAuthenticated = async () => {
     const token = await AsyncStorage.getItem("user_token");
     return !!token;
   } catch (error) {
-    console.error("❌ Erro ao verificar autenticação:", error);
     return false;
   }
 };
@@ -94,7 +88,6 @@ export const getStoredUserData = async () => {
     const userData = await AsyncStorage.getItem("user_data");
     return userData ? JSON.parse(userData) : null;
   } catch (error) {
-    console.error("❌ Erro ao obter dados do usuário:", error);
     return null;
   }
 };
@@ -107,7 +100,6 @@ export const getStoredToken = async () => {
   try {
     return await AsyncStorage.getItem("user_token");
   } catch (error) {
-    console.error("❌ Erro ao obter token:", error);
     return null;
   }
 };
@@ -119,11 +111,9 @@ export const getStoredToken = async () => {
  */
 export const requestPasswordReset = async (email) => {
   try {
-    console.log("📧 Solicitação de redefinição de senha para:", email);
     const response = await api.post("/users/forgot-password", { email });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao solicitar redefinição de senha:", error);
     throw error;
   }
 };
@@ -136,14 +126,12 @@ export const requestPasswordReset = async (email) => {
  */
 export const resetPassword = async (token, newPassword) => {
   try {
-    console.log("🔑 Redefinindo senha");
     const response = await api.post("/users/reset-password", {
       token,
       new_password: newPassword,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao redefinir senha:", error);
     throw error;
   }
 };
@@ -155,7 +143,6 @@ export const resetPassword = async (token, newPassword) => {
  */
 export const updateProfile = async (userData) => {
   try {
-    console.log("👤 Atualizando perfil:", userData);
     const response = await api.put("/users/profile", userData);
 
     // Atualiza os dados locais se a atualização foi bem-sucedida
@@ -165,7 +152,6 @@ export const updateProfile = async (userData) => {
 
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao atualizar perfil:", error);
     throw error;
   }
 };
@@ -178,14 +164,12 @@ export const updateProfile = async (userData) => {
  */
 export const changePassword = async (currentPassword, newPassword) => {
   try {
-    console.log("🔐 Alterando senha");
     const response = await api.put("/users/change-password", {
       current_password: currentPassword,
       new_password: newPassword,
     });
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao alterar senha:", error);
     throw error;
   }
 };
@@ -196,11 +180,9 @@ export const changePassword = async (currentPassword, newPassword) => {
  */
 export const getProfile = async () => {
   try {
-    console.log("👤 Obtendo perfil do usuário");
     const response = await api.get("/users/profile");
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao obter perfil:", error);
     throw error;
   }
 };
@@ -212,7 +194,6 @@ export const getProfile = async () => {
  */
 export const deleteAccount = async (password) => {
   try {
-    console.log("🗑️ Deletando conta do usuário");
     const response = await api.delete("/users/account", {
       data: { password },
     });
@@ -223,7 +204,6 @@ export const deleteAccount = async (password) => {
 
     return response.data;
   } catch (error) {
-    console.error("❌ Erro ao deletar conta:", error);
     throw error;
   }
 };
