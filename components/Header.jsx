@@ -78,12 +78,6 @@ export default function Header({
                 return (
                     <View style={styles.loggedContainer}>
                         <View style={styles.userInfo}>
-                            <View style={styles.avatarContainer}>
-                                <Image
-                                    source={userInfo?.avatar || require('../assets/img/logoIcon.png')}
-                                    style={styles.avatar}
-                                />
-                            </View>
                             <View style={styles.userTexts}>
                                 <Text style={styles.userName}>
                                     {"Olá, " + (userInfo?.name || "Usuário")}
@@ -218,15 +212,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         flex: 1,
-    },
-    avatarContainer: {
-        marginRight: 12,
-    },
-    avatar: {
-        width: 45,
-        height: 45,
-        borderRadius: 22.5,
-        backgroundColor: '#f0f0f0',
     },
     userTexts: {
         flex: 1,
