@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
 import { NavigationContainer, useIsFocused } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Header from "./components/Header";
@@ -11,7 +11,7 @@ import Login from "./screens/login";
 import Cadastro from "./screens/cadastro";
 import Produto from "./screens/produto";
 import React, { useEffect, useState } from 'react';
-import { isAuthenticated, getStoredUserData } from "./services";
+import { isAuthenticated, getStoredUserData, logout } from "./services";
 
 const Stack = createNativeStackNavigator();
 
@@ -93,6 +93,16 @@ function HomeScreen({ navigation }) {
         console.log('Promoção expirou!');
     };
 
+    const handleLogout = async () => {
+        try {
+            await logout();
+            setLoggedIn(false);
+            setUserInfo(null);
+        } catch (error) {
+            console.error('Erro ao fazer logout:', error);
+        }
+    };
+
     // Conteúdo sections
     const renderPromotionalHeader = () => (
         <View style={styles.promotionalContent}>
@@ -147,6 +157,15 @@ function HomeScreen({ navigation }) {
             {!loggedIn && (
                 <View style={styles.fixedButtonContainer}>
                     <LoginButton navigation={navigation} />
+                </View>
+            )}
+
+            {/* Botão de logout temporário */}
+            {loggedIn && (
+                <View style={styles.logoutButtonContainer}>
+                    <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                        <Text style={styles.logoutButtonText}>Logout</Text>
+                    </TouchableOpacity>
                 </View>
             )}
     
@@ -218,5 +237,28 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         paddingBottom: 20,
         zIndex: 999,
+    },
+    logoutButtonContainer: {
+        position: 'absolute',
+        bottom: 10,
+        left: 0,
+        right: 0,
+        backgroundColor: 'transparent',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        paddingBottom: 20,
+        zIndex: 999,
+    },
+    logoutButton: {
+        backgroundColor: '#ff4444',
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    logoutButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });
