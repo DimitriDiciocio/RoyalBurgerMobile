@@ -83,7 +83,21 @@ export const logout = async () => {
 export const isAuthenticated = async () => {
   try {
     const token = await AsyncStorage.getItem("user_token");
-    return !!token;
+    if (!token) return false;
+
+    try {
+      // Verifica token com a API (rota protegida)
+      await api.get("/users/profile");
+      return true;
+    } catch (err) {
+      // Se inválido/expirado, limpa storage e retorna false
+      const status = err?.response?.status;
+      if (status === 401) {
+        await AsyncStorage.removeItem("user_token");
+        await AsyncStorage.removeItem("user_data");
+      }
+      return false;
+    }
   } catch (error) {
     return false;
   }

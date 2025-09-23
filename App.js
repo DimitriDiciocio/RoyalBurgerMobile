@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useIsFocused } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Header from "./components/Header";
 import CarouselImg from "./components/CarouselImg";
@@ -10,10 +10,41 @@ import MenuCategory from "./components/MenuCategory";
 import Login from "./screens/login";
 import Cadastro from "./screens/cadastro";
 import Produto from "./screens/produto";
+import React, { useEffect, useState } from 'react';
+import { isAuthenticated, getStoredUserData } from "./services";
 
 const Stack = createNativeStackNavigator();
 
 function HomeScreen({ navigation }) {
+    const isFocused = useIsFocused();
+    const [loggedIn, setLoggedIn] = useState(false);
+    const [userInfo, setUserInfo] = useState(null);
+
+    useEffect(() => {
+        const checkAuth = async () => {
+            try {
+                const ok = await isAuthenticated();
+                setLoggedIn(!!ok);
+                if (ok) {
+                    const user = await getStoredUserData();
+                    // Normaliza campos esperados pelo Header
+                    const normalized = user ? {
+                        name: user.full_name || user.name || 'Usuário',
+                        points: user.points || '0',
+                        address: user.address || undefined,
+                        avatar: undefined,
+                    } : null;
+                    setUserInfo(normalized);
+                } else {
+                    setUserInfo(null);
+                }
+            } catch (e) {
+                setLoggedIn(false);
+                setUserInfo(null);
+            }
+        };
+        checkAuth();
+    }, [isFocused]);
     const mostOrderedData = [
         {
             title: "Hambúrguer Clássico",
@@ -99,19 +130,8 @@ function HomeScreen({ navigation }) {
             <View style={styles.header}>
                 <Header 
                     navigation={navigation} 
-                    type="home"
-                    // Exemplo de como seria para usuário logado:
-                    // type="logged"
-                    // userInfo={{
-                    //     name: "João Silva",
-                    //     points: "1,250",
-                    //     avatar: require('./assets/img/user-avatar.png')
-                    // }}
-                    // rightButton={
-                    //     <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-                    //         <Text>Sair</Text>
-                    //     </TouchableOpacity>
-                    // }
+                    type={loggedIn ? 'logged' : 'home'}
+                    userInfo={userInfo}
                 />
             </View>
 
@@ -123,11 +143,13 @@ function HomeScreen({ navigation }) {
                 />
             </View>
 
-            {/* Botão fixo */}
-            <View style={styles.fixedButtonContainer}>
-                <LoginButton navigation={navigation} />
-            </View>
-
+            {/* Botão fixo: só exibe se não estiver logado */}
+            {!loggedIn && (
+                <View style={styles.fixedButtonContainer}>
+                    <LoginButton navigation={navigation} />
+                </View>
+            )}
+    
             <StatusBar style="auto" />
         </View>
     );
