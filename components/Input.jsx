@@ -96,14 +96,8 @@ export default function Input({
 
     // Função para verificar se deve mostrar erro
     const shouldShowError = () => {
-        if (!error) return false;
-        if (type === 'email' && value.length > 0) {
-            return !validateEmail(value);
-        }
-        if (type === 'password' && value.length > 0) {
-            return !validatePassword(value);
-        }
-        return error.length > 0;
+        // Exibe erro somente quando prop error vier preenchida
+        return Boolean(error && typeof error === 'string' && error.length > 0);
     };
 
     // Estilos animados do label

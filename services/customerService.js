@@ -19,10 +19,13 @@ import api from "./api";
 export const registerCustomer = async (userData) => {
   try {
     // Mapear os dados do formulário para o formato esperado pela API
+    // Converte data de DD/MM/AAAA (UI) para DD-MM-AAAA (API)
+    const normalizedDob = (userData.dataNascimento || '').replaceAll('/', '-');
+
     const apiData = {
       full_name: userData.nomeCompleto,
       email: userData.email,
-      date_of_birth: userData.dataNascimento,
+      date_of_birth: normalizedDob,
       phone: userData.telefone,
       password: userData.senha,
       password_confirmation: userData.confirmarSenha,
@@ -41,6 +44,8 @@ export const registerCustomer = async (userData) => {
     const structuredError = {
       success: false,
       message:
+        error.response?.data?.error ||
+        error.response?.data?.msg ||
         error.response?.data?.message ||
         error.message ||
         "Erro ao realizar cadastro",

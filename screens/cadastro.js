@@ -46,15 +46,48 @@ export default function Cadastro({navigation}) {
 
     // Função para validar data de nascimento
     const validateDate = (date) => {
-        const dateRegex = /^(\d{2})-(\d{2})-(\d{4})$/;
-        if (!dateRegex.test(date)) return false;
-        
-        const [, day, month, year] = date.match(dateRegex);
+        // Se ainda não tem tamanho completo, não trava o usuário; deixa a API validar depois
+        if (!date || date.length < 10) {
+            return { valid: true, message: '' };
+        }
+
+        const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+        if (!dateRegex.test(date)) {
+            // Não padroniza aqui para permitir que a mensagem específica da API (ex.: ano inválido) apareça
+            return { valid: true, message: '' };
+        }
+
+        const [, dayStr, monthStr, yearStr] = date.match(dateRegex);
+        const day = parseInt(dayStr, 10);
+        const month = parseInt(monthStr, 10);
+        const year = parseInt(yearStr, 10);
+
+        // Padroniza mês inválido no cliente
+        if (month < 1 || month > 12) {
+            return { valid: false, message: 'Mês inválido (use 01-12)' };
+        }
+
+        // Verifica consistência de dia
         const birthDate = new Date(year, month - 1, day);
+        if (birthDate.getMonth() + 1 !== month || birthDate.getDate() !== day || birthDate.getFullYear() !== year) {
+            return { valid: false, message: 'Data inválida' };
+        }
+
+        // Regras de idade
         const today = new Date();
-        const age = today.getFullYear() - birthDate.getFullYear();
-        
-        return age >= 18 && age <= 120;
+        let age = today.getFullYear() - year;
+        const beforeBirthdayThisYear = (today.getMonth() + 1 < month) || ((today.getMonth() + 1 === month) && (today.getDate() < day));
+        if (beforeBirthdayThisYear) age -= 1;
+
+        if (age < 18) {
+            return { valid: false, message: 'Você deve ter pelo menos 18 anos' };
+        }
+
+        if (age > 120) {
+            return { valid: false, message: 'Data inválida' };
+        }
+
+        return { valid: true, message: '' };
     };
 
     // Função para validar senha
@@ -98,10 +131,10 @@ export default function Cadastro({navigation}) {
 
         // Validação de email
         if (!email.trim()) {
-            setEmailError('E-mail é obrigatório');
+            setEmailError('Email é obrigatório');
             hasError = true;
         } else if (!validateEmail(email)) {
-            setEmailError('Digite um e-mail válido');
+            setEmailError('Digite um email válido');
             hasError = true;
         }
 
@@ -109,9 +142,14 @@ export default function Cadastro({navigation}) {
         if (!dataNascimento.trim()) {
             setDataError('Data de nascimento é obrigatória');
             hasError = true;
-        } else if (!validateDate(dataNascimento)) {
-            setDataError('Data inválida ou você deve ter pelo menos 18 anos');
-            hasError = true;
+        } else {
+            const { valid, message } = validateDate(dataNascimento);
+            if (!valid) {
+                setDataError(message);
+                hasError = true;
+            } else {
+                setDataError('');
+            }
         }
 
         // Validação de telefone
@@ -121,6 +159,16 @@ export default function Cadastro({navigation}) {
         } else if (!validatePhone(telefone)) {
             setTelefoneError('Digite um telefone válido');
             hasError = true;
+        } else {
+            // Após validar formato, verifica se o primeiro dígito do número local é 9
+            const digits = telefone.replace(/\D/g, '');
+            if (digits.length >= 11) {
+                const firstLocalDigit = digits[2];
+                if (firstLocalDigit !== '9') {
+                    setTelefoneError('Telefone deve começar com 9');
+                    hasError = true;
+                }
+            }
         }
 
         // Validação de senha
@@ -148,14 +196,47 @@ export default function Cadastro({navigation}) {
         setIsSubmitting(true);
         try {
             const response = await registerCustomer({nomeCompleto, email, dataNascimento, telefone, senha, confirmarSenha});
-            setSubmitSuccess(response?.message || 'Cadastro realizado com sucesso.');
+            const apiSuccessMsg = response?.data?.message || response?.message;
+            setSubmitSuccess(apiSuccessMsg || 'Cadastro realizado com sucesso.');
             // Redireciona para login após breve confirmação
             setTimeout(() => {
                 navigation.navigate('Login');
             }, 800);
         } catch (error) {
-            const message = error?.message || 'Erro ao realizar cadastro.';
-            setSubmitError(message);
+            // Normaliza mensagem da API
+            let apiErrMsg = error?.data?.error || error?.data?.msg || error?.data?.message || '';
+            if (apiErrMsg) {
+                apiErrMsg = apiErrMsg.replace(/E-mail/gi, 'Email');
+            }
+
+            const lower = apiErrMsg.toLowerCase();
+
+            // Direciona por campo
+            if (/(data|nascimento|dd-?mm-?a{4}|dd\/?mm\/?a{4})/i.test(apiErrMsg)) {
+                setDataError(apiErrMsg);
+            }
+            if (lower.includes('email')) {
+                setEmailError(apiErrMsg || 'Email inválido');
+            }
+            if (lower.includes('telefone') || lower.includes('celular')) {
+                setTelefoneError(apiErrMsg || 'Telefone inválido');
+            }
+            if (lower.includes('senha')) {
+                if (lower.includes('confirma')) {
+                    setConfirmarSenhaError(apiErrMsg);
+                } else {
+                    setSenhaError(apiErrMsg);
+                }
+            }
+
+            // Códigos específicos
+            if (error?.status === 409) {
+                if (lower.includes('email')) setEmailError(apiErrMsg || 'Email já cadastrado');
+                if (lower.includes('telefone') || lower.includes('celular')) setTelefoneError(apiErrMsg || 'Telefone já cadastrado');
+            }
+
+            // Não mostra erro geral no rodapé
+            setSubmitError('');
         } finally {
             setIsSubmitting(false);
         }
@@ -208,17 +289,20 @@ export default function Cadastro({navigation}) {
     };
 
     const handleDataChange = (text) => {
-        // Formatação automática da data no formato DD-MM-YYYY
+        // Formatação automática da data no formato DD/MM/YYYY
         let formatted = text.replace(/\D/g, '');
         if (formatted.length >= 5) {
-            formatted = formatted.replace(/(\d{2})(\d{2})(\d{0,4})/, '$1-$2-$3');
+            formatted = formatted.replace(/(\d{2})(\d{2})(\d{0,4})/, '$1/$2/$3');
         } else if (formatted.length >= 3) {
-            formatted = formatted.replace(/(\d{2})(\d{0,2})/, '$1-$2');
+            formatted = formatted.replace(/(\d{2})(\d{0,2})/, '$1/$2');
         }
         
         setDataNascimento(formatted);
-        if (dataError && formatted.trim() && validateDate(formatted)) {
-            setDataError('');
+        if (formatted.trim()) {
+            const { valid } = validateDate(formatted);
+            if (valid && dataError) {
+                setDataError('');
+            }
         }
     };
 
@@ -274,7 +358,7 @@ export default function Cadastro({navigation}) {
                         value={dataNascimento}
                         onChangeText={handleDataChange}
                         error={dataError}
-                        placeholder="DD-MM-AAAA"
+                        placeholder="DD/MM/AAAA"
                         maxLength={10}
                     />
 
@@ -327,9 +411,7 @@ export default function Cadastro({navigation}) {
                         error={confirmarSenhaError}
                     />
 
-                    {!!submitError && (
-                        <Text style={{ color: '#D32F2F', marginBottom: 8 }}>{submitError}</Text>
-                    )}
+                    {/* Erro geral removido: erros aparecem apenas nos inputs */}
                     {!!submitSuccess && (
                         <Text style={{ color: '#2E7D32', marginBottom: 8 }}>{submitSuccess}</Text>
                     )}
