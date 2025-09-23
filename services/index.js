@@ -41,6 +41,7 @@ export {
   getCustomerById,
   updateCustomer,
   deactivateCustomer,
+  verifyMyPassword,
   activateCustomer,
   getCustomerAddresses,
   addCustomerAddress,

@@ -115,6 +115,20 @@ export const deactivateCustomer = async (customerId) => {
 };
 
 /**
+ * Verifica a senha do cliente autenticado antes de operações sensíveis.
+ * @param {string} password - Senha atual do usuário
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const verifyMyPassword = async (password) => {
+  try {
+    const response = await api.post(`/customers/me/verify-password`, { password });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Reativa um cliente.
  * @param {number} customerId - ID do cliente
  * @returns {Promise<object>} - Resposta da API
