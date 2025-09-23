@@ -21,7 +21,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export const login = async (userData) => {
   try {
     // Faz a requisição já com userData (que deve ter { email, password })
-    console.log(userData);
     const response = await api.post("/users/login", userData);
 
     const { access_token, user, full_name, roles } = response.data || {};
