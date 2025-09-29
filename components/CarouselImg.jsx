@@ -6,6 +6,8 @@ const { width } = Dimensions.get('window');
 export default function CarouselImg() {
     const [currentIndex, setCurrentIndex] = useState(0);
     const flatListRef = useRef(null);
+    const autoScrollTimerRef = useRef(null);
+    const isDraggingRef = useRef(false);
 
     const banners = [
         require('../assets/img/1banner-bem-vindo.png'),
@@ -15,25 +17,68 @@ export default function CarouselImg() {
         require('../assets/img/5banner-sanduíches.png'),
     ];
 
-    // Auto-scroll a cada 3 segundos
-    useEffect(() => {
-        const interval = setInterval(() => {
+    const startAutoScroll = () => {
+        if (autoScrollTimerRef.current) return;
+        autoScrollTimerRef.current = setInterval(() => {
+            if (isDraggingRef.current) return;
             const nextIndex = (currentIndex + 1) % banners.length;
-            flatListRef.current?.scrollToIndex({
-                index: nextIndex,
-                animated: true
-            });
+            flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
             setCurrentIndex(nextIndex);
         }, 5000);
+    };
 
-        return () => clearInterval(interval);
-    }, [currentIndex, banners.length]);
+    const stopAutoScroll = () => {
+        if (autoScrollTimerRef.current) {
+            clearInterval(autoScrollTimerRef.current);
+            autoScrollTimerRef.current = null;
+        }
+    };
+
+    // Inicia o auto-scroll ao montar e limpa ao desmontar
+    useEffect(() => {
+        startAutoScroll();
+        return () => stopAutoScroll();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Quando o índice mudar manualmente, garantimos que o timer exista
+    useEffect(() => {
+        if (!isDraggingRef.current) {
+            // reinicia o timer para manter o ritmo após interações
+            stopAutoScroll();
+            startAutoScroll();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentIndex]);
+
+    const onScrollBeginDrag = () => {
+        isDraggingRef.current = true;
+        stopAutoScroll();
+    };
 
     const onScrollEnd = (event) => {
         const contentOffset = event.nativeEvent.contentOffset.x;
-        const index = Math.round(contentOffset / width);
-        setCurrentIndex(index);
+        // Adiciona um threshold para evitar mudanças muito sensíveis
+        const threshold = width * 0.3; // 30% da largura da tela
+        let index = Math.round(contentOffset / width);
+        
+        // Garante que o índice está dentro dos limites
+        index = Math.max(0, Math.min(index, banners.length - 1));
+        
+        // Só atualiza se houve mudança significativa
+        if (Math.abs(contentOffset - (currentIndex * width)) > threshold || index !== currentIndex) {
+            setCurrentIndex(index);
+        }
+        
+        isDraggingRef.current = false;
+        startAutoScroll();
     };
+
+    const getItemLayout = (_, index) => ({
+        length: width,
+        offset: width * index,
+        index,
+    });
 
     const renderItem = ({ item }) => (
         <View style={styles.imageContainer}>
@@ -54,6 +99,15 @@ export default function CarouselImg() {
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
+                snapToInterval={width}
+                decelerationRate="normal"
+                scrollEventThrottle={16}
+                minimumZoomScale={1}
+                maximumZoomScale={1}
+                bounces={false}
+                scrollsToTop={false}
+                getItemLayout={getItemLayout}
+                onScrollBeginDrag={onScrollBeginDrag}
                 onMomentumScrollEnd={onScrollEnd}
                 keyExtractor={(item, index) => index.toString()}
             />

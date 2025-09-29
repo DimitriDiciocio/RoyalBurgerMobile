@@ -7,6 +7,7 @@ import CarouselImg from "./components/CarouselImg";
 import LoginButton from "./components/ButtonView";
 import ViewCardItem from "./components/ViewCardItem";
 import MenuCategory from "./components/MenuCategory";
+import MenuNavigation from "./components/MenuNavigation";
 import Login from "./screens/login";
 import Cadastro from "./screens/cadastro";
 import Produto from "./screens/produto";
@@ -146,7 +147,7 @@ function HomeScreen({ navigation }) {
             </View>
 
             {/* MenuCategory */}
-            <View style={styles.menuContainer}>
+            <View style={[styles.menuContainer, loggedIn && styles.menuContainerWithNavigation]}>
                 <MenuCategory
                     ListHeaderComponent={renderPromotionalHeader}
                     showFixedButton={true}
@@ -160,12 +161,10 @@ function HomeScreen({ navigation }) {
                 </View>
             )}
 
-            {/* Botão de logout temporário */}
+            {/* Menu de navegação fixo: só exibe se estiver logado */}
             {loggedIn && (
-                <View style={styles.logoutButtonContainer}>
-                    <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                        <Text style={styles.logoutButtonText}>Logout</Text>
-                    </TouchableOpacity>
+                <View style={styles.menuNavigationContainer}>
+                    <MenuNavigation navigation={navigation} />
                 </View>
             )}
     
@@ -219,6 +218,9 @@ const styles = StyleSheet.create({
         flex: 1,
         marginTop: 105,
     },
+    menuContainerWithNavigation: {
+        paddingBottom: 70, // Altura do MenuNavigation
+    },
     promotionalContent: {
         backgroundColor: '#F6F6F6',
         paddingTop: 10,
@@ -260,5 +262,12 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 16,
         fontWeight: 'bold',
+    },
+    menuNavigationContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 1000,
     },
 });
