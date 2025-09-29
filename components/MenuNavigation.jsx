@@ -21,10 +21,10 @@ const perfilSvg = `<svg width="30" height="30" viewBox="0 0 30 30" fill="none" x
 const MenuNavigation = ({ navigation }) => {
   const menuItems = [
     { id: 'home', icon: 'house', label: 'Início', screen: 'Home', type: 'svg' },
-    { id: 'menu', icon: 'crown', label: 'Clube Royal', screen: 'Home', type: 'svg' },
+    { id: 'menu', icon: 'crown', label: 'Clube Royal', screen: 'ClubeRoyal', type: 'svg' },
     { id: 'logo', icon: 'logo', label: '', screen: 'Home', type: 'logo' },
-    { id: 'orders', icon: 'pedido', label: 'Pedidos', screen: 'Home', type: 'svg' },
-    { id: 'profile', icon: 'perfil', label: 'Perfil', screen: 'Home', type: 'svg' },
+    { id: 'orders', icon: 'pedido', label: 'Pedidos', screen: 'Pedidos', type: 'svg' },
+    { id: 'profile', icon: 'perfil', label: 'Perfil', screen: 'Perfil', type: 'svg' },
   ];
 
   const getSvgIcon = (iconName) => {
@@ -101,7 +101,6 @@ const styles = StyleSheet.create({
   menuLabel: {
     fontSize: 10,
     color: '#666',
-    marginTop: 2,
     textAlign: 'center',
   },
   logoImage: {

@@ -11,6 +11,9 @@ import MenuNavigation from "./components/MenuNavigation";
 import Login from "./screens/login";
 import Cadastro from "./screens/cadastro";
 import Produto from "./screens/produto";
+import Perfil from "./screens/perfil";
+import ClubeRoyal from "./screens/clubeRoyal";
+import Pedidos from "./screens/pedidos";
 import React, { useEffect, useState } from 'react';
 import { isAuthenticated, getStoredUserData, logout } from "./services";
 
@@ -137,7 +140,6 @@ function HomeScreen({ navigation }) {
 
     return (
         <View style={styles.container}>
-            {/* Header principal fixo */}
             <View style={styles.header}>
                 <Header 
                     navigation={navigation} 
@@ -146,7 +148,6 @@ function HomeScreen({ navigation }) {
                 />
             </View>
 
-            {/* MenuCategory */}
             <View style={[styles.menuContainer, loggedIn && styles.menuContainerWithNavigation]}>
                 <MenuCategory
                     ListHeaderComponent={renderPromotionalHeader}
@@ -154,14 +155,12 @@ function HomeScreen({ navigation }) {
                 />
             </View>
 
-            {/* Botão fixo: só exibe se não estiver logado */}
             {!loggedIn && (
                 <View style={styles.fixedButtonContainer}>
                     <LoginButton navigation={navigation} />
                 </View>
             )}
 
-            {/* Menu de navegação fixo: só exibe se estiver logado */}
             {loggedIn && (
                 <View style={styles.menuNavigationContainer}>
                     <MenuNavigation navigation={navigation} />
@@ -176,26 +175,41 @@ function HomeScreen({ navigation }) {
 export default function App() {
     return (
         <NavigationContainer>
-            <Stack.Navigator initialRouteName="Home">
+            <Stack.Navigator 
+                initialRouteName="Home"
+                screenOptions={{
+                    headerShown: false,
+                    animation: 'fade',
+                    animationDuration: 200
+                }}
+            >
                 <Stack.Screen 
                     name="Home" 
                     component={HomeScreen}
-                    options={{ headerShown: false }}
                 />
                 <Stack.Screen 
                     name="Login" 
                     component={Login}
-                    options={{ headerShown: false }}
                 />
                 <Stack.Screen 
                     name="Cadastro" 
                     component={Cadastro}
-                    options={{ headerShown: false }}
                 />
                 <Stack.Screen 
                     name="Produto" 
                     component={Produto}
-                    options={{ headerShown: false }}
+                />
+                <Stack.Screen 
+                    name="Perfil" 
+                    component={Perfil}
+                />
+                <Stack.Screen 
+                    name="ClubeRoyal" 
+                    component={ClubeRoyal}
+                />
+                <Stack.Screen 
+                    name="Pedidos" 
+                    component={Pedidos}
                 />
             </Stack.Navigator>
         </NavigationContainer>
