@@ -1,5 +1,5 @@
-  import React, { useEffect, useState } from 'react';
-  import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView } from 'react-native';
   import { SvgXml } from 'react-native-svg';
   import { useIsFocused } from '@react-navigation/native';
   import { isAuthenticated, getStoredUserData } from '../services';
@@ -23,11 +23,19 @@
   </svg>`;
 
   const crownSvg = `<svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M8.08594 3.54375C8.30156 3.37266 8.4375 3.10781 8.4375 2.8125C8.4375 2.29453 8.01797 1.875 7.5 1.875C6.98203 1.875 6.5625 2.29453 6.5625 2.8125C6.5625 3.10781 6.70078 3.37266 6.91406 3.54375L5.31094 6.06562C5.07656 6.43359 4.57734 6.525 4.22812 6.2625L2.83359 5.21953C2.93906 5.06953 3 4.88438 3 4.6875C3 4.16953 2.58047 3.75 2.0625 3.75C1.54453 3.75 1.125 4.16953 1.125 4.6875C1.125 5.19844 1.53516 5.61562 2.04375 5.625L2.80781 10.7227C2.91797 11.4563 3.54844 12 4.29141 12H10.7086C11.4516 12 12.082 11.4563 12.1922 10.7227L12.9562 5.625C13.4648 5.61562 13.875 5.19844 13.875 4.6875C13.875 4.16953 13.4555 3.75 12.9375 3.75C12.4195 3.75 12 4.16953 12 4.6875C12 4.88438 12.0609 5.06953 12.1664 5.21953L10.7742 6.26484C10.425 6.52734 9.92578 6.43594 9.69141 6.06797L8.08594 3.54375Z" fill="#FFD700"/>
+  </svg>`;
+
+  const crownGraySvg = `<svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
   <path d="M8.08594 3.54375C8.30156 3.37266 8.4375 3.10781 8.4375 2.8125C8.4375 2.29453 8.01797 1.875 7.5 1.875C6.98203 1.875 6.5625 2.29453 6.5625 2.8125C6.5625 3.10781 6.70078 3.37266 6.91406 3.54375L5.31094 6.06562C5.07656 6.43359 4.57734 6.525 4.22812 6.2625L2.83359 5.21953C2.93906 5.06953 3 4.88438 3 4.6875C3 4.16953 2.58047 3.75 2.0625 3.75C1.54453 3.75 1.125 4.16953 1.125 4.6875C1.125 5.19844 1.53516 5.61562 2.04375 5.625L2.80781 10.7227C2.91797 11.4563 3.54844 12 4.29141 12H10.7086C11.4516 12 12.082 11.4563 12.1922 10.7227L12.9562 5.625C13.4648 5.61562 13.875 5.19844 13.875 4.6875C13.875 4.16953 13.4555 3.75 12.9375 3.75C12.4195 3.75 12 4.16953 12 4.6875C12 4.88438 12.0609 5.06953 12.1664 5.21953L10.7742 6.26484C10.425 6.52734 9.92578 6.43594 9.69141 6.06797L8.08594 3.54375Z" fill="#888888"/>
   </svg>`;
 
   const gearSvg = `<svg width="25" height="25" viewBox="0 0 25 25" fill="none" xmlns="http://www.w3.org/2000/svg">
   <path d="M10.1207 2.87109C10.2379 2.29297 10.7496 1.875 11.3434 1.875H13.6793C14.273 1.875 14.7848 2.29297 14.9019 2.87109L15.4684 5.60547C16.0191 5.83984 16.5348 6.14062 17.0035 6.49609L19.6519 5.61719C20.2144 5.42969 20.8316 5.66406 21.1285 6.17969L22.2965 8.20312C22.5934 8.71875 22.4879 9.36719 22.0426 9.76172L19.9605 11.6133C19.9957 11.9023 20.0113 12.1992 20.0113 12.5C20.0113 12.8008 19.9918 13.0977 19.9605 13.3867L22.0465 15.2422C22.4918 15.6367 22.5934 16.2891 22.3004 16.8008L21.1324 18.8242C20.8355 19.3359 20.2184 19.5742 19.6559 19.3867L17.0074 18.5078C16.5348 18.8633 16.0191 19.1602 15.4723 19.3984L14.9098 22.1289C14.7887 22.7109 14.2769 23.125 13.6871 23.125H11.3512C10.7574 23.125 10.2457 22.707 10.1285 22.1289L9.56601 19.3984C9.01523 19.1641 8.50351 18.8633 8.03085 18.5078L5.3707 19.3867C4.8082 19.5742 4.19101 19.3398 3.89413 18.8242L2.72617 16.8008C2.42929 16.2852 2.53476 15.6367 2.98007 15.2422L5.06601 13.3867C5.03085 13.0977 5.01523 12.8008 5.01523 12.5C5.01523 12.1992 5.03476 11.9023 5.06601 11.6133L2.98007 9.75781C2.53476 9.36328 2.4332 8.71094 2.72617 8.19922L3.89413 6.17578C4.19101 5.66016 4.8082 5.42578 5.3707 5.61328L8.01913 6.49219C8.49179 6.13672 9.00742 5.83984 9.55429 5.60156L10.1207 2.87109ZM12.5113 15.625C14.2379 15.6172 15.6324 14.2148 15.6246 12.4883C15.6168 10.7617 14.2144 9.36719 12.4879 9.375C10.7613 9.38281 9.36679 10.7852 9.3746 12.5117C9.38242 14.2383 10.7848 15.6328 12.5113 15.625Z" fill="#888888"/>
+  </svg>`;
+
+  const infoSvg = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M8 16C12.4187 16 16 12.4187 16 8C16 3.58125 12.4187 0 8 0C3.58125 0 0 3.58125 0 8C0 12.4187 3.58125 16 8 16ZM7 5C7 4.44688 7.44688 4 8 4C8.55313 4 9 4.44688 9 5C9 5.55312 8.55313 6 8 6C7.44688 6 7 5.55312 7 5ZM6.75 7H8.25C8.66562 7 9 7.33437 9 7.75V10.5H9.25C9.66562 10.5 10 10.8344 10 11.25C10 11.6656 9.66562 12 9.25 12H6.75C6.33437 12 6 11.6656 6 11.25C6 10.8344 6.33437 10.5 6.75 10.5H7.5V8.5H6.75C6.33437 8.5 6 8.16562 6 7.75C6 7.33437 6.33437 7 6.75 7Z" fill="#A0A0A0"/>
   </svg>`;
 
   export default function Perfil({ navigation }) {
@@ -88,7 +96,7 @@
         case 'localization':
           return localizationSvg;
         case 'crown':
-          return crownSvg;
+          return crownGraySvg; // Usa o SVG cinza para o menu
         case 'gear':
           return gearSvg;
         default:
@@ -98,38 +106,66 @@
 
     return (
       <View style={styles.container}>
-        <View style={styles.banner} />
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.banner} />
 
-        <View style={styles.modal}>
-          {/* Avatar */}
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {getInitials(userInfo?.name)}
+          <View style={styles.modal}>
+            {/* Avatar */}
+            <View style={styles.avatarContainer}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {getInitials(userInfo?.name)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Nome */}
+            <View style={styles.userNameContainer}>
+              <Text style={styles.userName}>
+                {(userInfo?.name || "Usuário")}
               </Text>
+              <View style={styles.borderLine} />
+            </View>
+
+            {/* Menu Options */}
+            <View style={styles.menuOptions}>
+              {menuOptions.map((option) => (
+                <TouchableOpacity key={option.id} style={styles.menuItem}>
+                  <View style={styles.menuIcon}>
+                    <SvgXml xml={getSvgIcon(option.icon)} width={25} height={25} />
+                  </View>
+                  <Text style={styles.menuText}>{option.title}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 
-          {/* Nome */}
-          <View style={styles.userNameContainer}>
-            <Text style={styles.userName}>
-              {(userInfo?.name || "Usuário")}
-            </Text>
-            <View style={styles.borderLine} />
-          </View>
-
-          {/* Menu Options */}
-          <View style={styles.menuOptions}>
-            {menuOptions.map((option) => (
-              <TouchableOpacity key={option.id} style={styles.menuItem}>
-                <View style={styles.menuIcon}>
-                  <SvgXml xml={getSvgIcon(option.icon)} width={25} height={25} />
-                </View>
-                <Text style={styles.menuText}>{option.title}</Text>
+          {/* Container de Seus Pontos */}
+          <View style={styles.pointsContainer}>
+            {/* Header do Container */}
+            <View style={styles.pointsHeader}>
+              <Text style={styles.pointsTitle}>Seus Pontos</Text>
+              <TouchableOpacity style={styles.infoButton}>
+                <SvgXml xml={infoSvg} width={16} height={16} />
               </TouchableOpacity>
-            ))}
+            </View>
+
+            {/* Conteúdo do Container */}
+            <View style={styles.pointsContent}>
+              <View style={styles.pointsDisplay}>
+                <SvgXml xml={crownSvg} width={40} height={40} />
+                <Text style={styles.pointsNumber}>200</Text>
+              </View>
+              <Text style={styles.pointsExpiration}>
+                Faltam XX dias para seus pontos expirarem
+              </Text>
+            </View>
           </View>
-        </View>
+        </ScrollView>
 
         <View style={styles.menuNavigationContainer}>
           <MenuNavigation navigation={navigation} />
@@ -142,6 +178,14 @@
     container: {
       flex: 1,
       alignItems: 'center',
+    },
+    scrollView: {
+      flex: 1,
+      width: '100%',
+    },
+    scrollContent: {
+      alignItems: 'center',
+      paddingBottom: 100, // Espaço para o menu de navegação
     },
     banner: {
       width: '100%',
@@ -234,5 +278,58 @@
       left: 0,
       right: 0,
       zIndex: 1000,
+    },
+    // Estilos do Container de Pontos
+    pointsContainer: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 10,
+      marginTop: 20,
+      padding: 20,
+      width: '70%',
+      maxWidth: 350,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: {
+        width: 0,
+        height: 4,
+      },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    pointsHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      width: '100%',
+      marginBottom: 20,
+    },
+    pointsTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: '#333',
+    },
+    infoButton: {
+      padding: 5,
+    },
+    pointsContent: {
+      alignItems: 'center',
+      width: '100%',
+    },
+    pointsDisplay: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 15,
+    },
+    pointsNumber: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: '#FFD700',
+      marginLeft: 15,
+    },
+    pointsExpiration: {
+      fontSize: 14,
+      color: '#888888',
+      textAlign: 'center',
     },
   });

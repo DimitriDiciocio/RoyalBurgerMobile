@@ -50,24 +50,33 @@ const MenuNavigation = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {menuItems.map((item) => (
-        <TouchableOpacity
-          key={item.id}
-          style={styles.menuItem}
-          onPress={() => handleNavigation(item.screen)}
-          activeOpacity={0.7}
-        >
-          {item.type === 'logo' ? (
-            <Image
-              source={require('../assets/img/logoIcon.png')}
-              style={styles.logoImage}
-            />
-          ) : (
+      {menuItems.map((item) => {
+        // Se for o logo (coroa), renderiza sem TouchableOpacity
+        if (item.type === 'logo') {
+          return (
+            <View key={item.id} style={styles.menuItem}>
+              <Image
+                source={require('../assets/img/logoIcon.png')}
+                style={styles.logoImage}
+              />
+              <Text style={styles.menuLabel}>{item.label}</Text>
+            </View>
+          );
+        }
+        
+        // Para outros itens, mantém o TouchableOpacity
+        return (
+          <TouchableOpacity
+            key={item.id}
+            style={styles.menuItem}
+            onPress={() => handleNavigation(item.screen)}
+            activeOpacity={0.7}
+          >
             <SvgXml xml={getSvgIcon(item.icon)} width={30} height={30} />
-          )}
-          <Text style={styles.menuLabel}>{item.label}</Text>
-        </TouchableOpacity>
-      ))}
+            <Text style={styles.menuLabel}>{item.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 };
