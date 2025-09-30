@@ -3,7 +3,11 @@ import { View, StyleSheet, Text, TouchableOpacity, ScrollView } from 'react-nati
   import { SvgXml } from 'react-native-svg';
   import { useIsFocused } from '@react-navigation/native';
   import { isAuthenticated, getStoredUserData } from '../services';
+  import { getCustomerAddresses, addCustomerAddress, updateCustomerAddress, deleteCustomerAddress } from '../services/customerService';
   import MenuNavigation from '../components/MenuNavigation';
+  import DadosContaBottomSheet from '../components/DadosContaBottomSheet';
+  import EnderecosBottomSheet from '../components/EnderecosBottomSheet';
+  import EditarEnderecoBottomSheet from '../components/EditarEnderecoBottomSheet';
 
   // SVGs dos ícones
   const lupaSvg = `<svg width="25" height="25" viewBox="0 0 25 25" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -41,6 +45,11 @@ import { View, StyleSheet, Text, TouchableOpacity, ScrollView } from 'react-nati
   export default function Perfil({ navigation }) {
     const isFocused = useIsFocused();
     const [userInfo, setUserInfo] = useState(null);
+    const [showDadosConta, setShowDadosConta] = useState(false);
+    const [showEnderecos, setShowEnderecos] = useState(false);
+    const [showEditarEndereco, setShowEditarEndereco] = useState(false);
+    const [enderecoSelecionado, setEnderecoSelecionado] = useState(null);
+    const [enderecos, setEnderecos] = useState([]);
 
     useEffect(() => {
       const getUserData = async () => {
@@ -48,23 +57,101 @@ import { View, StyleSheet, Text, TouchableOpacity, ScrollView } from 'react-nati
           const ok = await isAuthenticated();
           if (ok) {
             const user = await getStoredUserData();
-            // Normaliza campos esperados
+            // Mantém todos os dados do usuário
             const normalized = user ? {
+              ...user, // Mantém todos os campos do usuário
               name: user.full_name || user.name || 'Usuário',
               points: user.points || '0',
               address: user.address || undefined,
               avatar: undefined,
             } : null;
             setUserInfo(normalized);
+
+            // Buscar endereços do usuário
+            if (user?.id) {
+              fetchEnderecos(user.id);
+            }
           } else {
             setUserInfo(null);
+            setEnderecos([]);
           }
         } catch (e) {
           setUserInfo(null);
+          setEnderecos([]);
         }
       };
       getUserData();
     }, [isFocused]);
+
+    const fetchEnderecos = async (userId) => {
+      try {
+        const addresses = await getCustomerAddresses(userId);
+        setEnderecos(addresses);
+      } catch (error) {
+        console.error('Erro ao buscar endereços:', error);
+        setEnderecos([]);
+      }
+    };
+
+    const handleAddEndereco = () => {
+      setEnderecoSelecionado(null);
+      setShowEnderecos(false);
+      setShowEditarEndereco(true);
+    };
+
+    const handleEditEndereco = (endereco) => {
+      setEnderecoSelecionado(endereco);
+      setShowEnderecos(false);
+      setShowEditarEndereco(true);
+    };
+
+    const handleSaveEndereco = async (formData) => {
+      try {
+        if (!userInfo?.id) return;
+
+        if (formData.id) {
+          // Editar endereço existente
+          await updateCustomerAddress(userInfo.id, formData.id, {
+            street: formData.street,
+            number: formData.number,
+            complement: formData.complement,
+            neighborhood: formData.neighborhood,
+          });
+        } else {
+          // Adicionar novo endereço
+          await addCustomerAddress(userInfo.id, {
+            street: formData.street,
+            number: formData.number,
+            complement: formData.complement,
+            neighborhood: formData.neighborhood,
+          });
+        }
+
+        // Atualizar lista de endereços
+        await fetchEnderecos(userInfo.id);
+        setShowEditarEndereco(false);
+        setShowEnderecos(true);
+      } catch (error) {
+        console.error('Erro ao salvar endereço:', error);
+        alert('Erro ao salvar endereço. Tente novamente.');
+      }
+    };
+
+    const handleDeleteEndereco = async (enderecoId) => {
+      try {
+        if (!userInfo?.id) return;
+
+        await deleteCustomerAddress(userInfo.id, enderecoId);
+        
+        // Atualizar lista de endereços
+        await fetchEnderecos(userInfo.id);
+        setShowEditarEndereco(false);
+        setShowEnderecos(true);
+      } catch (error) {
+        console.error('Erro ao deletar endereço:', error);
+        alert('Erro ao deletar endereço. Tente novamente.');
+      }
+    };
 
     const menuOptions = [
       { id: 'cardapio', icon: 'lupa', title: 'Ver cardápio' },
@@ -134,7 +221,19 @@ import { View, StyleSheet, Text, TouchableOpacity, ScrollView } from 'react-nati
             {/* Menu Options */}
             <View style={styles.menuOptions}>
               {menuOptions.map((option) => (
-                <TouchableOpacity key={option.id} style={styles.menuItem}>
+                <TouchableOpacity 
+                  key={option.id} 
+                  style={styles.menuItem}
+                  onPress={() => {
+                    if (option.id === 'config') {
+                      navigation.navigate('Config');
+                    } else if (option.id === 'dados') {
+                      setShowDadosConta(true);
+                    } else if (option.id === 'enderecos') {
+                      setShowEnderecos(true);
+                    }
+                  }}
+                >
                   <View style={styles.menuIcon}>
                     <SvgXml xml={getSvgIcon(option.icon)} width={25} height={25} />
                   </View>
@@ -170,6 +269,34 @@ import { View, StyleSheet, Text, TouchableOpacity, ScrollView } from 'react-nati
         <View style={styles.menuNavigationContainer}>
           <MenuNavigation navigation={navigation} />
         </View>
+
+        {/* Bottom Sheet - Dados da Conta */}
+        <DadosContaBottomSheet
+          visible={showDadosConta}
+          onClose={() => setShowDadosConta(false)}
+          userData={userInfo}
+        />
+
+        {/* Bottom Sheet - Endereços */}
+        <EnderecosBottomSheet
+          visible={showEnderecos}
+          onClose={() => setShowEnderecos(false)}
+          enderecos={enderecos}
+          onAddNew={handleAddEndereco}
+          onEdit={handleEditEndereco}
+        />
+
+        {/* Bottom Sheet - Editar/Adicionar Endereço */}
+        <EditarEnderecoBottomSheet
+          visible={showEditarEndereco}
+          onClose={() => {
+            setShowEditarEndereco(false);
+            setShowEnderecos(true);
+          }}
+          endereco={enderecoSelecionado}
+          onSave={handleSaveEndereco}
+          onDelete={handleDeleteEndereco}
+        />
       </View>
     );
   }

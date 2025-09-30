@@ -14,6 +14,7 @@ import Produto from "./screens/produto";
 import Perfil from "./screens/perfil";
 import ClubeRoyal from "./screens/clubeRoyal";
 import Pedidos from "./screens/pedidos";
+import Config from "./screens/config";
 import React, { useEffect, useState } from 'react';
 import { isAuthenticated, getStoredUserData, logout } from "./services";
 
@@ -210,6 +211,10 @@ export default function App() {
                 <Stack.Screen 
                     name="Pedidos" 
                     component={Pedidos}
+                />
+                <Stack.Screen 
+                    name="Config" 
+                    component={Config}
                 />
             </Stack.Navigator>
         </NavigationContainer>
