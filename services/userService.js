@@ -53,7 +53,8 @@ export const login = async (userData) => {
       error?.response?.data?.msg ||
       error?.response?.data?.error ||
       error?.response?.data?.message;
-    const message = apiMsg || error?.message || "Não foi possível efetuar o login.";
+    const message =
+      apiMsg || error?.message || "Não foi possível efetuar o login.";
 
     return { ok: false, error: message, status };
   }
@@ -129,13 +130,51 @@ export const getStoredToken = async () => {
 };
 
 /**
+ * Obtém dados atualizados do usuário da API.
+ * @returns {Promise<object|null>} - Dados atualizados do usuário
+ */
+export const getCurrentUserProfile = async () => {
+  try {
+    const response = await api.get("/users/profile");
+    const userData = response.data;
+
+    // Atualiza os dados locais com os dados mais recentes da API
+    await AsyncStorage.setItem("user_data", JSON.stringify(userData));
+
+    return userData;
+  } catch (error) {
+    console.error("Erro ao obter perfil do usuário:", error);
+    throw error;
+  }
+};
+
+/**
+ * Testa se o token atual é válido fazendo uma requisição simples.
+ * @returns {Promise<boolean>} - True se o token é válido
+ */
+export const testTokenValidity = async () => {
+  try {
+    const token = await AsyncStorage.getItem("user_token");
+
+    if (!token) {
+      return false;
+    }
+
+    const response = await api.get("/users/profile");
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
+/**
  * Solicita redefinição de senha.
  * @param {string} email - Email do usuário
  * @returns {Promise<object>} - Resposta da API
  */
 export const requestPasswordReset = async (email) => {
   try {
-    const response = await api.post("/users/forgot-password", { email });
+    const response = await api.post("/users/request-password-reset", { email });
     return response.data;
   } catch (error) {
     throw error;
@@ -167,6 +206,14 @@ export const resetPassword = async (token, newPassword) => {
  */
 export const updateProfile = async (userData) => {
   try {
+    // Para clientes, usa a rota de customers
+    const user = await getStoredUserData();
+    if (user && user.role === "customer") {
+      const response = await api.put(`/customers/${user.id}`, userData);
+      return response.data;
+    }
+
+    // Para outros usuários, usa a rota de users
     const response = await api.put("/users/profile", userData);
 
     // Atualiza os dados locais se a atualização foi bem-sucedida
@@ -218,6 +265,19 @@ export const getProfile = async () => {
  */
 export const deleteAccount = async (password) => {
   try {
+    // Para clientes, usa a rota específica de customers
+    const user = await getStoredUserData();
+    if (user && user.role === "customer") {
+      const response = await api.delete("/customers/delete-account");
+
+      // Remove dados locais após deletar a conta
+      await AsyncStorage.removeItem("user_token");
+      await AsyncStorage.removeItem("user_data");
+
+      return response.data;
+    }
+
+    // Para outros usuários, usa a rota de users
     const response = await api.delete("/users/account", {
       data: { password },
     });
@@ -226,6 +286,137 @@ export const deleteAccount = async (password) => {
     await AsyncStorage.removeItem("user_token");
     await AsyncStorage.removeItem("user_data");
 
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Solicita verificação de email.
+ * @param {string} email - Email do usuário
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const requestEmailVerification = async (email) => {
+  try {
+    const response = await api.post("/users/request-email-verification", {
+      email,
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Verifica código de email.
+ * @param {string} email - Email do usuário
+ * @param {string} code - Código de verificação
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const verifyEmail = async (email, code) => {
+  try {
+    const response = await api.post("/users/verify-email", { email, code });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Reenvia código de verificação de email.
+ * @param {string} email - Email do usuário
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const resendVerificationCode = async (email) => {
+  try {
+    const response = await api.post("/users/resend-verification-code", {
+      email,
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Verifica senha do usuário.
+ * @param {string} password - Senha atual
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const verifyPassword = async (password) => {
+  try {
+    const response = await api.post("/users/verify-password", { password });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Verifica código 2FA e faz login.
+ * @param {number} userId - ID do usuário
+ * @param {string} code - Código 2FA
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const verify2FA = async (userId, code) => {
+  try {
+    const response = await api.post("/users/verify-2fa", {
+      user_id: userId,
+      code,
+    });
+
+    const { access_token, user } = response.data || {};
+
+    if (access_token) {
+      await AsyncStorage.setItem("user_token", access_token);
+
+      if (user) {
+        await AsyncStorage.setItem("user_data", JSON.stringify(user));
+      }
+    }
+
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Ativa/desativa 2FA.
+ * @param {boolean} enable - Se deve ativar ou desativar
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const toggle2FA = async (enable) => {
+  try {
+    const response = await api.post("/users/toggle-2fa", { enable });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Confirma ativação do 2FA.
+ * @param {string} code - Código de confirmação
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const enable2FAConfirm = async (code) => {
+  try {
+    const response = await api.post("/users/enable-2fa-confirm", { code });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Obtém status do 2FA.
+ * @returns {Promise<object>} - Status do 2FA
+ */
+export const get2FAStatus = async () => {
+  try {
+    const response = await api.get("/users/2fa-status");
     return response.data;
   } catch (error) {
     throw error;

@@ -7,14 +7,25 @@ import Constants from "expo-constants";
 // Resolve dinamicamente a URL base da API conforme o ambiente (emulador/dispositivo)
 function resolveBaseUrl() {
   // 1) Se vier via .env, prioriza
-  if (API_BASE_URL && typeof API_BASE_URL === "string" && API_BASE_URL.trim().length > 0) {
+  if (
+    API_BASE_URL &&
+    typeof API_BASE_URL === "string" &&
+    API_BASE_URL.trim().length > 0
+  ) {
     return API_BASE_URL.trim();
   }
 
   // 2) Tenta inferir pelo host do Metro/Expo (funciona para dispositivo físico na mesma rede)
-  const hostUri = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoClient?.hostUri || Constants.manifest?.hostUri;
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    Constants.manifest2?.extra?.expoClient?.hostUri ||
+    Constants.manifest?.hostUri;
   const inferredHost = hostUri ? hostUri.split(":")[0] : null;
-  if (inferredHost && inferredHost !== "127.0.0.1" && inferredHost !== "localhost") {
+  if (
+    inferredHost &&
+    inferredHost !== "127.0.0.1" &&
+    inferredHost !== "localhost"
+  ) {
     return `http://${inferredHost}:5000/api`;
   }
 
@@ -53,15 +64,18 @@ api.interceptors.request.use(
       // Lista de rotas que não precisam de token
       const publicRoutes = [
         "/users/login",
-        "/customers",
         "/users/forgot-password",
         "/users/reset-password",
       ];
 
+      // Rotas específicas que são públicas (usando match exato)
+      const isCustomerRegistration =
+        config.url === "/customers" && config.method?.toLowerCase() === "post";
+
       // Verifica se a rota atual é pública
-      const isPublicRoute = publicRoutes.some((route) =>
-        config.url?.includes(route)
-      );
+      const isPublicRoute =
+        publicRoutes.some((route) => config.url?.includes(route)) ||
+        isCustomerRegistration;
 
       // Se não for uma rota pública, adiciona o token
       if (!isPublicRoute) {
@@ -88,13 +102,20 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
-    // Se receber erro 401 (não autorizado), remove o token e redireciona para login
+    // Se receber erro 401 (não autorizado), verifica se é realmente um token inválido
     if (error.response?.status === 401) {
-      try {
-        await AsyncStorage.removeItem("user_token");
-        // Aqui você pode adicionar lógica para redirecionar para a tela de login
-      } catch (storageError) {
-        // Erro silencioso ao remover token
+      const errorCode = error.response?.data?.code;
+
+      // Só remove o token se for realmente um problema de token inválido
+      // Não remove se for apenas "MISSING_TOKEN" (pode ser problema de timing)
+      if (errorCode === "TOKEN_INVALID" || errorCode === "TOKEN_EXPIRED") {
+        try {
+          await AsyncStorage.removeItem("user_token");
+          await AsyncStorage.removeItem("user_data");
+          // Aqui você pode adicionar lógica para redirecionar para a tela de login
+        } catch (storageError) {
+          // Erro silencioso ao remover token
+        }
       }
     }
 

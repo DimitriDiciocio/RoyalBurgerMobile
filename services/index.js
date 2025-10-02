@@ -9,8 +9,15 @@
 // Serviço de API base
 export { default as api } from "./api";
 
-// Serviço de ingredientes (não possui bloco por categoria)
-export * from "./ingredientService";
+// Ingredientes
+export {
+  getAllIngredients,
+  createIngredient,
+  updateIngredient,
+  deleteIngredient,
+  updateIngredientAvailability,
+  adjustIngredientStock,
+} from "./ingredientService";
 
 /**
  * ========================================
@@ -26,12 +33,22 @@ export {
   isAuthenticated,
   getStoredUserData,
   getStoredToken,
+  getCurrentUserProfile,
+  testTokenValidity,
   requestPasswordReset,
   resetPassword,
   updateProfile,
   changePassword,
   getProfile,
   deleteAccount,
+  requestEmailVerification,
+  verifyEmail,
+  resendVerificationCode,
+  verifyPassword,
+  verify2FA,
+  toggle2FA,
+  enable2FAConfirm,
+  get2FAStatus,
 } from "./userService";
 
 // Clientes
@@ -47,6 +64,8 @@ export {
   addCustomerAddress,
   updateCustomerAddress,
   removeCustomerAddress,
+  getLoyaltyBalance,
+  getLoyaltyHistory,
 } from "./customerService";
 
 // Produtos
@@ -60,7 +79,8 @@ export {
   getProductsBySection,
   searchProducts,
   getProductIngredients,
-  updateProductIngredients,
+  addIngredientToProduct,
+  removeIngredientFromProduct,
   getAllSections,
   createSection,
   updateSection,
@@ -79,13 +99,6 @@ export {
   getOrdersByStatus,
   getTodayOrders,
   getOrderStats,
-  getOrderItems,
-  addOrderItem,
-  removeOrderItem,
-  updateOrderItemQuantity,
-  getOrderTracking,
-  updateOrderTracking,
-  getNearbyOrders,
 } from "./orderService";
 
 // Menu

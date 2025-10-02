@@ -20,7 +20,7 @@ export const registerCustomer = async (userData) => {
   try {
     // Mapear os dados do formulário para o formato esperado pela API
     // Converte data de DD/MM/AAAA (UI) para DD-MM-AAAA (API)
-    const normalizedDob = (userData.dataNascimento || '').replaceAll('/', '-');
+    const normalizedDob = (userData.dataNascimento || "").replaceAll("/", "-");
 
     const apiData = {
       full_name: userData.nomeCompleto,
@@ -121,7 +121,7 @@ export const deactivateCustomer = async (customerId) => {
  */
 export const verifyMyPassword = async (password) => {
   try {
-    const response = await api.post(`/customers/me/verify-password`, { password });
+    const response = await api.post(`/users/verify-password`, { password });
     return response.data;
   } catch (error) {
     throw error;
@@ -135,20 +135,7 @@ export const verifyMyPassword = async (password) => {
  */
 export const activateCustomer = async (customerId) => {
   try {
-    const response = await api.put(`/customers/${customerId}/activate`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-/**
- * Obtém estatísticas de clientes (apenas para admin/manager).
- * @returns {Promise<object>} - Estatísticas dos clientes
- */
-export const getCustomerStats = async () => {
-  try {
-    const response = await api.get("/customers/stats");
+    const response = await api.post(`/customers/${customerId}/reactivate`);
     return response.data;
   } catch (error) {
     throw error;
@@ -163,7 +150,7 @@ export const getCustomerStats = async () => {
  */
 export const getCustomerOrderHistory = async (customerId, filters = {}) => {
   try {
-    const response = await api.get(`/customers/${customerId}/orders`, {
+    const response = await api.get(`/orders/customer/${customerId}`, {
       params: filters,
     });
     return response.data;
@@ -238,6 +225,34 @@ export const removeCustomerAddress = async (customerId, addressId) => {
     const response = await api.delete(
       `/customers/${customerId}/addresses/${addressId}`
     );
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Obtém saldo do programa de fidelidade.
+ * @param {number} customerId - ID do cliente
+ * @returns {Promise<object>} - Saldo de pontos
+ */
+export const getLoyaltyBalance = async (customerId) => {
+  try {
+    const response = await api.get(`/customers/${customerId}/loyalty/balance`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Obtém histórico do programa de fidelidade.
+ * @param {number} customerId - ID do cliente
+ * @returns {Promise<Array>} - Histórico de pontos
+ */
+export const getLoyaltyHistory = async (customerId) => {
+  try {
+    const response = await api.get(`/customers/${customerId}/loyalty/history`);
     return response.data;
   } catch (error) {
     throw error;

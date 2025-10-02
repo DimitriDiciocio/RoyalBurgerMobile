@@ -82,7 +82,7 @@ export const getOrderById = async (orderId) => {
 export const updateOrderStatus = async (orderId, status, notes = "") => {
   try {
     "🔄 Atualizando status do pedido:", orderId, "para:", status;
-    const response = await api.put(`/orders/${orderId}/status`, {
+    const response = await api.patch(`/orders/${orderId}/status`, {
       status,
       notes,
     });
@@ -101,7 +101,7 @@ export const updateOrderStatus = async (orderId, status, notes = "") => {
 export const cancelOrder = async (orderId, reason = "") => {
   try {
     "❌ Cancelando pedido:", orderId, "motivo:", reason;
-    const response = await api.put(`/orders/${orderId}/cancel`, {
+    const response = await api.post(`/orders/${orderId}/cancel`, {
       reason,
     });
     return response.data;
@@ -180,134 +180,12 @@ export const getOrderStats = async (filters = {}) => {
   }
 };
 
-/**
- * Obtém itens de um pedido.
- * @param {number} orderId - ID do pedido
- * @returns {Promise<Array>} - Lista de itens do pedido
- */
-export const getOrderItems = async (orderId) => {
-  try {
-    "🛍️ Obtendo itens do pedido:", orderId;
-    const response = await api.get(`/orders/${orderId}/items`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-/**
- * Adiciona um item a um pedido (apenas para pedidos em andamento).
- * @param {number} orderId - ID do pedido
- * @param {object} itemData - Dados do item
- * @returns {Promise<object>} - Item adicionado
- */
-export const addOrderItem = async (orderId, itemData) => {
-  try {
-    "➕ Adicionando item ao pedido:", orderId;
-    const response = await api.post(`/orders/${orderId}/items`, itemData);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-/**
- * Remove um item de um pedido (apenas para pedidos em andamento).
- * @param {number} orderId - ID do pedido
- * @param {number} itemId - ID do item
- * @returns {Promise<object>} - Resposta da API
- */
-export const removeOrderItem = async (orderId, itemId) => {
-  try {
-    "🗑️ Removendo item do pedido:", orderId, "item:", itemId;
-    const response = await api.delete(`/orders/${orderId}/items/${itemId}`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-/**
- * Atualiza a quantidade de um item no pedido.
- * @param {number} orderId - ID do pedido
- * @param {number} itemId - ID do item
- * @param {number} quantity - Nova quantidade
- * @returns {Promise<object>} - Item atualizado
- */
-export const updateOrderItemQuantity = async (orderId, itemId, quantity) => {
-  try {
-    "✏️ Atualizando quantidade do item:", itemId, "para:", quantity;
-    const response = await api.put(`/orders/${orderId}/items/${itemId}`, {
-      quantity,
-    });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-/**
- * Obtém o rastreamento de um pedido.
- * @param {number} orderId - ID do pedido
- * @returns {Promise<object>} - Dados de rastreamento
- */
-export const getOrderTracking = async (orderId) => {
-  try {
-    "📍 Obtendo rastreamento do pedido:", orderId;
-    const response = await api.get(`/orders/${orderId}/tracking`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-/**
- * Atualiza o rastreamento de um pedido (apenas para admin/manager).
- * @param {number} orderId - ID do pedido
- * @param {object} trackingData - Dados de rastreamento
- * @returns {Promise<object>} - Rastreamento atualizado
- */
-export const updateOrderTracking = async (orderId, trackingData) => {
-  try {
-    "📍 Atualizando rastreamento do pedido:", orderId;
-    const response = await api.put(`/orders/${orderId}/tracking`, trackingData);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-/**
- * Obtém pedidos próximos ao usuário (para delivery).
- * @param {object} location - Coordenadas do usuário
- * @param {number} radius - Raio em km (padrão: 5)
- * @returns {Promise<Array>} - Lista de pedidos próximos
- */
-export const getNearbyOrders = async (location, radius = 5) => {
-  try {
-    "📍 Obtendo pedidos próximos:", location, "raio:", radius;
-    const response = await api.get("/orders/nearby", {
-      params: { ...location, radius },
-    });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-/**
- * Obtém relatório de pedidos.
- * @param {object} filters - Filtros do relatório
- * @returns {Promise<object>} - Relatório de pedidos
- */
-export const getOrderReport = async (filters = {}) => {
-  try {
-    ("📊 Gerando relatório de pedidos");
-    const response = await api.get("/orders/report", {
-      params: filters,
-    });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
+// Funções removidas pois não existem na API atual:
+// - getOrderItems
+// - addOrderItem
+// - removeOrderItem
+// - updateOrderItemQuantity
+// - getOrderTracking
+// - updateOrderTracking
+// - getNearbyOrders
+// - getOrderReport

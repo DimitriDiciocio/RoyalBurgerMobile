@@ -102,7 +102,8 @@ export const deleteProduct = async (productId) => {
 export const toggleProductStatus = async (productId, isActive) => {
   try {
     "🔄 Alterando status do produto:", productId, "para:", isActive;
-    const response = await api.put(`/products/${productId}/status`, {
+    // A API não tem endpoint específico para toggle, usa update
+    const response = await api.put(`/products/${productId}`, {
       is_active: isActive,
     });
     return response.data;
@@ -121,7 +122,7 @@ export const toggleProductStatus = async (productId, isActive) => {
 export const getProductsBySection = async (sectionId, filters = {}) => {
   try {
     "📂 Obtendo produtos da seção:", sectionId;
-    const response = await api.get(`/products/section/${sectionId}`, {
+    const response = await api.get(`/sections/${sectionId}/products`, {
       params: filters,
     });
     return response.data;
@@ -140,8 +141,9 @@ export const getProductsBySection = async (sectionId, filters = {}) => {
 export const searchProducts = async (searchTerm, filters = {}) => {
   try {
     "🔍 Buscando produtos com termo:", searchTerm;
-    const response = await api.get("/products/search", {
-      params: { q: searchTerm, ...filters },
+    // A API não tem endpoint de busca específico, usa getAllProducts com filtros
+    const response = await api.get("/products", {
+      params: { search: searchTerm, ...filters },
     });
     return response.data;
   } catch (error) {
@@ -167,20 +169,45 @@ export const getProductIngredients = async (productId) => {
 };
 
 /**
- * Atualiza ingredientes de um produto (apenas para admin/manager).
+ * Adiciona ingrediente a um produto (apenas para admin/manager).
  * @param {number} productId - ID do produto
- * @param {Array} ingredients - Lista de ingredientes
+ * @param {number} ingredientId - ID do ingrediente
+ * @param {number} quantity - Quantidade do ingrediente
  * @returns {Promise<object>} - Resposta da API
  */
-export const updateProductIngredients = async (productId, ingredients) => {
+export const addIngredientToProduct = async (
+  productId,
+  ingredientId,
+  quantity
+) => {
   try {
-    "🥬 Atualizando ingredientes do produto:", productId;
-    const response = await api.put(`/products/${productId}/ingredients`, {
-      ingredients,
+    "🥬 Adicionando ingrediente ao produto:", productId;
+    const response = await api.post(`/products/${productId}/ingredients`, {
+      ingredient_id: ingredientId,
+      quantity: quantity,
     });
     return response.data;
   } catch (error) {
-    "❌ Erro ao atualizar ingredientes:", error;
+    "❌ Erro ao adicionar ingrediente:", error;
+    throw error;
+  }
+};
+
+/**
+ * Remove ingrediente de um produto (apenas para admin/manager).
+ * @param {number} productId - ID do produto
+ * @param {number} ingredientId - ID do ingrediente
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const removeIngredientFromProduct = async (productId, ingredientId) => {
+  try {
+    "🥬 Removendo ingrediente do produto:", productId;
+    const response = await api.delete(
+      `/products/${productId}/ingredients/${ingredientId}`
+    );
+    return response.data;
+  } catch (error) {
+    "❌ Erro ao remover ingrediente:", error;
     throw error;
   }
 };

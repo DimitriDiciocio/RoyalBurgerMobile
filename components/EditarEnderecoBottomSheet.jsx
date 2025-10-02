@@ -1,26 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import BottomSheet from './BottomSheet';
-import Input from './Input';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  StyleSheet,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import BottomSheet from "./BottomSheet";
+import Input from "./Input";
 
-export default function EditarEnderecoBottomSheet({ 
-  visible, 
-  onClose, 
-  endereco = null, 
+export default function EditarEnderecoBottomSheet({
+  visible,
+  onClose,
+  endereco = null,
   onSave,
-  onDelete 
+  onDelete,
 }) {
   const isEditing = !!endereco;
-  
+
   const [formData, setFormData] = useState({
-    street: '',
-    number: '',
-    complement: '',
-    neighborhood: '',
-    city: '',
-    state: '',
-    zip_code: '',
+    street: "",
+    number: "",
+    complement: "",
+    neighborhood: "",
+    city: "",
+    state: "",
+    zip_code: "",
   });
 
   const [semNumero, setSemNumero] = useState(false);
@@ -30,26 +38,26 @@ export default function EditarEnderecoBottomSheet({
   useEffect(() => {
     if (endereco) {
       setFormData({
-        street: endereco.street || '',
-        number: endereco.number || '',
-        complement: endereco.complement || '',
-        neighborhood: endereco.neighborhood || '',
-        city: endereco.city || '',
-        state: endereco.state || '',
-        zip_code: endereco.zip_code || '',
+        street: endereco.street || "",
+        number: endereco.number || "",
+        complement: endereco.complement || "",
+        neighborhood: endereco.neighborhood || "",
+        city: endereco.city || "",
+        state: endereco.state || "",
+        zip_code: endereco.zip_code || "",
       });
-      setSemNumero(!endereco.number || endereco.number === 'S/N');
+      setSemNumero(!endereco.number || endereco.number === "S/N");
       setSemComplemento(!endereco.complement);
     } else {
       // Limpa o formulário quando for adicionar novo
       setFormData({
-        street: '',
-        number: '',
-        complement: '',
-        neighborhood: '',
-        city: '',
-        state: '',
-        zip_code: '',
+        street: "",
+        number: "",
+        complement: "",
+        neighborhood: "",
+        city: "",
+        state: "",
+        zip_code: "",
       });
       setSemNumero(false);
       setSemComplemento(false);
@@ -59,19 +67,29 @@ export default function EditarEnderecoBottomSheet({
   const handleConfirm = () => {
     // Validação simples
     if (!formData.zip_code.trim()) {
-      alert('Por favor, preencha o campo CEP');
+      alert("Por favor, preencha o campo CEP");
       return;
     }
     if (!formData.street.trim()) {
-      alert('Por favor, preencha o campo Rua');
+      alert("Por favor, preencha o campo Rua");
       return;
     }
     if (!formData.neighborhood.trim()) {
-      alert('Por favor, preencha o campo Bairro');
+      alert("Por favor, preencha o campo Bairro");
+      return;
+    }
+    if (!formData.city.trim()) {
+      alert("Por favor, preencha o campo Cidade");
+      return;
+    }
+    if (!formData.state.trim()) {
+      alert("Por favor, preencha o campo Estado");
       return;
     }
     if (!formData.number.trim() && !semNumero) {
-      alert('Por favor, preencha o campo Número ou marque "Endereço sem número"');
+      alert(
+        'Por favor, preencha o campo Número ou marque "Endereço sem número"'
+      );
       return;
     }
 
@@ -79,11 +97,11 @@ export default function EditarEnderecoBottomSheet({
     onSave({
       zip_code: formData.zip_code,
       street: formData.street,
-      number: semNumero ? 'S/N' : formData.number,
-      complement: semComplemento ? '' : formData.complement,
+      number: semNumero ? null : formData.number,
+      complement: semComplemento ? null : formData.complement,
       neighborhood: formData.neighborhood,
-      city: formData.city || 'Não informado',
-      state: formData.state || 'SP',
+      city: formData.city,
+      state: formData.state,
       id: endereco?.id, // Inclui ID se estiver editando
     });
   };
@@ -98,11 +116,11 @@ export default function EditarEnderecoBottomSheet({
     <BottomSheet visible={visible} onClose={onClose} heightPercentage={0.85}>
       <View style={styles.container}>
         <Text style={styles.title}>
-          {isEditing ? 'Editar dados' : 'Adicionar endereço'}
+          {isEditing ? "Editar dados" : "Adicionar endereço"}
         </Text>
         <Text style={styles.subtitle}>Campos com (*) são obrigatórios</Text>
-        
-        <ScrollView 
+
+        <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
@@ -113,6 +131,30 @@ export default function EditarEnderecoBottomSheet({
           removeClippedSubviews={false}
           overScrollMode="auto"
         >
+          {/* CEP */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>CEP*</Text>
+            <Input
+              placeholder="Ex: 01234-567"
+              placeholderTextColor="#CCCCCC"
+              value={formData.zip_code}
+              onChangeText={(text) => {
+                // Remove caracteres não numéricos e formata o CEP
+                const cleanText = text.replace(/\D/g, "");
+                let formattedText = cleanText;
+                if (cleanText.length > 5) {
+                  formattedText =
+                    cleanText.slice(0, 5) + "-" + cleanText.slice(5, 8);
+                }
+                setFormData({ ...formData, zip_code: formattedText });
+              }}
+              keyboardType="numeric"
+              maxLength={9}
+            />
+          </View>
+
+          <View style={styles.spacer} />
+
           {/* Rua */}
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Rua*</Text>
@@ -120,7 +162,9 @@ export default function EditarEnderecoBottomSheet({
               placeholder="Ex: Rua das Flores"
               placeholderTextColor="#CCCCCC"
               value={formData.street}
-              onChangeText={(text) => setFormData({ ...formData, street: text })}
+              onChangeText={(text) =>
+                setFormData({ ...formData, street: text })
+              }
             />
           </View>
 
@@ -133,7 +177,9 @@ export default function EditarEnderecoBottomSheet({
               placeholder="Ex: Centro"
               placeholderTextColor="#CCCCCC"
               value={formData.neighborhood}
-              onChangeText={(text) => setFormData({ ...formData, neighborhood: text })}
+              onChangeText={(text) =>
+                setFormData({ ...formData, neighborhood: text })
+              }
             />
           </View>
 
@@ -146,21 +192,27 @@ export default function EditarEnderecoBottomSheet({
               placeholder={semNumero ? "" : "Ex: 123"}
               placeholderTextColor="#CCCCCC"
               value={formData.number}
-              onChangeText={(text) => setFormData({ ...formData, number: text })}
+              onChangeText={(text) =>
+                setFormData({ ...formData, number: text })
+              }
               keyboardType="numeric"
               editable={!semNumero}
             />
-            <TouchableOpacity 
-              style={styles.checkboxContainer} 
+            <TouchableOpacity
+              style={styles.checkboxContainer}
               onPress={() => {
                 setSemNumero(!semNumero);
                 if (!semNumero) {
-                  setFormData({ ...formData, number: '' });
+                  setFormData({ ...formData, number: "" });
                 }
               }}
             >
-              <View style={[styles.checkbox, semNumero && styles.checkboxChecked]}>
-                {semNumero && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
+              <View
+                style={[styles.checkbox, semNumero && styles.checkboxChecked]}
+              >
+                {semNumero && (
+                  <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                )}
               </View>
               <Text style={styles.checkboxLabel}>Endereço sem número</Text>
             </TouchableOpacity>
@@ -175,20 +227,29 @@ export default function EditarEnderecoBottomSheet({
               placeholder={semComplemento ? "" : "Ex: Apto 101, Bloco B"}
               placeholderTextColor="#CCCCCC"
               value={formData.complement}
-              onChangeText={(text) => setFormData({ ...formData, complement: text })}
+              onChangeText={(text) =>
+                setFormData({ ...formData, complement: text })
+              }
               editable={!semComplemento}
             />
-            <TouchableOpacity 
-              style={styles.checkboxContainer} 
+            <TouchableOpacity
+              style={styles.checkboxContainer}
               onPress={() => {
                 setSemComplemento(!semComplemento);
                 if (!semComplemento) {
-                  setFormData({ ...formData, complement: '' });
+                  setFormData({ ...formData, complement: "" });
                 }
               }}
             >
-              <View style={[styles.checkbox, semComplemento && styles.checkboxChecked]}>
-                {semComplemento && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
+              <View
+                style={[
+                  styles.checkbox,
+                  semComplemento && styles.checkboxChecked,
+                ]}
+              >
+                {semComplemento && (
+                  <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                )}
               </View>
               <Text style={styles.checkboxLabel}>Endereço sem complemento</Text>
             </TouchableOpacity>
@@ -216,7 +277,9 @@ export default function EditarEnderecoBottomSheet({
               placeholder="Ex: SP"
               placeholderTextColor="#CCCCCC"
               value={formData.state}
-              onChangeText={(text) => setFormData({ ...formData, state: text.toUpperCase() })}
+              onChangeText={(text) =>
+                setFormData({ ...formData, state: text.toUpperCase() })
+              }
               maxLength={2}
             />
           </View>
@@ -227,16 +290,19 @@ export default function EditarEnderecoBottomSheet({
         {/* Botões de ação - FIXOS */}
         <View style={styles.buttonsContainer}>
           {isEditing && onDelete && (
-            <TouchableOpacity 
-              style={styles.deleteButton} 
+            <TouchableOpacity
+              style={styles.deleteButton}
               onPress={handleDelete}
             >
               <Text style={styles.deleteButtonText}>Excluir</Text>
             </TouchableOpacity>
           )}
-          
-          <TouchableOpacity 
-            style={[styles.confirmButton, isEditing && styles.confirmButtonSmall]} 
+
+          <TouchableOpacity
+            style={[
+              styles.confirmButton,
+              isEditing && styles.confirmButtonSmall,
+            ]}
             onPress={handleConfirm}
           >
             <Text style={styles.confirmButtonText}>Confirmar</Text>
@@ -253,15 +319,15 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontWeight: '600',
-    color: '#000000',
-    textAlign: 'center',
+    fontWeight: "600",
+    color: "#000000",
+    textAlign: "center",
     marginBottom: 5,
   },
   subtitle: {
     fontSize: 14,
-    color: '#888888',
-    textAlign: 'center',
+    color: "#888888",
+    textAlign: "center",
     marginBottom: 15,
   },
   scrollView: {
@@ -278,76 +344,76 @@ const styles = StyleSheet.create({
   },
   spacer: {
     height: 20,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   bottomSpacer: {
     height: 30,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   label: {
     fontSize: 14,
-    color: '#888888',
+    color: "#888888",
     marginBottom: 8,
   },
   checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 8,
   },
   checkbox: {
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: '#D9D9D9',
+    borderColor: "#D9D9D9",
     borderRadius: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   checkboxChecked: {
-    backgroundColor: '#FFC700',
-    borderColor: '#FFC700',
+    backgroundColor: "#FFC700",
+    borderColor: "#FFC700",
   },
   checkboxLabel: {
     fontSize: 12,
-    color: '#888888',
+    color: "#888888",
   },
   buttonsContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     paddingTop: 15,
     paddingBottom: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: "#F0F0F0",
   },
   deleteButton: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 8,
     paddingVertical: 15,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: '#FF0000',
+    borderColor: "#FF0000",
   },
   deleteButtonText: {
-    color: '#FF0000',
+    color: "#FF0000",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   confirmButton: {
     flex: 1,
-    backgroundColor: '#FFC700',
+    backgroundColor: "#FFC700",
     borderRadius: 8,
     paddingVertical: 15,
-    alignItems: 'center',
+    alignItems: "center",
   },
   confirmButtonSmall: {
     flex: 1,
   },
   confirmButtonText: {
-    color: '#000000',
+    color: "#000000",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
