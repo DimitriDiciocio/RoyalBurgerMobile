@@ -15,12 +15,13 @@ import {
   testTokenValidity,
   getLoyaltyBalance,
 } from "../services";
-import {
-  getCustomerAddresses,
-  addCustomerAddress,
-  updateCustomerAddress,
-  removeCustomerAddress,
-} from "../services/customerService";
+  import {
+    getCustomerAddresses,
+    addCustomerAddress,
+    updateCustomerAddress,
+    removeCustomerAddress,
+    setDefaultAddress,
+  } from "../services/customerService";
 import MenuNavigation from "../components/MenuNavigation";
 import DadosContaBottomSheet from "../components/DadosContaBottomSheet";
 import EnderecosBottomSheet from "../components/EnderecosBottomSheet";
@@ -67,6 +68,7 @@ export default function Perfil({ navigation }) {
   const [showEditarEndereco, setShowEditarEndereco] = useState(false);
   const [enderecoSelecionado, setEnderecoSelecionado] = useState(null);
   const [enderecos, setEnderecos] = useState([]);
+  const [enderecoAtivo, setEnderecoAtivo] = useState(null);
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
 
   useEffect(() => {
@@ -132,9 +134,28 @@ export default function Perfil({ navigation }) {
     try {
       const addresses = await getCustomerAddresses(userId);
       setEnderecos(addresses);
+      
+      // Define o endereço ativo
+      if (addresses && addresses.length > 0) {
+        // Primeiro, procura por um endereço marcado como padrão
+        const enderecoPadrao = addresses.find(e => e.is_default === true || e.isDefault === true);
+        
+        if (enderecoPadrao) {
+          setEnderecoAtivo(enderecoPadrao);
+        } else if (!enderecoAtivo) {
+          // Se não há endereço padrão, usa o mais recente
+          const enderecosOrdenados = [...addresses].sort((a, b) => 
+            new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0)
+          );
+          setEnderecoAtivo(enderecosOrdenados[0]);
+        }
+      } else {
+        setEnderecoAtivo(null);
+      }
     } catch (error) {
       console.error("Erro ao buscar endereços:", error);
       setEnderecos([]);
+      setEnderecoAtivo(null);
     }
   };
 
@@ -158,6 +179,22 @@ export default function Perfil({ navigation }) {
     setEnderecoSelecionado(endereco);
     setShowEnderecos(false);
     setShowEditarEndereco(true);
+  };
+
+  const handleSelectEndereco = async (endereco) => {
+    try {
+      // Chama a API para definir o endereço como padrão
+      if (userInfo?.id && endereco?.id) {
+        await setDefaultAddress(userInfo.id, endereco.id);
+      }
+      
+      // Atualiza o estado local
+      setEnderecoAtivo(endereco);
+    } catch (error) {
+      console.error('Erro ao definir endereço padrão:', error);
+      // Mesmo com erro, atualiza o estado local para melhor UX
+      setEnderecoAtivo(endereco);
+    }
   };
 
   const handleSaveEndereco = async (formData) => {
@@ -190,6 +227,30 @@ export default function Perfil({ navigation }) {
 
       // Atualizar lista de endereços
       await fetchEnderecos(userInfo.id);
+      
+      // Se é um novo endereço, define como padrão via API
+      if (!formData.id) {
+        // Aguarda um pouco para garantir que o endereço foi adicionado
+        setTimeout(async () => {
+          try {
+            const enderecosAtualizados = await getCustomerAddresses(userInfo.id);
+            if (enderecosAtualizados && enderecosAtualizados.length > 0) {
+              // Pega o endereço mais recente (primeiro da lista ordenada)
+              const enderecosOrdenados = [...enderecosAtualizados].sort((a, b) => 
+                new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0)
+              );
+              const enderecoMaisRecente = enderecosOrdenados[0];
+              
+              // Define como padrão via API
+              await setDefaultAddress(userInfo.id, enderecoMaisRecente.id);
+              setEnderecoAtivo(enderecoMaisRecente);
+            }
+          } catch (error) {
+            console.error('Erro ao definir endereço como padrão:', error);
+          }
+        }, 500);
+      }
+      
       setShowEditarEndereco(false);
       setShowEnderecos(true);
     } catch (error) {
@@ -401,13 +462,15 @@ export default function Perfil({ navigation }) {
       />
 
       {/* Bottom Sheet - Endereços */}
-      <EnderecosBottomSheet
-        visible={showEnderecos}
-        onClose={() => setShowEnderecos(false)}
-        enderecos={enderecos}
-        onAddNew={handleAddEndereco}
-        onEdit={handleEditEndereco}
-      />
+        <EnderecosBottomSheet
+          visible={showEnderecos}
+          onClose={() => setShowEnderecos(false)}
+          enderecos={enderecos}
+          onAddNew={handleAddEndereco}
+          onEdit={handleEditEndereco}
+          onSelect={handleSelectEndereco}
+          enderecoAtivo={enderecoAtivo}
+        />
 
       {/* Bottom Sheet - Editar/Adicionar Endereço */}
       <EditarEnderecoBottomSheet
@@ -419,6 +482,7 @@ export default function Perfil({ navigation }) {
         endereco={enderecoSelecionado}
         onSave={handleSaveEndereco}
         onDelete={handleDeleteEndereco}
+        enderecos={enderecos}
       />
     </View>
   );

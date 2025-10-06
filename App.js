@@ -18,6 +18,7 @@ import Pedidos from "./screens/pedidos";
 import Config from "./screens/config";
 import React, { useEffect, useState } from 'react';
 import { isAuthenticated, getStoredUserData, logout } from "./services";
+import { getCustomerAddresses, getLoyaltyBalance } from "./services/customerService";
 
 const Stack = createNativeStackNavigator();
 
@@ -25,6 +26,59 @@ function HomeScreen({ navigation }) {
     const isFocused = useIsFocused();
     const [loggedIn, setLoggedIn] = useState(false);
     const [userInfo, setUserInfo] = useState(null);
+    const [enderecos, setEnderecos] = useState([]);
+    const [enderecoAtivo, setEnderecoAtivo] = useState(null);
+    const [loyaltyBalance, setLoyaltyBalance] = useState(0);
+
+    const fetchEnderecos = async (userId) => {
+        try {
+            const enderecosData = await getCustomerAddresses(userId);
+            setEnderecos(enderecosData || []);
+        } catch (error) {
+            console.error('Erro ao buscar endereços:', error);
+            setEnderecos([]);
+        }
+    };
+
+    const fetchLoyaltyBalance = async (userId) => {
+        try {
+            const balance = await getLoyaltyBalance(userId);
+            const points = balance?.current_balance || 0;
+            setLoyaltyBalance(points);
+            return points;
+        } catch (error) {
+            console.error('Erro ao buscar pontos:', error);
+            setLoyaltyBalance(0);
+            return 0;
+        }
+    };
+
+    const handleEnderecoAtivoChange = (data) => {
+        // Verificação de segurança para evitar erro quando data é null
+        if (!data) return;
+        
+        if (typeof data === 'object' && data.type === 'refresh') {
+            // Atualiza a lista de endereços
+            setEnderecos(data.enderecos);
+            // Se tem endereço ativo específico, usa ele, senão define baseado na lista
+            if (data.enderecoAtivo) {
+                setEnderecoAtivo(data.enderecoAtivo);
+            } else if (data.enderecos && data.enderecos.length > 0) {
+                const enderecoPadrao = data.enderecos.find(e => e.is_default === true || e.isDefault === true);
+                if (enderecoPadrao) {
+                    setEnderecoAtivo(enderecoPadrao);
+                } else {
+                    const enderecosOrdenados = [...data.enderecos].sort((a, b) => 
+                        new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0)
+                    );
+                    setEnderecoAtivo(enderecosOrdenados[0]);
+                }
+            }
+        } else {
+            // Endereço ativo mudou
+            setEnderecoAtivo(data);
+        }
+    };
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -33,20 +87,31 @@ function HomeScreen({ navigation }) {
                 setLoggedIn(!!ok);
                 if (ok) {
                     const user = await getStoredUserData();
-                    // Normaliza campos esperados pelo Header
-                    const normalized = user ? {
-                        name: user.full_name || user.name || 'Usuário',
-                        points: user.points || '0',
-                        address: user.address || undefined,
-                        avatar: undefined,
-                    } : null;
-                    setUserInfo(normalized);
+                    
+                    // Buscar endereços e pontos se o usuário estiver logado
+                    if (user?.id) {
+                        await fetchEnderecos(user.id);
+                        const points = await fetchLoyaltyBalance(user.id);
+                        
+                        // Normaliza campos esperados pelo Header
+                        const normalized = {
+                            name: user.full_name || user.name || 'Usuário',
+                            points: points.toString(), // Usa os pontos da API
+                            address: user.address || undefined,
+                            avatar: undefined,
+                        };
+                        setUserInfo(normalized);
+                    } else {
+                        setUserInfo(null);
+                    }
                 } else {
                     setUserInfo(null);
+                    setEnderecos([]);
                 }
             } catch (e) {
                 setLoggedIn(false);
                 setUserInfo(null);
+                setEnderecos([]);
             }
         };
         checkAuth();
@@ -104,6 +169,9 @@ function HomeScreen({ navigation }) {
             await logout();
             setLoggedIn(false);
             setUserInfo(null);
+            setEnderecos([]);
+            setEnderecoAtivo(null);
+            setLoyaltyBalance(0);
         } catch (error) {
             console.error('Erro ao fazer logout:', error);
         }
@@ -147,6 +215,8 @@ function HomeScreen({ navigation }) {
                     navigation={navigation} 
                     type={loggedIn ? 'logged' : 'home'}
                     userInfo={userInfo}
+                    enderecos={enderecos}
+                    onEnderecoAtivoChange={handleEnderecoAtivoChange}
                 />
             </View>
 

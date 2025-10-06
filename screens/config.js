@@ -121,12 +121,6 @@ export default function Config({ navigation }) {
             onPress={handleChangePassword}
           />
 
-          <BotaoCheck
-            title="Verificar seu email"
-            description="Verifique seu email para uma melhor experiência e segurança"
-            iconSvg={checkSvg}
-            onPress={handleVerifyEmail}
-          />
         </View>
 
         {/* Botões de ação */}

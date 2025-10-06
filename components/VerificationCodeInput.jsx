@@ -25,33 +25,64 @@ const VerificationCodeInput = ({
   }, [autoFocus]);
 
   const handleTextChange = (text, index) => {
-    // Remove caracteres não numéricos
-    const numericText = text.replace(/[^0-9]/g, '');
-    
-    // Atualiza o código
+    // Mantém apenas dígitos
+    const numericText = (text || '').replace(/[^0-9]/g, '');
+
+    // Se colou múltiplos dígitos, distribui a partir do campo atual
+    if (numericText.length > 1) {
+      const distributed = [...code];
+      let cursor = index;
+      for (let i = 0; i < numericText.length && cursor < length; i += 1) {
+        distributed[cursor] = numericText[i];
+        cursor += 1;
+      }
+      setCode(distributed);
+
+      const joined = distributed.join('');
+      onCodeChange?.(joined);
+
+      // Foca próximo vazio ou último preenchido
+      const nextEmpty = distributed.findIndex((c) => !c);
+      const focusIndex = nextEmpty === -1 ? length - 1 : nextEmpty;
+      inputRefs.current[focusIndex]?.focus();
+
+      if (joined.length === length) {
+        onCodeComplete?.(joined);
+      }
+      return;
+    }
+
+    // Comportamento normal para um dígito
     const newCode = [...code];
     newCode[index] = numericText;
     setCode(newCode);
 
-    // Chama callback de mudança
     const fullCode = newCode.join('');
     onCodeChange?.(fullCode);
 
-    // Auto-focus no próximo input se digitou um número
     if (numericText && index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
 
-    // Chama callback de código completo
     if (fullCode.length === length && fullCode.replace(/\s/g, '').length === length) {
       onCodeComplete?.(fullCode);
     }
   };
 
   const handleKeyPress = (key, index) => {
-    // Se pressionou backspace e o campo está vazio, volta para o anterior
-    if (key === 'Backspace' && !code[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+    if (key === 'Backspace') {
+      const newCode = [...code];
+      // Se o campo atual tem valor, apaga e mantém foco; senão, limpa o anterior e foca nele
+      if (newCode[index]) {
+        newCode[index] = '';
+        setCode(newCode);
+        onCodeChange?.(newCode.join(''));
+      } else if (index > 0) {
+        newCode[index - 1] = '';
+        setCode(newCode);
+        onCodeChange?.(newCode.join(''));
+        inputRefs.current[index - 1]?.focus();
+      }
     }
   };
 
@@ -112,17 +143,22 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     marginVertical: 10,
+    width: '100%',
   },
   inputsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    width: '100%',
+    maxWidth: 384,
+    alignSelf: 'center',
+    paddingHorizontal: 12,
     marginBottom: 10,
   },
   input: {
-    width: 50,
-    height: 60,
+    width: 48,
+    height: 56,
+    marginHorizontal: 3,
     borderWidth: 2,
     borderColor: '#E0E0E0',
     borderRadius: 12,

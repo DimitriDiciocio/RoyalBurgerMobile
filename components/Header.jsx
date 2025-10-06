@@ -1,9 +1,13 @@
 import {StyleSheet, View, Text, TouchableOpacity, Image} from 'react-native';
 import ButtonDark from "./Button";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { SvgXml } from 'react-native-svg';
 import {FontAwesome} from '@expo/vector-icons';
 import AntDesign from '@expo/vector-icons/AntDesign';
+import EnderecosBottomSheet from './EnderecosBottomSheet';
+import EditarEnderecoBottomSheet from './EditarEnderecoBottomSheet';
+import { setDefaultAddress, getCustomerAddresses, addCustomerAddress, updateCustomerAddress, removeCustomerAddress } from '../services/customerService';
+import { getStoredUserData } from '../services/userService';
 
 const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M5.29385 9.29365C4.90322 9.68428 4.90322 10.3187 5.29385 10.7093L11.2938 16.7093C11.6845 17.0999 12.3188 17.0999 12.7095 16.7093C13.1001 16.3187 13.1001 15.6843 12.7095 15.2937L7.41572 9.9999L12.7063 4.70615C13.097 4.31553 13.097 3.68115 12.7063 3.29053C12.3157 2.8999 11.6813 2.8999 11.2907 3.29053L5.29072 9.29053L5.29385 9.29365Z" fill="black"/>
@@ -31,11 +35,185 @@ export default function Header({
                                    showBackButton = false,
                                    title = null,
                                    subtitle = null,
-                                   rightButton = null
-                               }) {
+                                   rightButton = null,
+                                    enderecos = [],
+                                    onEnderecoAtivoChange = null
+                                }) {
+    const [showEnderecosBottomSheet, setShowEnderecosBottomSheet] = useState(false);
+    const [showEditarEndereco, setShowEditarEndereco] = useState(false);
+    const [enderecoSelecionado, setEnderecoSelecionado] = useState(null);
+    const [enderecoAtivo, setEnderecoAtivo] = useState(null);
+
+    // Função para formatar o endereço para exibição
+    const formatEndereco = (endereco) => {
+        if (!endereco) return "Adicionar endereço";
+        
+        const parts = [];
+        if (endereco.street) {
+            parts.push(endereco.street);
+        }
+        if (endereco.number) {
+            parts.push(endereco.number);
+        }
+        
+        return parts.length > 0 ? parts.join(', ') : "Adicionar endereço";
+    };
+
+    // Define o endereço ativo quando os endereços mudarem
+    useEffect(() => {
+        if (enderecos && enderecos.length > 0) {
+            // Primeiro, procura por um endereço marcado como padrão
+            const enderecoPadrao = enderecos.find(e => e.is_default === true || e.isDefault === true);
+            
+            if (enderecoPadrao) {
+                // Se encontrou um endereço padrão, usa ele
+                setEnderecoAtivo(enderecoPadrao);
+                if (onEnderecoAtivoChange) {
+                    onEnderecoAtivoChange(enderecoPadrao);
+                }
+            } else if (!enderecoAtivo) {
+                // Se não há endereço padrão e não há endereço ativo definido, usa o mais recente
+                const enderecosOrdenados = [...enderecos].sort((a, b) => 
+                    new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0)
+                );
+                const enderecoMaisRecente = enderecosOrdenados[0];
+                setEnderecoAtivo(enderecoMaisRecente);
+                
+                if (onEnderecoAtivoChange) {
+                    onEnderecoAtivoChange(enderecoMaisRecente);
+                }
+            }
+        } else {
+            setEnderecoAtivo(null);
+            if (onEnderecoAtivoChange) {
+                onEnderecoAtivoChange(null);
+            }
+        }
+    }, [enderecos]);
     const handlePress = () => {
         if (navigation) {
             navigation.navigate('Login');
+        }
+    };
+
+    const handleSelectEndereco = async (endereco) => {
+        try {
+            // Chama a API para definir o endereço como padrão
+            const user = await getStoredUserData();
+            if (user?.id && endereco?.id) {
+                await setDefaultAddress(user.id, endereco.id);
+            }
+            
+            // Atualiza o estado local
+            setEnderecoAtivo(endereco);
+            if (onEnderecoAtivoChange) {
+                onEnderecoAtivoChange(endereco);
+            }
+        } catch (error) {
+            console.error('Erro ao definir endereço padrão:', error);
+            // Mesmo com erro, atualiza o estado local para melhor UX
+            setEnderecoAtivo(endereco);
+            if (onEnderecoAtivoChange) {
+                onEnderecoAtivoChange(endereco);
+            }
+        }
+    };
+
+    const handleSaveEndereco = async (formData) => {
+        try {
+            const user = await getStoredUserData();
+            if (!user?.id) return;
+
+            if (formData.id) {
+                // Editar endereço existente
+                await updateCustomerAddress(user.id, formData.id, {
+                    street: formData.street,
+                    number: formData.number,
+                    complement: formData.complement,
+                    neighborhood: formData.neighborhood,
+                    city: formData.city,
+                    state: formData.state,
+                    zip_code: formData.zip_code,
+                });
+            } else {
+                // Adicionar novo endereço
+                await addCustomerAddress(user.id, {
+                    street: formData.street,
+                    number: formData.number,
+                    complement: formData.complement,
+                    neighborhood: formData.neighborhood,
+                    city: formData.city,
+                    state: formData.state,
+                    zip_code: formData.zip_code,
+                });
+            }
+
+            // Se é um novo endereço, define como padrão via API
+            if (!formData.id) {
+                // Aguarda um pouco para garantir que o endereço foi adicionado
+                setTimeout(async () => {
+                    try {
+                        const enderecosAtualizados = await getCustomerAddresses(user.id);
+                        if (enderecosAtualizados && enderecosAtualizados.length > 0) {
+                            // Pega o endereço mais recente (primeiro da lista ordenada)
+                            const enderecosOrdenados = [...enderecosAtualizados].sort((a, b) => 
+                                new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0)
+                            );
+                            const enderecoMaisRecente = enderecosOrdenados[0];
+                            
+                            // Define como padrão via API
+                            await setDefaultAddress(user.id, enderecoMaisRecente.id);
+                            
+                            // Atualiza o estado local imediatamente
+                            setEnderecoAtivo(enderecoMaisRecente);
+                            
+                            // Notifica o componente pai com o novo endereço ativo
+                            if (onEnderecoAtivoChange) {
+                                onEnderecoAtivoChange({ 
+                                    type: 'refresh', 
+                                    enderecos: enderecosAtualizados,
+                                    enderecoAtivo: enderecoMaisRecente
+                                });
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Erro ao definir endereço como padrão:', error);
+                    }
+                }, 500);
+            } else {
+                // Para edição, apenas atualiza a lista
+                const enderecosAtualizados = await getCustomerAddresses(user.id);
+                if (onEnderecoAtivoChange) {
+                    onEnderecoAtivoChange({ type: 'refresh', enderecos: enderecosAtualizados });
+                }
+            }
+            
+            setShowEditarEndereco(false);
+            setShowEnderecosBottomSheet(true);
+        } catch (error) {
+            console.error("Erro ao salvar endereço:", error);
+            alert("Erro ao salvar endereço. Tente novamente.");
+        }
+    };
+
+    const handleDeleteEndereco = async (enderecoId) => {
+        try {
+            const user = await getStoredUserData();
+            if (!user?.id) return;
+
+            await removeCustomerAddress(user.id, enderecoId);
+
+            // Atualizar lista de endereços
+            const enderecosAtualizados = await getCustomerAddresses(user.id);
+            if (onEnderecoAtivoChange) {
+                onEnderecoAtivoChange({ type: 'refresh', enderecos: enderecosAtualizados });
+            }
+            
+            setShowEditarEndereco(false);
+            setShowEnderecosBottomSheet(true);
+        } catch (error) {
+            console.error("Erro ao deletar endereço:", error);
+            alert("Erro ao deletar endereço. Tente novamente.");
         }
     };
 
@@ -50,6 +228,26 @@ export default function Header({
                 navigation.goBack();
             }
         }
+    };
+
+    const handleAddressPress = () => {
+        setShowEnderecosBottomSheet(true);
+    };
+
+    const handleCloseEnderecosBottomSheet = () => {
+        setShowEnderecosBottomSheet(false);
+    };
+
+    const handleAddNewEndereco = () => {
+        setShowEnderecosBottomSheet(false);
+        setEnderecoSelecionado(null);
+        setShowEditarEndereco(true);
+    };
+
+    const handleEditEndereco = (endereco) => {
+        setShowEnderecosBottomSheet(false);
+        setEnderecoSelecionado(endereco);
+        setShowEditarEndereco(true);
     };
 
     // Renderizar conteúdo baseado no tipo
@@ -87,23 +285,27 @@ export default function Header({
                                 <Text style={styles.userName}>
                                     {"Olá, " + (userInfo?.name || "Usuário")}
                                 </Text>
-                                <View style={styles.userAddressRow}>
+                                <TouchableOpacity 
+                                    style={styles.userAddressRow}
+                                    onPress={handleAddressPress}
+                                    activeOpacity={0.7}
+                                >
                                     <SvgXml
                                         xml={localizationSvg}
                                         width={9}
                                         height={13}
                                         style={styles.userAddressIcon}
                                     />
-                                    <Text style={styles.userAddress}>
-                                        {userInfo?.address || "Adicionar endereço"}
-                                    </Text>
+                                     <Text style={styles.userAddress}>
+                                         {formatEndereco(enderecoAtivo)}
+                                     </Text>
                                     <SvgXml
                                         xml={downArrowSvg}
                                         width={20}
                                         height={20}
                                         style={styles.userAddressArrow}
                                     />
-                                </View>
+                                </TouchableOpacity>
                             </View>
                         </View>
                         <View style={styles.pointsContainer}>
@@ -140,9 +342,33 @@ export default function Header({
     };
 
     return (
-        <View style={[styles.container, styles[`${type}Container`]]}>
-            {renderContent()}
-        </View>
+        <>
+            <View style={[styles.container, styles[`${type}Container`]]}>
+                {renderContent()}
+            </View>
+            
+            <EnderecosBottomSheet
+                visible={showEnderecosBottomSheet}
+                onClose={handleCloseEnderecosBottomSheet}
+                enderecos={enderecos}
+                onAddNew={handleAddNewEndereco}
+                onEdit={handleEditEndereco}
+                onSelect={handleSelectEndereco}
+                enderecoAtivo={enderecoAtivo}
+            />
+
+            <EditarEnderecoBottomSheet
+                visible={showEditarEndereco}
+                onClose={() => {
+                    setShowEditarEndereco(false);
+                    setShowEnderecosBottomSheet(true);
+                }}
+                endereco={enderecoSelecionado}
+                onSave={handleSaveEndereco}
+                onDelete={handleDeleteEndereco}
+                enderecos={enderecos}
+            />
+        </>
     );
 }
 

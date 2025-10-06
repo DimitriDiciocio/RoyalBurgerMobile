@@ -21,6 +21,7 @@ export default function EditarEnderecoBottomSheet({
   endereco = null,
   onSave,
   onDelete,
+  enderecos = [],
 }) {
   const isEditing = !!endereco;
 
@@ -40,6 +41,26 @@ export default function EditarEnderecoBottomSheet({
   // Estados para os novos componentes
   const [selectedState, setSelectedState] = useState(null);
   const [selectedCity, setSelectedCity] = useState(null);
+
+  // Função para verificar se o endereço já existe
+  const isDuplicateAddress = (newAddress) => {
+    return enderecos.some(existingAddress => {
+      // Se estiver editando, ignora o próprio endereço
+      if (isEditing && existingAddress.id === endereco.id) {
+        return false;
+      }
+      
+      // Compara os campos principais
+      const sameStreet = existingAddress.street?.toLowerCase().trim() === newAddress.street?.toLowerCase().trim();
+      const sameNumber = existingAddress.number === newAddress.number;
+      const sameNeighborhood = existingAddress.neighborhood?.toLowerCase().trim() === newAddress.neighborhood?.toLowerCase().trim();
+      const sameCity = existingAddress.city?.toLowerCase().trim() === newAddress.city?.toLowerCase().trim();
+      const sameState = existingAddress.state?.toLowerCase().trim() === newAddress.state?.toLowerCase().trim();
+      const sameZipCode = existingAddress.zip_code?.replace(/\D/g, '') === newAddress.zip_code?.replace(/\D/g, '');
+      
+      return sameStreet && sameNumber && sameNeighborhood && sameCity && sameState && sameZipCode;
+    });
+  };
 
   // Preenche o formulário quando estiver editando
   useEffect(() => {
@@ -134,8 +155,8 @@ export default function EditarEnderecoBottomSheet({
       return;
     }
 
-    // Callback com os dados
-    onSave({
+    // Prepara os dados do endereço
+    const addressData = {
       zip_code: formData.zip_code,
       street: formData.street,
       number: semNumero ? null : formData.number,
@@ -144,7 +165,16 @@ export default function EditarEnderecoBottomSheet({
       city: selectedCity.nome,
       state: selectedState.sigla,
       id: endereco?.id, // Inclui ID se estiver editando
-    });
+    };
+
+    // Verifica se o endereço já existe
+    if (isDuplicateAddress(addressData)) {
+      alert('Este endereço já está cadastrado. Por favor, verifique os dados ou adicione um complemento para diferenciá-lo.');
+      return;
+    }
+
+    // Callback com os dados
+    onSave(addressData);
   };
 
   const handleDelete = () => {

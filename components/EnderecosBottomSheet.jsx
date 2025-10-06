@@ -3,10 +3,16 @@ import { View, StyleSheet, Text, ScrollView, TouchableOpacity } from 'react-nati
 import BottomSheet from './BottomSheet';
 import CardEndereco from './CardEndereco';
 
-export default function EnderecosBottomSheet({ visible, onClose, enderecos, onAddNew, onEdit }) {
+export default function EnderecosBottomSheet({ visible, onClose, enderecos, onAddNew, onEdit, onSelect, enderecoAtivo }) {
   const handleEditEndereco = (endereco) => {
     if (onEdit) {
       onEdit(endereco);
+    }
+  };
+
+  const handleSelectEndereco = (endereco) => {
+    if (onSelect) {
+      onSelect(endereco);
     }
   };
 
@@ -51,14 +57,26 @@ export default function EnderecosBottomSheet({ visible, onClose, enderecos, onAd
           contentContainerStyle={styles.scrollContent}
         >
           {enderecos && enderecos.length > 0 ? (
-            enderecos.map((endereco, index) => (
-              <CardEndereco
-                key={endereco.id || index}
-                endereco={formatEndereco(endereco)}
-                complemento={formatComplemento(endereco)}
-                onEdit={() => handleEditEndereco(endereco)}
-              />
-            ))
+            // Ordena endereços: ativo primeiro, depois os outros
+            [...enderecos].sort((a, b) => {
+              const aIsActive = enderecoAtivo && a.id === enderecoAtivo.id;
+              const bIsActive = enderecoAtivo && b.id === enderecoAtivo.id;
+              if (aIsActive && !bIsActive) return -1;
+              if (!aIsActive && bIsActive) return 1;
+              return 0;
+            }).map((endereco, index) => {
+              const isActive = enderecoAtivo && endereco.id === enderecoAtivo.id;
+              return (
+                <CardEndereco
+                  key={endereco.id || index}
+                  endereco={formatEndereco(endereco)}
+                  complemento={formatComplemento(endereco)}
+                  onEdit={() => handleEditEndereco(endereco)}
+                  onSelect={() => handleSelectEndereco(endereco)}
+                  isActive={isActive}
+                />
+              );
+            })
           ) : (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>Nenhum endereço cadastrado</Text>

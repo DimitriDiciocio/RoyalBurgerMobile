@@ -3,6 +3,7 @@ import {StyleSheet, View, Text, TouchableOpacity, Image, TextInput, ScrollView, 
 import Header from "../components/Header";
 import Input from "../components/Input";
 import {login, registerCustomer} from "../services";
+import { requestEmailVerification } from "../services/customerService";
 
 export default function Login({navigation}) {
     const [email, setEmail] = useState('');
@@ -60,7 +61,22 @@ export default function Login({navigation}) {
             if (result.ok) {
                 navigation.navigate('Home');
             } else {
-                setSubmitError(result.error || 'Não foi possível fazer login.');
+                const message = result.error || '';
+                const isUnverified =
+                    result.status === 403 ||
+                    /nao verificado|não verificado|email.*verificar|verify.*email|EMAIL_NOT_VERIFIED|UNVERIFIED/i.test(message);
+
+                if (isUnverified) {
+                    try {
+                        await requestEmailVerification(email);
+                    } catch (e) {
+                        // Silencia erro de reenvio para não bloquear o fluxo
+                    }
+                    navigation.navigate('VerificacaoEmail', { email });
+                    return;
+                }
+
+                setSubmitError(message || 'Não foi possível fazer login.');
             }
         } catch (e) {
             setSubmitError('Erro inesperado ao fazer login.');

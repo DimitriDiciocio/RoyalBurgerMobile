@@ -234,6 +234,23 @@ export const removeCustomerAddress = async (customerId, addressId) => {
 };
 
 /**
+ * Define um endereço como padrão para um cliente.
+ * @param {number} customerId - ID do cliente
+ * @param {number} addressId - ID do endereço
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const setDefaultAddress = async (customerId, addressId) => {
+  try {
+    const response = await api.put(
+      `/customers/${customerId}/addresses/${addressId}/set-default`
+    );
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Obtém saldo do programa de fidelidade.
  * @param {number} customerId - ID do cliente
  * @returns {Promise<object>} - Saldo de pontos

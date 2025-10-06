@@ -186,7 +186,7 @@ export default function VerificacaoEmail({ navigation, route }) {
       >
         <View style={styles.form}>
           <View style={styles.iconContainer}>
-            <Text style={styles.icon}>📧</Text>
+            <Text style={styles.icon}>✉️</Text>
           </View>
           
           <Text style={styles.titulo}>Verifique seu email</Text>
