@@ -422,3 +422,19 @@ export const get2FAStatus = async () => {
     throw error;
   }
 };
+
+/**
+ * Atualiza a senha do usuário.
+ * @param {object} passwordData - Dados da senha
+ * @param {string} passwordData.current_password - Senha atual
+ * @param {string} passwordData.new_password - Nova senha
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const updatePassword = async (passwordData) => {
+  try {
+    const response = await api.put("/users/change-password", passwordData);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};

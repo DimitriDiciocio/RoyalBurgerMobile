@@ -43,7 +43,12 @@ export default function Header({
         if (onBackPress) {
             onBackPress();
         } else if (navigation) {
-            navigation.goBack();
+            // Se estiver na tela de login, vai para Home
+            if (type === 'login') {
+                navigation.navigate('Home');
+            } else {
+                navigation.goBack();
+            }
         }
     };
 

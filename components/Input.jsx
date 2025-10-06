@@ -10,6 +10,8 @@ export default function Input({
                                   onChangeText = () => {},
                                   error = null,
                                   style = {},
+                                  isValid = false,
+                                  isValidating = false,
                                   ...props
                               }) {
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -126,7 +128,9 @@ export default function Input({
             <View style={[
                 styles.inputContainer,
                 isFocused && styles.inputFocused,
-                error && styles.inputError
+                error && styles.inputError,
+                isValid && styles.inputValid,
+                isValidating && styles.inputValidating
             ]}>
                 {label && (
                     <Animated.Text style={labelStyle}>
@@ -217,5 +221,11 @@ const styles = StyleSheet.create({
         marginTop: 8,
         marginLeft: 4,
         fontWeight: '500',
+    },
+    inputValid: {
+        borderColor: '#4CAF50',
+    },
+    inputValidating: {
+        borderColor: '#FFC700',
     },
 });

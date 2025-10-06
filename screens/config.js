@@ -3,6 +3,7 @@ import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Alert } from 'rea
 import { SvgXml } from 'react-native-svg';
 import BotaoCheck from '../components/BotaoCheck';
 import BotaoSwitch from '../components/BotaoSwitch';
+import AlterarSenhaBottomSheet from '../components/AlterarSenhaBottomSheet';
 import { logout } from '../services/userService';
 
 // SVG do ícone de voltar (igual ao produto.js)
@@ -24,10 +25,10 @@ export default function Config({ navigation }) {
   const [notificacaoPedidos, setNotificacaoPedidos] = useState(false);
   const [notificacaoPromocoes, setNotificacaoPromocoes] = useState(false);
   const [verificacaoDuasEtapas, setVerificacaoDuasEtapas] = useState(false);
+  const [showAlterarSenha, setShowAlterarSenha] = useState(false);
 
   const handleChangePassword = () => {
-    console.log('Alterar senha');
-    // Adicione a navegação ou ação desejada aqui
+    setShowAlterarSenha(true);
   };
 
   const handleVerifyEmail = () => {
@@ -139,6 +140,12 @@ export default function Config({ navigation }) {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Bottom Sheet de Alterar Senha */}
+      <AlterarSenhaBottomSheet
+        visible={showAlterarSenha}
+        onClose={() => setShowAlterarSenha(false)}
+      />
     </View>
   );
 }

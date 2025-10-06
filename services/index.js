@@ -257,3 +257,6 @@ export {
   formatCEP,
   getCompleteAddressInfo,
 } from "./addressService";
+
+// Atualização de senha
+export { updatePassword } from "./userService";

@@ -89,18 +89,25 @@ export default function DadosContaBottomSheet({
   const formatBirthdate = (date) => {
     if (!date) return "Data de nascimento não informada.";
     
-    // Se já está no formato DD/MM/AAAA, retorna como está
-    if (date.includes('/')) {
-      return date;
-    }
-    
-    // Se está no formato DD-MM-AAAA, converte para DD/MM/AAAA
+    // Se está no formato AAAA-MM-DD, converte para DD/MM/AAAA
     if (date.includes('-')) {
       const parts = date.split('-');
       if (parts.length === 3) {
-        const [day, month, year] = parts;
-        return `${day}/${month}/${year}`;
+        // Verifica se é formato AAAA-MM-DD (ano com 4 dígitos no início)
+        if (parts[0].length === 4) {
+          const [year, month, day] = parts;
+          return `${day}/${month}/${year}`;
+        } else {
+          // Se é DD-MM-AAAA, converte para DD/MM/AAAA
+          const [day, month, year] = parts;
+          return `${day}/${month}/${year}`;
+        }
       }
+    }
+    
+    // Se já está no formato DD/MM/AAAA, retorna como está
+    if (date.includes('/')) {
+      return date;
     }
     
     return date;
