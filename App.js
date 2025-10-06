@@ -10,6 +10,7 @@ import MenuCategory from "./components/MenuCategory";
 import MenuNavigation from "./components/MenuNavigation";
 import Login from "./screens/login";
 import Cadastro from "./screens/cadastro";
+import VerificacaoEmail from "./screens/verificacaoEmail";
 import Produto from "./screens/produto";
 import Perfil from "./screens/perfil";
 import ClubeRoyal from "./screens/clubeRoyal";
@@ -195,6 +196,10 @@ export default function App() {
                 <Stack.Screen 
                     name="Cadastro" 
                     component={Cadastro}
+                />
+                <Stack.Screen 
+                    name="VerificacaoEmail" 
+                    component={VerificacaoEmail}
                 />
                 <Stack.Screen 
                     name="Produto" 

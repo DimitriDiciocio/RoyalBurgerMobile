@@ -12,7 +12,7 @@ import api from "./api";
  */
 
 /**
- * Registra um novo cliente.
+ * Registra um novo cliente (criação temporária para verificação de email).
  * @param {object} userData - Objeto com dados do cliente
  * @returns {Promise<object>} - Dados do cliente criado
  */
@@ -29,6 +29,8 @@ export const registerCustomer = async (userData) => {
       phone: userData.telefone,
       password: userData.senha,
       password_confirmation: userData.confirmarSenha,
+      // Indica que o usuário ainda não foi verificado
+      is_email_verified: false,
     };
 
     const response = await api.post("/customers", apiData);
@@ -37,7 +39,7 @@ export const registerCustomer = async (userData) => {
     return {
       success: true,
       data: response.data,
-      message: "Cadastro realizado com sucesso",
+      message: "Cadastro realizado com sucesso. Verifique seu email para ativar a conta.",
     };
   } catch (error) {
     // Estruturar erro de forma consistente
@@ -256,5 +258,109 @@ export const getLoyaltyHistory = async (customerId) => {
     return response.data;
   } catch (error) {
     throw error;
+  }
+};
+
+/**
+ * ========================================
+ * SERVIÇO DE VERIFICAÇÃO DE EMAIL
+ * ========================================
+ */
+
+/**
+ * Solicita verificação de email para um usuário.
+ * @param {string} email - Email do usuário
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const requestEmailVerification = async (email) => {
+  try {
+    const response = await api.post("/users/request-email-verification", {
+      email,
+    });
+    return {
+      success: true,
+      data: response.data,
+      message: response.data?.msg || "Código de verificação enviado por e-mail",
+    };
+  } catch (error) {
+    const structuredError = {
+      success: false,
+      message:
+        error.response?.data?.error ||
+        error.response?.data?.msg ||
+        error.response?.data?.message ||
+        error.message ||
+        "Erro ao solicitar verificação de email",
+      status: error.response?.status,
+      data: error.response?.data,
+    };
+
+    throw structuredError;
+  }
+};
+
+/**
+ * Verifica código de email.
+ * @param {string} email - Email do usuário
+ * @param {string} code - Código de verificação
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const verifyEmailCode = async (email, code) => {
+  try {
+    const response = await api.post("/users/verify-email", { 
+      email, 
+      code 
+    });
+    return {
+      success: true,
+      data: response.data,
+      message: response.data?.msg || "Email verificado com sucesso",
+    };
+  } catch (error) {
+    const structuredError = {
+      success: false,
+      message:
+        error.response?.data?.error ||
+        error.response?.data?.msg ||
+        error.response?.data?.message ||
+        error.message ||
+        "Erro ao verificar código",
+      status: error.response?.status,
+      data: error.response?.data,
+    };
+
+    throw structuredError;
+  }
+};
+
+/**
+ * Reenvia código de verificação de email.
+ * @param {string} email - Email do usuário
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const resendVerificationCode = async (email) => {
+  try {
+    const response = await api.post("/users/request-email-verification", {
+      email,
+    });
+    return {
+      success: true,
+      data: response.data,
+      message: response.data?.msg || "Novo código de verificação enviado",
+    };
+  } catch (error) {
+    const structuredError = {
+      success: false,
+      message:
+        error.response?.data?.error ||
+        error.response?.data?.msg ||
+        error.response?.data?.message ||
+        error.message ||
+        "Erro ao reenviar código",
+      status: error.response?.status,
+      data: error.response?.data,
+    };
+
+    throw structuredError;
   }
 };

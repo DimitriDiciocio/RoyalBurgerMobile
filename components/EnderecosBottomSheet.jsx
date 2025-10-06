@@ -108,6 +108,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 15,
     marginBottom: 10,
+    marginHorizontal: 20,
   },
   addButtonText: {
     color: '#000000',

@@ -43,33 +43,11 @@ export default function BottomSheet({ visible, onClose, children, heightPercenta
     });
   };
 
-  // PanResponder para arrastar
+  // PanResponder para arrastar - apenas no indicador
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Só ativa se arrastar mais de 5px verticalmente
-        return Math.abs(gestureState.dy) > 5;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        // Só permite arrastar para baixo (dy positivo)
-        if (gestureState.dy > 0) {
-          slideAnim.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        // Se arrastar mais de 100px para baixo, fecha
-        if (gestureState.dy > 100) {
-          handleClose();
-        } else {
-          // Senão, volta para a posição original
-          Animated.spring(slideAnim, {
-            toValue: 0,
-            useNativeDriver: true,
-            friction: 8,
-          }).start();
-        }
-      },
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: () => false,
     })
   ).current;
 
@@ -93,7 +71,7 @@ export default function BottomSheet({ visible, onClose, children, heightPercenta
               ]}
             >
               {/* Indicador de arrastar */}
-              <View style={styles.dragIndicatorContainer} {...panResponder.panHandlers}>
+              <View style={styles.dragIndicatorContainer}>
                 <TouchableOpacity onPress={handleClose} style={styles.dragIndicatorTouchArea}>
                   <View style={styles.dragIndicator} />
                 </TouchableOpacity>
@@ -144,6 +122,5 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
   },
 });

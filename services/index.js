@@ -246,3 +246,14 @@ export {
   getStockAlerts,
   getStockReport,
 } from "./stockService";
+
+// Endereços e IBGE
+export {
+  searchCEP,
+  getStates,
+  getCitiesByState,
+  getCitiesByStateSigla,
+  validateCEP,
+  formatCEP,
+  getCompleteAddressInfo,
+} from "./addressService";

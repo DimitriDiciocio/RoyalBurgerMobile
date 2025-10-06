@@ -198,9 +198,12 @@ export default function Cadastro({navigation}) {
             const response = await registerCustomer({nomeCompleto, email, dataNascimento, telefone, senha, confirmarSenha});
             const apiSuccessMsg = response?.data?.message || response?.message;
             setSubmitSuccess(apiSuccessMsg || 'Cadastro realizado com sucesso.');
-            // Redireciona para login após breve confirmação
+            // Redireciona para verificação de email após breve confirmação
             setTimeout(() => {
-                navigation.navigate('Login');
+                navigation.navigate('VerificacaoEmail', {
+                    email: email,
+                    userData: {nomeCompleto, email, dataNascimento, telefone, senha, confirmarSenha}
+                });
             }, 800);
         } catch (error) {
             // Normaliza mensagem da API

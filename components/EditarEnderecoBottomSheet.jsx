@@ -11,6 +11,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import BottomSheet from "./BottomSheet";
 import Input from "./Input";
+import CEPInput from "./CEPInput";
+import StateSelector from "./StateSelector";
+import CitySelector from "./CitySelector";
 
 export default function EditarEnderecoBottomSheet({
   visible,
@@ -33,6 +36,10 @@ export default function EditarEnderecoBottomSheet({
 
   const [semNumero, setSemNumero] = useState(false);
   const [semComplemento, setSemComplemento] = useState(false);
+  
+  // Estados para os novos componentes
+  const [selectedState, setSelectedState] = useState(null);
+  const [selectedCity, setSelectedCity] = useState(null);
 
   // Preenche o formulário quando estiver editando
   useEffect(() => {
@@ -48,6 +55,14 @@ export default function EditarEnderecoBottomSheet({
       });
       setSemNumero(!endereco.number || endereco.number === "S/N");
       setSemComplemento(!endereco.complement);
+      
+      // Inicializa os seletores se houver dados
+      if (endereco.state) {
+        setSelectedState({ sigla: endereco.state, nome: endereco.state });
+      }
+      if (endereco.city) {
+        setSelectedCity({ nome: endereco.city });
+      }
     } else {
       // Limpa o formulário quando for adicionar novo
       setFormData({
@@ -61,6 +76,8 @@ export default function EditarEnderecoBottomSheet({
       });
       setSemNumero(false);
       setSemComplemento(false);
+      setSelectedState(null);
+      setSelectedCity(null);
     }
   }, [endereco, visible]);
 
@@ -78,12 +95,12 @@ export default function EditarEnderecoBottomSheet({
       alert("Por favor, preencha o campo Bairro");
       return;
     }
-    if (!formData.city.trim()) {
-      alert("Por favor, preencha o campo Cidade");
+    if (!selectedState) {
+      alert("Por favor, selecione um estado");
       return;
     }
-    if (!formData.state.trim()) {
-      alert("Por favor, preencha o campo Estado");
+    if (!selectedCity) {
+      alert("Por favor, selecione uma cidade");
       return;
     }
     if (!formData.number.trim() && !semNumero) {
@@ -100,8 +117,8 @@ export default function EditarEnderecoBottomSheet({
       number: semNumero ? null : formData.number,
       complement: semComplemento ? null : formData.complement,
       neighborhood: formData.neighborhood,
-      city: formData.city,
-      state: formData.state,
+      city: selectedCity.nome,
+      state: selectedState.sigla,
       id: endereco?.id, // Inclui ID se estiver editando
     });
   };
@@ -110,6 +127,72 @@ export default function EditarEnderecoBottomSheet({
     if (onDelete && endereco?.id) {
       onDelete(endereco.id);
     }
+  };
+
+  // Função para lidar com a busca de CEP
+  const handleCEPFound = async (addressData) => {
+    if (addressData) {
+      setFormData(prev => ({
+        ...prev,
+        street: addressData.logradouro || prev.street,
+        neighborhood: addressData.bairro || prev.neighborhood,
+        city: addressData.localidade || prev.city,
+        state: addressData.uf || prev.state,
+      }));
+      
+      // Atualiza os seletores se houver dados
+      if (addressData.uf) {
+        // Busca o nome completo do estado pela sigla
+        try {
+          const { getStates } = await import('../services/addressService');
+          const statesResult = await getStates();
+          if (statesResult.success) {
+            const state = statesResult.data.find(s => s.sigla === addressData.uf);
+            if (state) {
+              setSelectedState({ 
+                id: state.id, 
+                sigla: state.sigla, 
+                nome: state.nome 
+              });
+            } else {
+              // Fallback se não encontrar o estado
+              setSelectedState({ sigla: addressData.uf, nome: addressData.uf });
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao buscar estado:', error);
+          // Fallback se der erro
+          setSelectedState({ sigla: addressData.uf, nome: addressData.uf });
+        }
+      }
+      if (addressData.localidade) {
+        setSelectedCity({ nome: addressData.localidade });
+      }
+    }
+  };
+
+  // Função para lidar com a seleção de estado
+  const handleStateChange = (state) => {
+    setSelectedState(state);
+    setFormData(prev => ({
+      ...prev,
+      state: state.sigla
+    }));
+    // Limpa a cidade quando muda o estado
+    setSelectedCity(null);
+    setFormData(prev => ({
+      ...prev,
+      city: ""
+    }));
+  };
+
+  // Função para lidar com a seleção de cidade
+  const handleCityChange = (city) => {
+    setSelectedCity(city);
+    setFormData(prev => ({
+      ...prev,
+      city: city.nome
+    }));
   };
 
   return (
@@ -122,36 +205,19 @@ export default function EditarEnderecoBottomSheet({
 
         <ScrollView
           style={styles.scrollView}
-          showsVerticalScrollIndicator={true}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          scrollEventThrottle={16}
-          bounces={true}
-          scrollEnabled={true}
-          removeClippedSubviews={false}
-          overScrollMode="auto"
+          showsVerticalScrollIndicator={false}
         >
           {/* CEP */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>CEP*</Text>
-            <Input
-              placeholder="Ex: 01234-567"
-              placeholderTextColor="#CCCCCC"
-              value={formData.zip_code}
-              onChangeText={(text) => {
-                // Remove caracteres não numéricos e formata o CEP
-                const cleanText = text.replace(/\D/g, "");
-                let formattedText = cleanText;
-                if (cleanText.length > 5) {
-                  formattedText =
-                    cleanText.slice(0, 5) + "-" + cleanText.slice(5, 8);
-                }
-                setFormData({ ...formData, zip_code: formattedText });
-              }}
-              keyboardType="numeric"
-              maxLength={9}
-            />
-          </View>
+          <CEPInput
+            label="CEP*"
+            value={formData.zip_code}
+            onValueChange={(text) => setFormData({ ...formData, zip_code: text })}
+            onAddressFound={handleCEPFound}
+            placeholder="00000-000"
+            autoSearch={true}
+          />
 
           <View style={styles.spacer} />
 
@@ -257,32 +323,24 @@ export default function EditarEnderecoBottomSheet({
 
           <View style={styles.spacer} />
 
-          {/* Cidade */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Cidade</Text>
-            <Input
-              placeholder="Ex: São Paulo"
-              placeholderTextColor="#CCCCCC"
-              value={formData.city}
-              onChangeText={(text) => setFormData({ ...formData, city: text })}
-            />
-          </View>
+          {/* Estado */}
+          <StateSelector
+            label="Estado*"
+            value={selectedState}
+            onValueChange={handleStateChange}
+            placeholder="Selecione um estado"
+          />
 
           <View style={styles.spacer} />
 
-          {/* Estado */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Estado</Text>
-            <Input
-              placeholder="Ex: SP"
-              placeholderTextColor="#CCCCCC"
-              value={formData.state}
-              onChangeText={(text) =>
-                setFormData({ ...formData, state: text.toUpperCase() })
-              }
-              maxLength={2}
-            />
-          </View>
+          {/* Cidade */}
+          <CitySelector
+            label="Cidade*"
+            value={selectedCity}
+            onValueChange={handleCityChange}
+            selectedState={selectedState}
+            placeholder="Selecione uma cidade"
+          />
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
@@ -383,7 +441,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     paddingTop: 15,
-    paddingBottom: 10,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
     borderTopWidth: 1,
     borderTopColor: "#F0F0F0",
   },
