@@ -233,6 +233,15 @@ export default function Perfil({ navigation }) {
       .toUpperCase();
   };
 
+  const capitalizeName = (name) => {
+    if (!name) return "Usuário";
+    return name
+      .toLowerCase()
+      .split(" ")
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
+
   const getSvgIcon = (iconName) => {
     switch (iconName) {
       case "lupa":
@@ -273,7 +282,7 @@ export default function Perfil({ navigation }) {
 
           {/* Nome */}
           <View style={styles.userNameContainer}>
-            <Text style={styles.userName}>{userInfo?.name || "Usuário"}</Text>
+            <Text style={styles.userName}>{capitalizeName(userInfo?.name)}</Text>
             <View style={styles.borderLine} />
           </View>
 
@@ -490,6 +499,7 @@ const styles = StyleSheet.create({
     fontSize: 25,
     fontWeight: "500",
     color: "#333",
+    textAlign: "center",
   },
   menuOptions: {
     width: "100%",
@@ -525,6 +535,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     marginTop: 20,
+    marginBottom: 40,
     padding: 20,
     width: "70%",
     maxWidth: 350,

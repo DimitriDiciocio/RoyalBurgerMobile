@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, StyleSheet, Text, ScrollView, Alert } from "react-native";
 import BottomSheet from "./BottomSheet";
 import BotaoCheck from "./BotaoCheck";
+import EditarDadoBottomSheet from "./EditarDadoBottomSheet";
 import { updateProfile } from "../services";
 
 // SVG do ícone de edição (pen.svg)
@@ -16,131 +17,49 @@ export default function DadosContaBottomSheet({
   onUserDataUpdate,
 }) {
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showEditSheet, setShowEditSheet] = useState(false);
+  const [editingField, setEditingField] = useState(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [editingTitle, setEditingTitle] = useState("");
+  const [editingPlaceholder, setEditingPlaceholder] = useState("");
+  const [editingKeyboardType, setEditingKeyboardType] = useState("default");
+  const [editingMaxLength, setEditingMaxLength] = useState(null);
+
+  const openEditSheet = (field, title, placeholder, keyboardType = "default", maxLength = null) => {
+    const currentValue = userData?.[field] || "";
+    setEditingField(field);
+    setEditingValue(currentValue);
+    setEditingTitle(title);
+    setEditingPlaceholder(placeholder);
+    setEditingKeyboardType(keyboardType);
+    setEditingMaxLength(maxLength);
+    setShowEditSheet(true);
+  };
 
   const handleEditName = () => {
-    Alert.prompt(
-      "Editar Nome",
-      "Digite seu nome completo:",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Salvar",
-          onPress: async (newName) => {
-            if (newName && newName.trim()) {
-              await updateUserField("full_name", newName.trim());
-            }
-          },
-        },
-      ],
-      "plain-text",
-      userData?.full_name || userData?.name || ""
-    );
+    openEditSheet("full_name", "Editar Nome", "Digite seu nome completo");
   };
 
   const handleEditCPF = () => {
-    Alert.prompt(
-      "Editar CPF",
-      "Digite seu CPF (apenas números):",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Salvar",
-          onPress: async (newCPF) => {
-            if (newCPF && newCPF.replace(/\D/g, "").length === 11) {
-              await updateUserField("cpf", newCPF.replace(/\D/g, ""));
-            } else {
-              Alert.alert("Erro", "CPF deve ter 11 dígitos");
-            }
-          },
-        },
-      ],
-      "plain-text",
-      userData?.cpf || ""
-    );
+    openEditSheet("cpf", "Editar CPF", "Digite seu CPF (apenas números)", "numeric", 11);
   };
 
   const handleEditBirthdate = () => {
-    Alert.prompt(
-      "Editar Data de Nascimento",
-      "Digite sua data de nascimento (DD/MM/AAAA):",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Salvar",
-          onPress: async (newDate) => {
-            if (newDate && newDate.trim()) {
-              // Converte DD/MM/AAAA para DD-MM-AAAA (formato da API)
-              const formattedDate = newDate.replace(/\//g, "-");
-              await updateUserField("date_of_birth", formattedDate);
-            }
-          },
-        },
-      ],
-      "plain-text",
-      userData?.date_of_birth || ""
-    );
+    openEditSheet("date_of_birth", "Editar Data de Nascimento", "Digite sua data de nascimento", "numeric", 10);
   };
 
   const handleEditEmail = () => {
-    Alert.prompt(
-      "Editar Email",
-      "Digite seu novo email:",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Salvar",
-          onPress: async (newEmail) => {
-            if (newEmail && newEmail.trim()) {
-              await updateUserField("email", newEmail.trim());
-            }
-          },
-        },
-      ],
-      "email-address",
-      userData?.email || ""
-    );
+    openEditSheet("email", "Editar Email", "Digite seu novo email", "email-address");
   };
 
   const handleEditPhone = () => {
-    Alert.prompt(
-      "Editar Telefone",
-      "Digite seu telefone:",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Salvar",
-          onPress: async (newPhone) => {
-            if (newPhone && newPhone.trim()) {
-              await updateUserField("phone", newPhone.replace(/\D/g, ""));
-            }
-          },
-        },
-      ],
-      "phone-pad",
-      userData?.phone || ""
-    );
+    openEditSheet("phone", "Editar Telefone", "Digite seu telefone", "phone-pad");
   };
 
-  const updateUserField = async (field, value) => {
-    if (isUpdating) return;
-
-    setIsUpdating(true);
-    try {
-      await updateProfile({ [field]: value });
-      Alert.alert("Sucesso", "Dados atualizados com sucesso!");
-
-      // Notifica o componente pai para atualizar os dados
-      if (onUserDataUpdate) {
-        onUserDataUpdate();
-      }
-    } catch (error) {
-      const errorMessage =
-        error?.response?.data?.error ||
-        error?.message ||
-        "Erro ao atualizar dados";
-      Alert.alert("Erro", errorMessage);
-    } finally {
-      setIsUpdating(false);
+  const handleSaveEdit = (newValue) => {
+    // Notifica o componente pai para atualizar os dados
+    if (onUserDataUpdate) {
+      onUserDataUpdate();
     }
   };
 
@@ -164,6 +83,27 @@ export default function DadosContaBottomSheet({
       return cleaned.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
     }
     return phone;
+  };
+
+  // Função para formatar data de nascimento
+  const formatBirthdate = (date) => {
+    if (!date) return "Data de nascimento não informada.";
+    
+    // Se já está no formato DD/MM/AAAA, retorna como está
+    if (date.includes('/')) {
+      return date;
+    }
+    
+    // Se está no formato DD-MM-AAAA, converte para DD/MM/AAAA
+    if (date.includes('-')) {
+      const parts = date.split('-');
+      if (parts.length === 3) {
+        const [day, month, year] = parts;
+        return `${day}/${month}/${year}`;
+      }
+    }
+    
+    return date;
   };
 
   return (
@@ -191,9 +131,7 @@ export default function DadosContaBottomSheet({
 
           <BotaoCheck
             title="Data de nascimento"
-            description={
-              userData?.date_of_birth || "Data de nascimento não informada."
-            }
+            description={formatBirthdate(userData?.date_of_birth)}
             iconSvg={penSvg}
             onPress={handleEditBirthdate}
           />
@@ -218,6 +156,19 @@ export default function DadosContaBottomSheet({
           />
         </View>
       </ScrollView>
+
+      {/* Bottom Sheet de Edição */}
+      <EditarDadoBottomSheet
+        visible={showEditSheet}
+        onClose={() => setShowEditSheet(false)}
+        field={editingField}
+        currentValue={editingValue}
+        onSave={handleSaveEdit}
+        title={editingTitle}
+        placeholder={editingPlaceholder}
+        keyboardType={editingKeyboardType}
+        maxLength={editingMaxLength}
+      />
     </BottomSheet>
   );
 }

@@ -58,7 +58,31 @@ export default function EditarEnderecoBottomSheet({
       
       // Inicializa os seletores se houver dados
       if (endereco.state) {
-        setSelectedState({ sigla: endereco.state, nome: endereco.state });
+        // Busca o nome completo do estado pela sigla
+        const initializeState = async () => {
+          try {
+            const { getStates } = await import('../services/addressService');
+            const statesResult = await getStates();
+            if (statesResult.success) {
+              const state = statesResult.data.find(s => s.sigla === endereco.state);
+              if (state) {
+                setSelectedState({ 
+                  id: state.id, 
+                  sigla: state.sigla, 
+                  nome: state.nome 
+                });
+              } else {
+                // Fallback se não encontrar o estado
+                setSelectedState({ sigla: endereco.state, nome: endereco.state });
+              }
+            }
+          } catch (error) {
+            console.error('Erro ao buscar estado:', error);
+            // Fallback se der erro
+            setSelectedState({ sigla: endereco.state, nome: endereco.state });
+          }
+        };
+        initializeState();
       }
       if (endereco.city) {
         setSelectedCity({ nome: endereco.city });
@@ -196,7 +220,7 @@ export default function EditarEnderecoBottomSheet({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} heightPercentage={0.85}>
+    <BottomSheet visible={visible} onClose={onClose} heightPercentage={0.90}>
       <View style={styles.container}>
         <Text style={styles.title}>
           {isEditing ? "Editar dados" : "Adicionar endereço"}
@@ -442,7 +466,6 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingTop: 15,
     paddingBottom: 20,
-    paddingHorizontal: 20,
     borderTopWidth: 1,
     borderTopColor: "#F0F0F0",
   },
