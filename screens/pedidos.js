@@ -118,7 +118,7 @@ export default function Pedidos({ navigation }) {
       </View>
       
       <View style={styles.menuNavigationContainer}>
-        <MenuNavigation navigation={navigation} />
+        <MenuNavigation navigation={navigation} currentRoute="Pedidos" />
       </View>
     </View>
   );

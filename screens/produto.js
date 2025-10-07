@@ -229,7 +229,7 @@
                     
                     {loggedIn && (
                         <View style={styles.menuNavigationContainer}>
-                            <MenuNavigation navigation={navigation} />
+                            <MenuNavigation navigation={navigation} currentRoute="Home" />
                         </View>
                     )}
             </KeyboardAvoidingView>
