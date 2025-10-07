@@ -15,6 +15,7 @@ import {
   testTokenValidity,
   getLoyaltyBalance,
 } from "../services";
+import { calculateDaysUntilExpiration } from "../services/customerService";
   import {
     getCustomerAddresses,
     addCustomerAddress,
@@ -70,6 +71,7 @@ export default function Perfil({ navigation }) {
   const [enderecos, setEnderecos] = useState([]);
   const [enderecoAtivo, setEnderecoAtivo] = useState(null);
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
+  const [loyaltyData, setLoyaltyData] = useState(null);
 
   useEffect(() => {
     const getUserData = async () => {
@@ -163,10 +165,31 @@ export default function Perfil({ navigation }) {
     try {
       const balance = await getLoyaltyBalance(userId);
       setLoyaltyBalance(balance?.current_balance || 0);
+      setLoyaltyData(balance);
     } catch (error) {
       console.error("Erro ao buscar pontos:", error);
       setLoyaltyBalance(0);
+      setLoyaltyData(null);
     }
+  };
+
+  // Função para calcular dias restantes até expiração
+  const getDaysUntilExpiration = () => {
+    if (!loyaltyData) {
+      return 0;
+    }
+    
+    // A API retorna a data de expiração diretamente no objeto
+    if (loyaltyData.points_expiration_date) {
+      return calculateDaysUntilExpiration(loyaltyData.points_expiration_date);
+    }
+    
+    // Fallback: se não tiver data mas tiver pontos, assume 30 dias
+    if (loyaltyData.current_balance > 0) {
+      return 30;
+    }
+    
+    return 0;
   };
 
   const handleAddEndereco = () => {
@@ -360,7 +383,11 @@ export default function Perfil({ navigation }) {
                     setShowDadosConta(true);
                   } else if (option.id === "enderecos") {
                     setShowEnderecos(true);
-                  }
+                  } else if (option.id === "pontos") {
+                    navigation.navigate("ClubeRoyal");
+                  } else if (option.id === "pedidos") {
+                    navigation.navigate("Pedidos");
+                  } 
                 }}
               >
                 <View style={styles.menuIcon}>
@@ -381,7 +408,10 @@ export default function Perfil({ navigation }) {
           {/* Header do Container */}
           <View style={styles.pointsHeader}>
             <Text style={styles.pointsTitle}>Seus Pontos</Text>
-            <TouchableOpacity style={styles.infoButton}>
+            <TouchableOpacity 
+              style={styles.infoButton}
+              onPress={() => navigation.navigate('ClubeRoyal')}
+            >
               <SvgXml xml={infoSvg} width={16} height={16} />
             </TouchableOpacity>
           </View>
@@ -393,14 +423,19 @@ export default function Perfil({ navigation }) {
               <Text style={styles.pointsNumber}>{loyaltyBalance}</Text>
             </View>
             <Text style={styles.pointsExpiration}>
-              Faltam XX dias para seus pontos expirarem
+              {getDaysUntilExpiration() > 0 
+                ? `Faltam ${getDaysUntilExpiration()} dias para seus pontos expirarem`
+                : loyaltyBalance > 0 
+                  ? 'Seus pontos expiraram'
+                  : 'Você não possui pontos para expirar'
+              }
             </Text>
           </View>
         </View>
       </ScrollView>
 
       <View style={styles.menuNavigationContainer}>
-        <MenuNavigation navigation={navigation} />
+        <MenuNavigation navigation={navigation} currentRoute="Perfil" />
       </View>
 
       {/* Bottom Sheet - Dados da Conta */}

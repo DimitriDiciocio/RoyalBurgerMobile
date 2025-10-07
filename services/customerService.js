@@ -253,7 +253,7 @@ export const setDefaultAddress = async (customerId, addressId) => {
 /**
  * Obtém saldo do programa de fidelidade.
  * @param {number} customerId - ID do cliente
- * @returns {Promise<object>} - Saldo de pontos
+ * @returns {Promise<object>} - Saldo de pontos com data de expiração
  */
 export const getLoyaltyBalance = async (customerId) => {
   try {
@@ -262,6 +262,27 @@ export const getLoyaltyBalance = async (customerId) => {
   } catch (error) {
     throw error;
   }
+};
+
+/**
+ * Calcula quantos dias faltam para os pontos expirarem.
+ * @param {string} expirationDate - Data de expiração no formato YYYY-MM-DD
+ * @returns {number} - Número de dias restantes (0 se já expirou)
+ */
+export const calculateDaysUntilExpiration = (expirationDate) => {
+  if (!expirationDate) return 0;
+  
+  const today = new Date();
+  const expDate = new Date(expirationDate);
+  
+  // Remove as horas para comparar apenas as datas
+  today.setHours(0, 0, 0, 0);
+  expDate.setHours(0, 0, 0, 0);
+  
+  const diffTime = expDate - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  return Math.max(0, diffDays);
 };
 
 /**

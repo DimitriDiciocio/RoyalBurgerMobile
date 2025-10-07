@@ -1,10 +1,19 @@
-import React, {useState} from 'react';
+import React, {useState, useRef} from 'react';
 import {StyleSheet, View, Text, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform} from 'react-native';
 import Header from "../components/Header";
 import Input from "../components/Input";
 import {registerCustomer} from "../services";
 
 export default function Cadastro({navigation}) {
+    // Referências para os campos
+    const scrollViewRef = useRef(null);
+    const nomeRef = useRef(null);
+    const emailRef = useRef(null);
+    const dataRef = useRef(null);
+    const telefoneRef = useRef(null);
+    const senhaRef = useRef(null);
+    const confirmarSenhaRef = useRef(null);
+
     const [nomeCompleto, setNomeCompleto] = useState('');
     const [email, setEmail] = useState('');
     const [dataNascimento, setDataNascimento] = useState('');
@@ -107,6 +116,53 @@ export default function Cadastro({navigation}) {
         return hasUppercase && hasNumber && hasSpecialChar && hasMinLength;
     };
 
+    // Função para rolar para o campo com erro
+    const scrollToErrorField = (fieldName) => {
+        setTimeout(() => {
+            let targetRef = null;
+            
+            switch (fieldName) {
+                case 'nome':
+                    targetRef = nomeRef;
+                    break;
+                case 'email':
+                    targetRef = emailRef;
+                    break;
+                case 'data':
+                    targetRef = dataRef;
+                    break;
+                case 'telefone':
+                    targetRef = telefoneRef;
+                    break;
+                case 'senha':
+                    targetRef = senhaRef;
+                    break;
+                case 'confirmarSenha':
+                    targetRef = confirmarSenhaRef;
+                    break;
+            }
+
+            if (targetRef && targetRef.current && scrollViewRef.current) {
+                targetRef.current.measureLayout(
+                    scrollViewRef.current.getInnerViewNode(),
+                    (x, y) => {
+                        scrollViewRef.current.scrollTo({
+                            y: y - 100, // Offset para não ficar colado no topo
+                            animated: true,
+                        });
+                    },
+                    () => {
+                        // Fallback se measureLayout falhar
+                        scrollViewRef.current.scrollTo({
+                            y: 0,
+                            animated: true,
+                        });
+                    },
+                );
+            }
+        }, 100);
+    };
+
     const handleCadastro = async () => {
         // Resetar erros
         setSubmitError('');
@@ -119,34 +175,41 @@ export default function Cadastro({navigation}) {
         setConfirmarSenhaError('');
 
         let hasError = false;
+        let firstErrorField = null;
 
         // Validação de nome completo
         if (!nomeCompleto.trim()) {
             setNomeError('Nome completo é obrigatório');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'nome';
         } else if (nomeCompleto.trim().split(' ').length < 2) {
             setNomeError('Digite seu nome completo');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'nome';
         }
 
         // Validação de email
         if (!email.trim()) {
             setEmailError('Email é obrigatório');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'email';
         } else if (!validateEmail(email)) {
             setEmailError('Digite um email válido');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'email';
         }
 
         // Validação de data de nascimento
         if (!dataNascimento.trim()) {
             setDataError('Data de nascimento é obrigatória');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'data';
         } else {
             const { valid, message } = validateDate(dataNascimento);
             if (!valid) {
                 setDataError(message);
                 hasError = true;
+                if (!firstErrorField) firstErrorField = 'data';
             } else {
                 setDataError('');
             }
@@ -156,40 +219,40 @@ export default function Cadastro({navigation}) {
         if (!telefone.trim()) {
             setTelefoneError('Telefone é obrigatório');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'telefone';
         } else if (!validatePhone(telefone)) {
             setTelefoneError('Digite um telefone válido');
             hasError = true;
-        } else {
-            // Após validar formato, verifica se o primeiro dígito do número local é 9
-            const digits = telefone.replace(/\D/g, '');
-            if (digits.length >= 11) {
-                const firstLocalDigit = digits[2];
-                if (firstLocalDigit !== '9') {
-                    setTelefoneError('Telefone deve começar com 9');
-                    hasError = true;
-                }
-            }
+            if (!firstErrorField) firstErrorField = 'telefone';
         }
 
         // Validação de senha
         if (!senha.trim()) {
             setSenhaError('Senha é obrigatória');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'senha';
         } else if (!validatePassword(senha)) {
             setSenhaError('Senha não atende aos requisitos');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'senha';
         }
 
         // Validação de confirmação de senha
         if (!confirmarSenha.trim()) {
             setConfirmarSenhaError('Confirmação de senha é obrigatória');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'confirmarSenha';
         } else if (senha !== confirmarSenha) {
             setConfirmarSenhaError('Senhas não coincidem');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'confirmarSenha';
         }
 
         if (hasError) {
+            // Rola para o primeiro campo com erro
+            if (firstErrorField) {
+                scrollToErrorField(firstErrorField);
+            }
             return;
         }
 
@@ -214,28 +277,39 @@ export default function Cadastro({navigation}) {
 
             const lower = apiErrMsg.toLowerCase();
 
-            // Direciona por campo
+            // Direciona por campo e rola para o campo com erro
             if (/(data|nascimento|dd-?mm-?a{4}|dd\/?mm\/?a{4})/i.test(apiErrMsg)) {
                 setDataError(apiErrMsg);
+                scrollToErrorField('data');
             }
             if (lower.includes('email')) {
                 setEmailError(apiErrMsg || 'Email inválido');
+                scrollToErrorField('email');
             }
             if (lower.includes('telefone') || lower.includes('celular')) {
                 setTelefoneError(apiErrMsg || 'Telefone inválido');
+                scrollToErrorField('telefone');
             }
             if (lower.includes('senha')) {
                 if (lower.includes('confirma')) {
                     setConfirmarSenhaError(apiErrMsg);
+                    scrollToErrorField('confirmarSenha');
                 } else {
                     setSenhaError(apiErrMsg);
+                    scrollToErrorField('senha');
                 }
             }
 
             // Códigos específicos
             if (error?.status === 409) {
-                if (lower.includes('email')) setEmailError(apiErrMsg || 'Email já cadastrado');
-                if (lower.includes('telefone') || lower.includes('celular')) setTelefoneError(apiErrMsg || 'Telefone já cadastrado');
+                if (lower.includes('email')) {
+                    setEmailError(apiErrMsg || 'Email já cadastrado');
+                    scrollToErrorField('email');
+                }
+                if (lower.includes('telefone') || lower.includes('celular')) {
+                    setTelefoneError(apiErrMsg || 'Telefone já cadastrado');
+                    scrollToErrorField('telefone');
+                }
             }
 
             // Não mostra erro geral no rodapé
@@ -326,10 +400,12 @@ export default function Cadastro({navigation}) {
                     type="login"
                     navigation={navigation}
                     showBackButton={true}
+                    onBackPress={() => navigation.navigate('Login')}
                 />
             </View>
 
             <ScrollView 
+                ref={scrollViewRef}
                 style={styles.scrollView}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
@@ -339,48 +415,57 @@ export default function Cadastro({navigation}) {
                 <View style={styles.form}>
                     <Text style={styles.titulo}>Cadastre sua conta Royal</Text>
                     
-                    <Input
-                        label="Nome completo"
-                        type="text"
-                        value={nomeCompleto}
-                        onChangeText={setNomeCompleto}
-                        error={nomeError}
-                    />
+                    <View ref={nomeRef}>
+                        <Input
+                            label="Nome completo"
+                            type="text"
+                            value={nomeCompleto}
+                            onChangeText={setNomeCompleto}
+                            error={nomeError}
+                        />
+                    </View>
 
-                    <Input
-                        label="Email"
-                        type="email"
-                        value={email}
-                        onChangeText={handleEmailChange}
-                        error={emailError}
-                    />
+                    <View ref={emailRef}>
+                        <Input
+                            label="Email"
+                            type="email"
+                            value={email}
+                            onChangeText={handleEmailChange}
+                            error={emailError}
+                        />
+                    </View>
 
-                    <Input
-                        label="Data de nascimento"
-                        type="date"
-                        value={dataNascimento}
-                        onChangeText={handleDataChange}
-                        error={dataError}
-                        placeholder="DD/MM/AAAA"
-                        maxLength={10}
-                    />
+                    <View ref={dataRef}>
+                        <Input
+                            label="Data de nascimento"
+                            type="date"
+                            value={dataNascimento}
+                            onChangeText={handleDataChange}
+                            error={dataError}
+                            maxLength={10}
+                        />
+                    </View>
 
-                    <Input
-                        label="Telefone"
-                        type="phone"
-                        value={telefone}
-                        onChangeText={handleTelefoneChange}
-                        error={telefoneError}
-                        maxLength={15}
-                    />
+                    <View ref={telefoneRef}>
+                        <Input
+                            label="Telefone"
+                            type="phone"
+                            value={telefone}
+                            onChangeText={handleTelefoneChange}
+                            error={telefoneError}
+                            maxLength={15}
+                        />
+                    </View>
 
-                    <Input
-                        label="Senha"
-                        type="password"
-                        value={senha}
-                        onChangeText={handleSenhaChange}
-                        error={senhaError}
-                    />
+                    <View ref={senhaRef}>
+                        <Input
+                            label="Senha"
+                            type="password"
+                            value={senha}
+                            onChangeText={handleSenhaChange}
+                            error={senhaError}
+                        />
+                    </View>
 
                     <View style={styles.passwordRequirements}>
                         <Text style={styles.requirementsTitle}>Requisitos da senha:</Text>
@@ -406,13 +491,15 @@ export default function Cadastro({navigation}) {
                         </View>
                     </View>
 
-                    <Input
-                        label="Confirmar senha"
-                        type="password"
-                        value={confirmarSenha}
-                        onChangeText={handleConfirmarSenhaChange}
-                        error={confirmarSenhaError}
-                    />
+                    <View ref={confirmarSenhaRef}>
+                        <Input
+                            label="Confirmar senha"
+                            type="password"
+                            value={confirmarSenha}
+                            onChangeText={handleConfirmarSenhaChange}
+                            error={confirmarSenhaError}
+                        />
+                    </View>
 
                     {/* Erro geral removido: erros aparecem apenas nos inputs */}
                     {!!submitSuccess && (

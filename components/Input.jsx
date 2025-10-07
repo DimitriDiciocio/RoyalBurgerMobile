@@ -108,14 +108,15 @@ export default function Input({
         left: 16,
         backgroundColor: '#FFFFFF',
         paddingHorizontal: 4,
-        zIndex: 3,
+        zIndex: 1,
+        pointerEvents: 'none', // Permite cliques passarem através do label
         fontSize: labelAnimation.interpolate({
             inputRange: [0, 1],
             outputRange: [14, 12], // Tamanho normal -> menor
         }),
         top: labelAnimation.interpolate({
             inputRange: [0, 1],
-            outputRange: [16, -6], // Centro -> topo
+            outputRange: [12, -6], 
         }),
         color: labelAnimation.interpolate({
             inputRange: [0, 1],

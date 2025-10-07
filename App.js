@@ -88,15 +88,14 @@ function HomeScreen({ navigation }) {
                 if (ok) {
                     const user = await getStoredUserData();
                     
-                    // Buscar endereços e pontos se o usuário estiver logado
+                    // Buscar endereços se o usuário estiver logado
                     if (user?.id) {
                         await fetchEnderecos(user.id);
-                        const points = await fetchLoyaltyBalance(user.id);
                         
                         // Normaliza campos esperados pelo Header
                         const normalized = {
                             name: user.full_name || user.name || 'Usuário',
-                            points: points.toString(), // Usa os pontos da API
+                            points: userInfo?.points || "0", // Mantém pontos existentes ou usa 0
                             address: user.address || undefined,
                             avatar: undefined,
                         };
@@ -116,6 +115,31 @@ function HomeScreen({ navigation }) {
         };
         checkAuth();
     }, [isFocused]);
+
+    // Carrega pontos apenas quando o usuário estiver logado e na tela principal
+    useEffect(() => {
+        if (loggedIn && userInfo?.name && isFocused && userInfo?.points === "0") {
+            loadUserPoints();
+        }
+    }, [loggedIn, userInfo?.name, isFocused, userInfo?.points]);
+
+    // Função para carregar pontos apenas quando necessário
+    const loadUserPoints = async () => {
+        if (loggedIn && userInfo?.name) {
+            try {
+                const user = await getStoredUserData();
+                if (user?.id) {
+                    const points = await fetchLoyaltyBalance(user.id);
+                    setUserInfo(prev => ({
+                        ...prev,
+                        points: points.toString()
+                    }));
+                }
+            } catch (error) {
+                console.error('Erro ao carregar pontos:', error);
+            }
+        }
+    };
     const mostOrderedData = [
         {
             title: "Hambúrguer Clássico",
@@ -235,7 +259,7 @@ function HomeScreen({ navigation }) {
 
             {loggedIn && (
                 <View style={styles.menuNavigationContainer}>
-                    <MenuNavigation navigation={navigation} />
+                    <MenuNavigation navigation={navigation} currentRoute="Home" />
                 </View>
             )}
     
