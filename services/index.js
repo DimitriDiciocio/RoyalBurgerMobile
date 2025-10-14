@@ -77,6 +77,7 @@ export {
   deleteProduct,
   toggleProductStatus,
   getProductsBySection,
+  getProductsByCategory,
   searchProducts,
   getProductIngredients,
   addIngredientToProduct,
@@ -86,6 +87,17 @@ export {
   updateSection,
   deleteSection,
 } from "./productService";
+
+// Categorias
+export {
+  getAllCategories,
+  getCategoryById,
+  getCategoriesForSelect,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  searchCategories,
+} from "./categoryService";
 
 // Pedidos
 export {

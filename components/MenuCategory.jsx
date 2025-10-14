@@ -7,9 +7,11 @@ import {
     TouchableOpacity,
     Animated,
     Easing,
+    ActivityIndicator,
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import CardItemHorizontal from "./CardItemHorizontal";
+import { getAllCategories, getProductsByCategory } from '../services';
 
 
 export default function MenuCategory({
@@ -20,9 +22,58 @@ export default function MenuCategory({
                                          onItemPress = () => {}
                                      }) {
     const [activeCategory, setActiveCategory] = useState(-1); // -1 = nenhuma categoria selecionada
+    const [categories, setCategories] = useState([]);
+    const [products, setProducts] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [loadingProducts, setLoadingProducts] = useState(false);
     const flatListRef = useRef(null);
     const categoryListRef = useRef(null);
     const debounceTimeoutRef = useRef(null);
+
+    // Carregar categorias da API
+    useEffect(() => {
+        loadCategories();
+    }, []);
+
+    const loadCategories = async () => {
+        try {
+            setLoading(true);
+            const response = await getAllCategories();
+            const categoriesList = response.items || response;
+            setCategories(categoriesList);
+            
+            // Carregar produtos da primeira categoria automaticamente
+            if (categoriesList.length > 0) {
+                await loadProductsForCategory(categoriesList[0].id);
+                setActiveCategory(0);
+            }
+        } catch (error) {
+            console.log('Erro ao carregar categorias:', error);
+            // Fallback para dados mock se a API falhar
+            setCategories(mockData);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadProductsForCategory = async (categoryId) => {
+        try {
+            setLoadingProducts(true);
+            const response = await getProductsByCategory(categoryId, { page_size: 50 });
+            setProducts(prev => ({
+                ...prev,
+                [categoryId]: response.items || []
+            }));
+        } catch (error) {
+            console.log('Erro ao carregar produtos da categoria:', error);
+            setProducts(prev => ({
+                ...prev,
+                [categoryId]: []
+            }));
+        } finally {
+            setLoadingProducts(false);
+        }
+    };
 
     // Cleanup do timeout
     useEffect(() => {
@@ -143,9 +194,11 @@ export default function MenuCategory({
         },
     ];
 
-    // Transformar dados em lista plana
+    // Transformar dados em lista plana usando dados reais da API
     const flattenedData = [];
-    mockData.forEach((category, categoryIndex) => {
+    const dataToUse = categories.length > 0 ? categories : mockData;
+    
+    dataToUse.forEach((category, categoryIndex) => {
         flattenedData.push({
             type: 'categoryHeader',
             categoryIndex,
@@ -153,20 +206,41 @@ export default function MenuCategory({
             id: `header-${category.id}`
         });
 
-        category.data.forEach((item) => {
+        // Usar produtos da API se disponíveis, senão usar dados mock
+        const categoryProducts = products[category.id] || category.data || [];
+        categoryProducts.forEach((item) => {
+            // Transformar produto da API para o formato esperado pelo CardItemHorizontal
+            const formattedItem = {
+                id: item.id,
+                title: item.name,
+                description: item.description || 'Descrição não disponível',
+                price: `R$ ${parseFloat(item.price).toFixed(2).replace('.', ',')}`,
+                deliveryTime: `${item.preparation_time_minutes || 30} min`,
+                deliveryPrice: 'R$ 5,00', // Valor fixo por enquanto
+                imageSource: item.image_url ? { uri: item.image_url } : null,
+                categoryId: item.category_id,
+                isAvailable: item.is_active !== false
+            };
+
             flattenedData.push({
                 type: 'item',
                 categoryIndex,
-                item: item,
+                item: formattedItem,
                 id: `item-${item.id}`
             });
         });
     });
 
 
-    const scrollToCategory = (categoryIndex) => {
+    const scrollToCategory = async (categoryIndex) => {
         // Atualizar categoria imediatamente
         setActiveCategory(categoryIndex);
+
+        const category = categories[categoryIndex];
+        if (category && !products[category.id]) {
+            // Carregar produtos da categoria se ainda não foram carregados
+            await loadProductsForCategory(category.id);
+        }
 
         const headerIndex = flattenedData.findIndex(
             item => item.type === 'categoryHeader' && item.categoryIndex === categoryIndex
@@ -229,7 +303,10 @@ export default function MenuCategory({
         if (item.type === 'categoryHeader') {
             return (
                 <View style={styles.categoryHeader}>
-                    <Text style={styles.categoryHeaderText}>{item.category.title}</Text>
+                    <Text style={styles.categoryHeaderText}>{item.category.name || item.category.title}</Text>
+                    {loadingProducts && activeCategory === item.categoryIndex && (
+                        <ActivityIndicator size="small" color="#333" style={styles.loadingIndicator} />
+                    )}
                 </View>
             );
         } else {
@@ -242,6 +319,7 @@ export default function MenuCategory({
                     deliveryPrice={item.item.deliveryPrice}
                     imageSource={item.item.imageSource}
                     isAvailable={item.item.isAvailable}
+                    productId={item.item.id}
                     onPress={() => onItemPress(item.item)}
                 />
             );
@@ -267,12 +345,21 @@ export default function MenuCategory({
                     ]}
                     numberOfLines={1}
                 >
-                    {item.title}
+                    {item.name || item.title}
                 </Text>
             </TouchableOpacity>
         );
     };
 
+
+    if (loading) {
+        return (
+            <View style={[styles.container, styles.loadingContainer]}>
+                <ActivityIndicator size="large" color="#333" />
+                <Text style={styles.loadingText}>Carregando categorias...</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -281,7 +368,7 @@ export default function MenuCategory({
                 <FontAwesome name="bars" size={20} color="#888888" style={styles.menuIcon} />
                 <FlatList
                     ref={categoryListRef}
-                    data={mockData}
+                    data={dataToUse}
                     renderItem={renderCategoryTab}
                     keyExtractor={(item) => item.id.toString()}
                     horizontal
@@ -385,5 +472,17 @@ const styles = StyleSheet.create({
     },
     itemSeparator: {
         height: 12,
+    },
+    loadingContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 16,
+        color: '#666',
+    },
+    loadingIndicator: {
+        marginLeft: 10,
     },
 });

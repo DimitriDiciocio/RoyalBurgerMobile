@@ -9,7 +9,8 @@ export default function CardItemHorizontal({
                                                deliveryPrice = "R$5,00",
                                                imageSource = null,
                                                isAvailable = true,
-                                               onPress = () => {}
+                                               onPress = () => {},
+                                               productId = null
                                            }) {
     return (
         <TouchableOpacity
@@ -22,6 +23,10 @@ export default function CardItemHorizontal({
                     style={styles.image}
                     source={imageSource || { uri: 'https://via.placeholder.com/120x100' }}
                     resizeMode="cover"
+                    onError={() => {
+                        // Fallback para imagem padrão em caso de erro
+                        console.log('Erro ao carregar imagem do produto:', productId);
+                    }}
                 />
                 {!isAvailable && (
                     <View style={styles.unavailableOverlay}>

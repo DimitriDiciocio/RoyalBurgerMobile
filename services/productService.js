@@ -133,6 +133,31 @@ export const getProductsBySection = async (sectionId, filters = {}) => {
 };
 
 /**
+ * Obtém produtos por ID da categoria.
+ * @param {number} categoryId - ID da categoria
+ * @param {object} options - Opções de paginação e filtros
+ * @returns {Promise<object>} - Objeto com produtos, categoria e paginação
+ */
+export const getProductsByCategory = async (categoryId, options = {}) => {
+  try {
+    console.log("Obtendo produtos da categoria:", categoryId, "com opções:", options);
+    const { page = 1, page_size = 10, include_inactive = false } = options;
+    
+    const response = await api.get(`/products/category/${categoryId}`, {
+      params: {
+        page,
+        page_size,
+        include_inactive
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.log("Erro ao obter produtos da categoria:", error);
+    throw error;
+  }
+};
+
+/**
  * Busca produtos por termo.
  * @param {string} searchTerm - Termo de busca
  * @param {object} filters - Filtros adicionais
