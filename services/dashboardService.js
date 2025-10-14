@@ -18,7 +18,7 @@ import api from "./api";
  */
 export const getDashboardData = async (filters = {}) => {
   try {
-    "📊 Obtendo dados do dashboard com filtros:", filters;
+    "Obtendo dados do dashboard com filtros:", filters;
     const response = await api.get("/dashboard", { params: filters });
     return response.data;
   } catch (error) {
@@ -33,7 +33,7 @@ export const getDashboardData = async (filters = {}) => {
  */
 export const getSalesStats = async (filters = {}) => {
   try {
-    ("💰 Obtendo estatísticas de vendas");
+    ("Obtendo estatísticas de vendas");
     const response = await api.get("/dashboard/sales", { params: filters });
     return response.data;
   } catch (error) {
@@ -48,7 +48,7 @@ export const getSalesStats = async (filters = {}) => {
  */
 export const getOrderStats = async (filters = {}) => {
   try {
-    ("🛒 Obtendo estatísticas de pedidos");
+    ("Obtendo estatísticas de pedidos");
     const response = await api.get("/dashboard/orders", { params: filters });
     return response.data;
   } catch (error) {
@@ -63,7 +63,7 @@ export const getOrderStats = async (filters = {}) => {
  */
 export const getCustomerStats = async (filters = {}) => {
   try {
-    ("👥 Obtendo estatísticas de clientes");
+    ("Obtendo estatísticas de clientes");
     const response = await api.get("/dashboard/customers", { params: filters });
     return response.data;
   } catch (error) {
@@ -78,7 +78,7 @@ export const getCustomerStats = async (filters = {}) => {
  */
 export const getProductStats = async (filters = {}) => {
   try {
-    ("🍔 Obtendo estatísticas de produtos");
+    ("Obtendo estatísticas de produtos");
     const response = await api.get("/dashboard/products", { params: filters });
     return response.data;
   } catch (error) {
@@ -94,7 +94,7 @@ export const getProductStats = async (filters = {}) => {
  */
 export const getSalesByPeriod = async (period, filters = {}) => {
   try {
-    "📈 Obtendo vendas por período:", period;
+    "Obtendo vendas por período:", period;
     const response = await api.get(`/dashboard/sales/${period}`, {
       params: filters,
     });
@@ -112,7 +112,7 @@ export const getSalesByPeriod = async (period, filters = {}) => {
  */
 export const getOrdersByPeriod = async (period, filters = {}) => {
   try {
-    "📊 Obtendo pedidos por período:", period;
+    "Obtendo pedidos por período:", period;
     const response = await api.get(`/dashboard/orders/${period}`, {
       params: filters,
     });
@@ -129,7 +129,7 @@ export const getOrdersByPeriod = async (period, filters = {}) => {
  */
 export const getTopSellingProducts = async (filters = {}) => {
   try {
-    ("🏆 Obtendo produtos mais vendidos");
+    ("Obtendo produtos mais vendidos");
     const response = await api.get("/dashboard/top-products", {
       params: filters,
     });
@@ -146,7 +146,7 @@ export const getTopSellingProducts = async (filters = {}) => {
  */
 export const getTopCustomers = async (filters = {}) => {
   try {
-    ("👑 Obtendo clientes mais ativos");
+    ("Obtendo clientes mais ativos");
     const response = await api.get("/dashboard/top-customers", {
       params: filters,
     });
@@ -163,7 +163,7 @@ export const getTopCustomers = async (filters = {}) => {
  */
 export const getHourlyPerformance = async (date) => {
   try {
-    "⏰ Obtendo performance por hora para:", date;
+    "Obtendo performance por hora para:", date;
     const response = await api.get("/dashboard/hourly", {
       params: { date },
     });
@@ -180,7 +180,7 @@ export const getHourlyPerformance = async (date) => {
  */
 export const getWeeklyPerformance = async (filters = {}) => {
   try {
-    ("📅 Obtendo performance por dia da semana");
+    ("Obtendo performance por dia da semana");
     const response = await api.get("/dashboard/weekly", {
       params: filters,
     });
@@ -197,7 +197,7 @@ export const getWeeklyPerformance = async (filters = {}) => {
  */
 export const getMonthlyPerformance = async (filters = {}) => {
   try {
-    ("📆 Obtendo performance por mês");
+    ("Obtendo performance por mês");
     const response = await api.get("/dashboard/monthly", {
       params: filters,
     });
@@ -214,7 +214,7 @@ export const getMonthlyPerformance = async (filters = {}) => {
  */
 export const getYearlyPerformance = async (filters = {}) => {
   try {
-    ("🗓️ Obtendo performance por ano");
+    ("Obtendo performance por ano");
     const response = await api.get("/dashboard/yearly", {
       params: filters,
     });
@@ -231,7 +231,7 @@ export const getYearlyPerformance = async (filters = {}) => {
  */
 export const getConversionMetrics = async (filters = {}) => {
   try {
-    ("📈 Obtendo métricas de conversão");
+    ("Obtendo métricas de conversão");
     const response = await api.get("/dashboard/conversion", {
       params: filters,
     });
@@ -248,7 +248,7 @@ export const getConversionMetrics = async (filters = {}) => {
  */
 export const getRetentionMetrics = async (filters = {}) => {
   try {
-    ("🔄 Obtendo métricas de retenção de clientes");
+    ("Obtendo métricas de retenção de clientes");
     const response = await api.get("/dashboard/retention", {
       params: filters,
     });
@@ -265,7 +265,7 @@ export const getRetentionMetrics = async (filters = {}) => {
  */
 export const getCustomerSatisfaction = async (filters = {}) => {
   try {
-    ("😊 Obtendo dados de satisfação do cliente");
+    ("Obtendo dados de satisfação do cliente");
     const response = await api.get("/dashboard/satisfaction", {
       params: filters,
     });
@@ -282,7 +282,7 @@ export const getCustomerSatisfaction = async (filters = {}) => {
  */
 export const getDeliveryTimeMetrics = async (filters = {}) => {
   try {
-    ("🚚 Obtendo dados de tempo de entrega");
+    ("Obtendo dados de tempo de entrega");
     const response = await api.get("/dashboard/delivery-time", {
       params: filters,
     });
@@ -299,7 +299,7 @@ export const getDeliveryTimeMetrics = async (filters = {}) => {
  */
 export const getCancellationMetrics = async (filters = {}) => {
   try {
-    ("❌ Obtendo dados de cancelamentos");
+    ("Obtendo dados de cancelamentos");
     const response = await api.get("/dashboard/cancellations", {
       params: filters,
     });
@@ -316,7 +316,7 @@ export const getCancellationMetrics = async (filters = {}) => {
  */
 export const getInventoryMetrics = async (filters = {}) => {
   try {
-    ("📦 Obtendo dados de estoque");
+    ("Obtendo dados de estoque");
     const response = await api.get("/dashboard/inventory", {
       params: filters,
     });
@@ -333,7 +333,7 @@ export const getInventoryMetrics = async (filters = {}) => {
  */
 export const getEmployeeMetrics = async (filters = {}) => {
   try {
-    ("👨‍💼 Obtendo dados de funcionários");
+    ("Obtendo dados de funcionários");
     const response = await api.get("/dashboard/employees", {
       params: filters,
     });
@@ -350,7 +350,7 @@ export const getEmployeeMetrics = async (filters = {}) => {
  */
 export const getPromotionMetrics = async (filters = {}) => {
   try {
-    ("🏷️ Obtendo dados de promoções");
+    ("Obtendo dados de promoções");
     const response = await api.get("/dashboard/promotions", {
       params: filters,
     });
@@ -367,7 +367,7 @@ export const getPromotionMetrics = async (filters = {}) => {
  */
 export const getPaymentMetrics = async (filters = {}) => {
   try {
-    ("💳 Obtendo dados de pagamento");
+    ("Obtendo dados de pagamento");
     const response = await api.get("/dashboard/payments", {
       params: filters,
     });
@@ -384,7 +384,7 @@ export const getPaymentMetrics = async (filters = {}) => {
  */
 export const getFeedbackMetrics = async (filters = {}) => {
   try {
-    ("💬 Obtendo dados de feedback");
+    ("Obtendo dados de feedback");
     const response = await api.get("/dashboard/feedback", {
       params: filters,
     });
@@ -401,7 +401,7 @@ export const getFeedbackMetrics = async (filters = {}) => {
  */
 export const getComparisonData = async (filters = {}) => {
   try {
-    ("📊 Obtendo dados de comparação com período anterior");
+    ("Obtendo dados de comparação com período anterior");
     const response = await api.get("/dashboard/comparison", {
       params: filters,
     });

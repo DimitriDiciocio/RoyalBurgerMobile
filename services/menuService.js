@@ -19,7 +19,7 @@ import api from "./api";
  */
 export const getFullMenu = async (filters = {}) => {
   try {
-    "🍽️ Obtendo menu completo com filtros:", filters;
+    "Obtendo menu completo com filtros:", filters;
     const response = await api.get("/menu", { params: filters });
     return response.data;
   } catch (error) {
@@ -35,7 +35,7 @@ export const getFullMenu = async (filters = {}) => {
  */
 export const getMenuBySection = async (sectionId, filters = {}) => {
   try {
-    "📂 Obtendo menu da seção:", sectionId;
+    "Obtendo menu da seção:", sectionId;
     const response = await api.get(`/menu/section/${sectionId}`, {
       params: filters,
     });
@@ -52,7 +52,7 @@ export const getMenuBySection = async (sectionId, filters = {}) => {
  */
 export const getFeaturedProducts = async (limit = 6) => {
   try {
-    "⭐ Obtendo produtos em destaque (limite:", limit, ")";
+    "Obtendo produtos em destaque (limite:", limit, ")";
     const response = await api.get("/menu/featured", {
       params: { limit },
     });
@@ -69,7 +69,7 @@ export const getFeaturedProducts = async (limit = 6) => {
  */
 export const getPromotionalProducts = async (filters = {}) => {
   try {
-    ("🏷️ Obtendo produtos em promoção");
+    ("Obtendo produtos em promoção");
     const response = await api.get("/menu/promotions", {
       params: filters,
     });
@@ -87,7 +87,7 @@ export const getPromotionalProducts = async (filters = {}) => {
  */
 export const getBestSellingProducts = async (limit = 10, period = "month") => {
   try {
-    "🏆 Obtendo produtos mais vendidos (limite:",
+    "Obtendo produtos mais vendidos (limite:",
       limit,
       "período:",
       period,
@@ -109,7 +109,7 @@ export const getBestSellingProducts = async (limit = 10, period = "month") => {
  */
 export const getRecommendedProducts = async (userId, limit = 5) => {
   try {
-    "💡 Obtendo produtos recomendados para usuário:", userId;
+    "Obtendo produtos recomendados para usuário:", userId;
     const response = await api.get(`/menu/recommendations/${userId}`, {
       params: { limit },
     });
@@ -127,7 +127,7 @@ export const getRecommendedProducts = async (userId, limit = 5) => {
  */
 export const searchMenuProducts = async (searchTerm, filters = {}) => {
   try {
-    "🔍 Buscando produtos no menu:", searchTerm;
+    "Buscando produtos no menu:", searchTerm;
     const response = await api.get("/menu/search", {
       params: { q: searchTerm, ...filters },
     });
@@ -144,7 +144,7 @@ export const searchMenuProducts = async (searchTerm, filters = {}) => {
  */
 export const getMenuCategories = async (filters = {}) => {
   try {
-    ("📂 Obtendo categorias do menu");
+    ("Obtendo categorias do menu");
     const response = await api.get("/menu/categories", {
       params: filters,
     });
@@ -161,7 +161,7 @@ export const getMenuCategories = async (filters = {}) => {
  */
 export const getMenuProduct = async (productId) => {
   try {
-    "🍔 Obtendo produto do menu:", productId;
+    "Obtendo produto do menu:", productId;
     const response = await api.get(`/menu/products/${productId}`);
     return response.data;
   } catch (error) {
@@ -176,7 +176,7 @@ export const getMenuProduct = async (productId) => {
  */
 export const getMenuProductIngredients = async (productId) => {
   try {
-    "🥬 Obtendo ingredientes do produto:", productId;
+    "Obtendo ingredientes do produto:", productId;
     const response = await api.get(`/menu/products/${productId}/ingredients`);
     return response.data;
   } catch (error) {
@@ -191,7 +191,7 @@ export const getMenuProductIngredients = async (productId) => {
  */
 export const getProductCustomizationOptions = async (productId) => {
   try {
-    "⚙️ Obtendo opções de personalização do produto:", productId;
+    "Obtendo opções de personalização do produto:", productId;
     const response = await api.get(
       `/menu/products/${productId}/customizations`
     );
@@ -209,7 +209,7 @@ export const getProductCustomizationOptions = async (productId) => {
  */
 export const getSimilarProducts = async (productId, limit = 4) => {
   try {
-    "🔄 Obtendo produtos similares ao produto:", productId;
+    "Obtendo produtos similares ao produto:", productId;
     const response = await api.get(`/menu/products/${productId}/similar`, {
       params: { limit },
     });
@@ -232,7 +232,7 @@ export const getProductsByPriceRange = async (
   filters = {}
 ) => {
   try {
-    "💰 Obtendo produtos por faixa de preço:", minPrice, "-", maxPrice;
+    "Obtendo produtos por faixa de preço:", minPrice, "-", maxPrice;
     const response = await api.get("/menu/price-range", {
       params: { min_price: minPrice, max_price: maxPrice, ...filters },
     });
@@ -250,7 +250,7 @@ export const getProductsByPriceRange = async (
  */
 export const getProductsByIngredient = async (ingredient, filters = {}) => {
   try {
-    "🥬 Obtendo produtos por ingrediente:", ingredient;
+    "Obtendo produtos por ingrediente:", ingredient;
     const response = await api.get("/menu/by-ingredient", {
       params: { ingredient, ...filters },
     });
@@ -271,7 +271,7 @@ export const getProductsWithoutIngredient = async (
   filters = {}
 ) => {
   try {
-    "🚫 Obtendo produtos sem ingrediente:", ingredient;
+    "Obtendo produtos sem ingrediente:", ingredient;
     const response = await api.get("/menu/without-ingredient", {
       params: { ingredient, ...filters },
     });
@@ -288,7 +288,7 @@ export const getProductsWithoutIngredient = async (
  */
 export const getVegetarianProducts = async (filters = {}) => {
   try {
-    ("🥬 Obtendo produtos vegetarianos");
+    ("Obtendo produtos vegetarianos");
     const response = await api.get("/menu/vegetarian", {
       params: filters,
     });
@@ -305,7 +305,7 @@ export const getVegetarianProducts = async (filters = {}) => {
  */
 export const getVeganProducts = async (filters = {}) => {
   try {
-    ("🌱 Obtendo produtos veganos");
+    ("Obtendo produtos veganos");
     const response = await api.get("/menu/vegan", {
       params: filters,
     });
@@ -322,7 +322,7 @@ export const getVeganProducts = async (filters = {}) => {
  */
 export const getGlutenFreeProducts = async (filters = {}) => {
   try {
-    ("🌾 Obtendo produtos sem glúten");
+    ("Obtendo produtos sem glúten");
     const response = await api.get("/menu/gluten-free", {
       params: filters,
     });
@@ -339,7 +339,7 @@ export const getGlutenFreeProducts = async (filters = {}) => {
  */
 export const getLactoseFreeProducts = async (filters = {}) => {
   try {
-    ("🥛 Obtendo produtos sem lactose");
+    ("Obtendo produtos sem lactose");
     const response = await api.get("/menu/lactose-free", {
       params: filters,
     });
@@ -357,7 +357,7 @@ export const getLactoseFreeProducts = async (filters = {}) => {
  */
 export const getProductsBySpiceLevel = async (spiceLevel, filters = {}) => {
   try {
-    "🌶️ Obtendo produtos por nível de picância:", spiceLevel;
+    "Obtendo produtos por nível de picância:", spiceLevel;
     const response = await api.get("/menu/spice-level", {
       params: { spice_level: spiceLevel, ...filters },
     });
@@ -375,7 +375,7 @@ export const getProductsBySpiceLevel = async (spiceLevel, filters = {}) => {
  */
 export const getProductsByPrepTime = async (maxPrepTime, filters = {}) => {
   try {
-    "⏱️ Obtendo produtos por tempo de preparo:", maxPrepTime, "min";
+    "Obtendo produtos por tempo de preparo:", maxPrepTime, "min";
     const response = await api.get("/menu/prep-time", {
       params: { max_prep_time: maxPrepTime, ...filters },
     });

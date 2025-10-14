@@ -19,7 +19,7 @@ import api from "./api";
  */
 export const getChatHistory = async (orderId, filters = {}) => {
   try {
-    "💬 Obtendo histórico de chat do pedido:", orderId;
+    "Obtendo histórico de chat do pedido:", orderId;
     const response = await api.get(`/chat/${orderId}`, { params: filters });
     return response.data;
   } catch (error) {
@@ -42,7 +42,7 @@ export const sendMessage = async (
   metadata = {}
 ) => {
   try {
-    "📤 Enviando mensagem no chat do pedido:", orderId;
+    "Enviando mensagem no chat do pedido:", orderId;
     const response = await api.post(`/chat/${orderId}/message`, {
       message,
       type,
@@ -62,7 +62,7 @@ export const sendMessage = async (
  */
 export const markMessagesAsRead = async (orderId, messageIds) => {
   try {
-    "✅ Marcando mensagens como lidas:", messageIds;
+    "Marcando mensagens como lidas:", messageIds;
     const response = await api.put(`/chat/${orderId}/mark-read`, {
       message_ids: messageIds,
     });
@@ -79,7 +79,7 @@ export const markMessagesAsRead = async (orderId, messageIds) => {
  */
 export const getUnreadMessages = async (orderId) => {
   try {
-    "🔔 Obtendo mensagens não lidas do pedido:", orderId;
+    "Obtendo mensagens não lidas do pedido:", orderId;
     const response = await api.get(`/chat/${orderId}/unread`);
     return response.data;
   } catch (error) {
@@ -94,7 +94,7 @@ export const getUnreadMessages = async (orderId) => {
  */
 export const getUnreadMessageCount = async (orderId) => {
   try {
-    "🔢 Obtendo contagem de mensagens não lidas do pedido:", orderId;
+    "Obtendo contagem de mensagens não lidas do pedido:", orderId;
     const response = await api.get(`/chat/${orderId}/unread-count`);
     return response.data.count;
   } catch (error) {
@@ -109,7 +109,7 @@ export const getUnreadMessageCount = async (orderId) => {
  */
 export const getActiveConversations = async (filters = {}) => {
   try {
-    ("💬 Obtendo conversas ativas");
+    ("Obtendo conversas ativas");
     const response = await api.get("/chat/conversations", { params: filters });
     return response.data;
   } catch (error) {
@@ -125,7 +125,7 @@ export const getActiveConversations = async (filters = {}) => {
  */
 export const getConversation = async (conversationId, filters = {}) => {
   try {
-    "💬 Obtendo conversa:", conversationId;
+    "Obtendo conversa:", conversationId;
     const response = await api.get(`/chat/conversations/${conversationId}`, {
       params: filters,
     });
@@ -142,7 +142,7 @@ export const getConversation = async (conversationId, filters = {}) => {
  */
 export const createConversation = async (conversationData) => {
   try {
-    "➕ Criando nova conversa:", conversationData;
+    "Criando nova conversa:", conversationData;
     const response = await api.post("/chat/conversations", conversationData);
     return response.data;
   } catch (error) {
@@ -158,7 +158,7 @@ export const createConversation = async (conversationData) => {
  */
 export const closeConversation = async (conversationId, reason = "") => {
   try {
-    "🔒 Encerrando conversa:", conversationId, "motivo:", reason;
+    "Encerrando conversa:", conversationId, "motivo:", reason;
     const response = await api.put(
       `/chat/conversations/${conversationId}/close`,
       {
@@ -178,7 +178,7 @@ export const closeConversation = async (conversationId, reason = "") => {
  */
 export const reopenConversation = async (conversationId) => {
   try {
-    "🔓 Reabrindo conversa:", conversationId;
+    "Reabrindo conversa:", conversationId;
     const response = await api.put(
       `/chat/conversations/${conversationId}/reopen`
     );
@@ -196,7 +196,7 @@ export const reopenConversation = async (conversationId) => {
  */
 export const getConversationMessages = async (conversationId, filters = {}) => {
   try {
-    "💬 Obtendo mensagens da conversa:", conversationId;
+    "Obtendo mensagens da conversa:", conversationId;
     const response = await api.get(
       `/chat/conversations/${conversationId}/messages`,
       {
@@ -224,7 +224,7 @@ export const sendConversationMessage = async (
   metadata = {}
 ) => {
   try {
-    "📤 Enviando mensagem na conversa:", conversationId;
+    "Enviando mensagem na conversa:", conversationId;
     const response = await api.post(
       `/chat/conversations/${conversationId}/messages`,
       {
@@ -246,7 +246,7 @@ export const sendConversationMessage = async (
  */
 export const getConversationParticipants = async (conversationId) => {
   try {
-    "👥 Obtendo participantes da conversa:", conversationId;
+    "Obtendo participantes da conversa:", conversationId;
     const response = await api.get(
       `/chat/conversations/${conversationId}/participants`
     );
@@ -269,7 +269,7 @@ export const addConversationParticipant = async (
   role = "member"
 ) => {
   try {
-    "➕ Adicionando participante à conversa:",
+    "Adicionando participante à conversa:",
       conversationId,
       "usuário:",
       userId;
@@ -294,7 +294,7 @@ export const addConversationParticipant = async (
  */
 export const removeConversationParticipant = async (conversationId, userId) => {
   try {
-    "➖ Removendo participante da conversa:",
+    "Removendo participante da conversa:",
       conversationId,
       "usuário:",
       userId;
@@ -314,7 +314,7 @@ export const removeConversationParticipant = async (conversationId, userId) => {
  */
 export const getMessageStatus = async (messageId) => {
   try {
-    "📊 Obtendo status da mensagem:", messageId;
+    "Obtendo status da mensagem:", messageId;
     const response = await api.get(`/chat/messages/${messageId}/status`);
     return response.data;
   } catch (error) {
@@ -330,7 +330,7 @@ export const getMessageStatus = async (messageId) => {
  */
 export const editMessage = async (messageId, newMessage) => {
   try {
-    "✏️ Editando mensagem:", messageId;
+    "Editando mensagem:", messageId;
     const response = await api.put(`/chat/messages/${messageId}`, {
       message: newMessage,
     });
@@ -347,7 +347,7 @@ export const editMessage = async (messageId, newMessage) => {
  */
 export const deleteMessage = async (messageId) => {
   try {
-    "🗑️ Removendo mensagem:", messageId;
+    "Removendo mensagem:", messageId;
     const response = await api.delete(`/chat/messages/${messageId}`);
     return response.data;
   } catch (error) {
@@ -362,7 +362,7 @@ export const deleteMessage = async (messageId) => {
  */
 export const getChatStats = async (filters = {}) => {
   try {
-    ("📊 Obtendo estatísticas de chat");
+    ("Obtendo estatísticas de chat");
     const response = await api.get("/chat/stats", { params: filters });
     return response.data;
   } catch (error) {
@@ -378,7 +378,7 @@ export const getChatStats = async (filters = {}) => {
  */
 export const getConversationsByStatus = async (status, filters = {}) => {
   try {
-    "💬 Obtendo conversas por status:", status;
+    "Obtendo conversas por status:", status;
     const response = await api.get(`/chat/conversations/status/${status}`, {
       params: filters,
     });
@@ -396,7 +396,7 @@ export const getConversationsByStatus = async (status, filters = {}) => {
  */
 export const getRecentConversations = async (limit = 10, filters = {}) => {
   try {
-    "💬 Obtendo conversas recentes (limite:", limit, ")";
+    "Obtendo conversas recentes (limite:", limit, ")";
     const response = await api.get("/chat/conversations/recent", {
       params: { limit, ...filters },
     });

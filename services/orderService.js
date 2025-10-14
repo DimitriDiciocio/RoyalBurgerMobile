@@ -19,7 +19,7 @@ import api from "./api";
  */
 export const createOrder = async (orderData) => {
   try {
-    "🛒 Criando pedido:", orderData;
+    "Criando pedido:", orderData;
     const response = await api.post("/orders", orderData);
     return response.data;
   } catch (error) {
@@ -34,7 +34,7 @@ export const createOrder = async (orderData) => {
  */
 export const getMyOrders = async (filters = {}) => {
   try {
-    "📋 Obtendo meus pedidos com filtros:", filters;
+    "Obtendo meus pedidos com filtros:", filters;
     const response = await api.get("/orders", { params: filters });
     return response.data;
   } catch (error) {
@@ -49,7 +49,7 @@ export const getMyOrders = async (filters = {}) => {
  */
 export const getAllOrders = async (filters = {}) => {
   try {
-    "📋 Obtendo todos os pedidos com filtros:", filters;
+    "Obtendo todos os pedidos com filtros:", filters;
     const response = await api.get("/orders/all", { params: filters });
     return response.data;
   } catch (error) {
@@ -64,7 +64,7 @@ export const getAllOrders = async (filters = {}) => {
  */
 export const getOrderById = async (orderId) => {
   try {
-    "🛒 Obtendo pedido por ID:", orderId;
+    "Obtendo pedido por ID:", orderId;
     const response = await api.get(`/orders/${orderId}`);
     return response.data;
   } catch (error) {
@@ -81,7 +81,7 @@ export const getOrderById = async (orderId) => {
  */
 export const updateOrderStatus = async (orderId, status, notes = "") => {
   try {
-    "🔄 Atualizando status do pedido:", orderId, "para:", status;
+    "Atualizando status do pedido:", orderId, "para:", status;
     const response = await api.patch(`/orders/${orderId}/status`, {
       status,
       notes,
@@ -100,7 +100,7 @@ export const updateOrderStatus = async (orderId, status, notes = "") => {
  */
 export const cancelOrder = async (orderId, reason = "") => {
   try {
-    "❌ Cancelando pedido:", orderId, "motivo:", reason;
+    "Cancelando pedido:", orderId, "motivo:", reason;
     const response = await api.post(`/orders/${orderId}/cancel`, {
       reason,
     });
@@ -118,7 +118,7 @@ export const cancelOrder = async (orderId, reason = "") => {
  */
 export const getCustomerOrderHistory = async (customerId, filters = {}) => {
   try {
-    "📊 Obtendo histórico de pedidos do cliente:", customerId;
+    "Obtendo histórico de pedidos do cliente:", customerId;
     const response = await api.get(`/orders/customer/${customerId}`, {
       params: filters,
     });
@@ -136,7 +136,7 @@ export const getCustomerOrderHistory = async (customerId, filters = {}) => {
  */
 export const getOrdersByStatus = async (status, filters = {}) => {
   try {
-    "📋 Obtendo pedidos com status:", status;
+    "Obtendo pedidos com status:", status;
     const response = await api.get(`/orders/status/${status}`, {
       params: filters,
     });
@@ -153,7 +153,7 @@ export const getOrdersByStatus = async (status, filters = {}) => {
  */
 export const getTodayOrders = async (filters = {}) => {
   try {
-    ("📅 Obtendo pedidos de hoje");
+    ("Obtendo pedidos de hoje");
     const response = await api.get("/orders/today", {
       params: filters,
     });
@@ -170,7 +170,7 @@ export const getTodayOrders = async (filters = {}) => {
  */
 export const getOrderStats = async (filters = {}) => {
   try {
-    ("📊 Obtendo estatísticas de pedidos");
+    ("Obtendo estatísticas de pedidos");
     const response = await api.get("/orders/stats", {
       params: filters,
     });

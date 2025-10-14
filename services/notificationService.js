@@ -18,7 +18,7 @@ import api from "./api";
  */
 export const getMyNotifications = async (filters = {}) => {
   try {
-    "🔔 Obtendo minhas notificações com filtros:", filters;
+    "Obtendo minhas notificações com filtros:", filters;
     const response = await api.get("/notifications", { params: filters });
     return response.data;
   } catch (error) {
@@ -33,7 +33,7 @@ export const getMyNotifications = async (filters = {}) => {
  */
 export const getUnreadNotifications = async (filters = {}) => {
   try {
-    ("🔔 Obtendo notificações não lidas");
+    ("Obtendo notificações não lidas");
     const response = await api.get("/notifications/unread", {
       params: filters,
     });
@@ -50,7 +50,7 @@ export const getUnreadNotifications = async (filters = {}) => {
  */
 export const getNotificationById = async (notificationId) => {
   try {
-    "🔔 Obtendo notificação por ID:", notificationId;
+    "Obtendo notificação por ID:", notificationId;
     const response = await api.get(`/notifications/${notificationId}`);
     return response.data;
   } catch (error) {
@@ -65,7 +65,7 @@ export const getNotificationById = async (notificationId) => {
  */
 export const markNotificationAsRead = async (notificationId) => {
   try {
-    "✅ Marcando notificação como lida:", notificationId;
+    "Marcando notificação como lida:", notificationId;
     const response = await api.put(`/notifications/${notificationId}/read`);
     return response.data;
   } catch (error) {
@@ -80,7 +80,7 @@ export const markNotificationAsRead = async (notificationId) => {
  */
 export const markNotificationsAsRead = async (notificationIds) => {
   try {
-    "✅ Marcando notificações como lidas:", notificationIds;
+    "Marcando notificações como lidas:", notificationIds;
     const response = await api.put("/notifications/mark-read", {
       notification_ids: notificationIds,
     });
@@ -96,7 +96,7 @@ export const markNotificationsAsRead = async (notificationIds) => {
  */
 export const markAllNotificationsAsRead = async () => {
   try {
-    ("✅ Marcando todas as notificações como lidas");
+    ("Marcando todas as notificações como lidas");
     const response = await api.put("/notifications/mark-all-read");
     return response.data;
   } catch (error) {
@@ -111,7 +111,7 @@ export const markAllNotificationsAsRead = async () => {
  */
 export const deleteNotification = async (notificationId) => {
   try {
-    "🗑️ Removendo notificação:", notificationId;
+    "Removendo notificação:", notificationId;
     const response = await api.delete(`/notifications/${notificationId}`);
     return response.data;
   } catch (error) {
@@ -126,7 +126,7 @@ export const deleteNotification = async (notificationId) => {
  */
 export const deleteNotifications = async (notificationIds) => {
   try {
-    "🗑️ Removendo notificações:", notificationIds;
+    "Removendo notificações:", notificationIds;
     const response = await api.delete("/notifications/delete-multiple", {
       data: { notification_ids: notificationIds },
     });
@@ -142,7 +142,7 @@ export const deleteNotifications = async (notificationIds) => {
  */
 export const deleteAllReadNotifications = async () => {
   try {
-    ("🗑️ Removendo todas as notificações lidas");
+    ("Removendo todas as notificações lidas");
     const response = await api.delete("/notifications/delete-read");
     return response.data;
   } catch (error) {
@@ -158,7 +158,7 @@ export const deleteAllReadNotifications = async () => {
  */
 export const getNotificationsByType = async (type, filters = {}) => {
   try {
-    "🔔 Obtendo notificações por tipo:", type;
+    "Obtendo notificações por tipo:", type;
     const response = await api.get(`/notifications/type/${type}`, {
       params: filters,
     });
@@ -176,7 +176,7 @@ export const getNotificationsByType = async (type, filters = {}) => {
  */
 export const getNotificationsByStatus = async (status, filters = {}) => {
   try {
-    "🔔 Obtendo notificações por status:", status;
+    "Obtendo notificações por status:", status;
     const response = await api.get(`/notifications/status/${status}`, {
       params: filters,
     });
@@ -194,7 +194,7 @@ export const getNotificationsByStatus = async (status, filters = {}) => {
  */
 export const getRecentNotifications = async (limit = 10, filters = {}) => {
   try {
-    "🔔 Obtendo notificações recentes (limite:", limit, ")";
+    "Obtendo notificações recentes (limite:", limit, ")";
     const response = await api.get("/notifications/recent", {
       params: { limit, ...filters },
     });
@@ -210,7 +210,7 @@ export const getRecentNotifications = async (limit = 10, filters = {}) => {
  */
 export const getNotificationSettings = async () => {
   try {
-    ("⚙️ Obtendo configurações de notificação");
+    ("Obtendo configurações de notificação");
     const response = await api.get("/notifications/settings");
     return response.data;
   } catch (error) {
@@ -225,7 +225,7 @@ export const getNotificationSettings = async () => {
  */
 export const updateNotificationSettings = async (settings) => {
   try {
-    "⚙️ Atualizando configurações de notificação:", settings;
+    "Atualizando configurações de notificação:", settings;
     const response = await api.put("/notifications/settings", settings);
     return response.data;
   } catch (error) {
@@ -241,7 +241,7 @@ export const updateNotificationSettings = async (settings) => {
  */
 export const registerPushToken = async (token, platform) => {
   try {
-    "📱 Registrando token de push notification:", platform;
+    "Registrando token de push notification:", platform;
     const response = await api.post("/notifications/register-token", {
       token,
       platform,
@@ -259,7 +259,7 @@ export const registerPushToken = async (token, platform) => {
  */
 export const unregisterPushToken = async (token) => {
   try {
-    "📱 Removendo token de push notification:", token;
+    "Removendo token de push notification:", token;
     const response = await api.delete("/notifications/unregister-token", {
       data: { token },
     });
@@ -276,7 +276,7 @@ export const unregisterPushToken = async (token) => {
  */
 export const sendTestNotification = async (notificationData) => {
   try {
-    "🧪 Enviando notificação de teste:", notificationData;
+    "Enviando notificação de teste:", notificationData;
     const response = await api.post(
       "/notifications/send-test",
       notificationData
@@ -294,7 +294,7 @@ export const sendTestNotification = async (notificationData) => {
  */
 export const getNotificationStats = async (filters = {}) => {
   try {
-    ("📊 Obtendo estatísticas de notificações");
+    ("Obtendo estatísticas de notificações");
     const response = await api.get("/notifications/stats", {
       params: filters,
     });
@@ -312,7 +312,7 @@ export const getNotificationStats = async (filters = {}) => {
  */
 export const getNotificationsByPeriod = async (period, filters = {}) => {
   try {
-    "📅 Obtendo notificações por período:", period;
+    "Obtendo notificações por período:", period;
     const response = await api.get(`/notifications/period/${period}`, {
       params: filters,
     });
@@ -329,7 +329,7 @@ export const getNotificationsByPeriod = async (period, filters = {}) => {
  */
 export const getOrderNotifications = async (filters = {}) => {
   try {
-    ("🛒 Obtendo notificações de pedidos");
+    ("Obtendo notificações de pedidos");
     const response = await api.get("/notifications/orders", {
       params: filters,
     });
@@ -346,7 +346,7 @@ export const getOrderNotifications = async (filters = {}) => {
  */
 export const getPromotionNotifications = async (filters = {}) => {
   try {
-    ("🏷️ Obtendo notificações de promoções");
+    ("Obtendo notificações de promoções");
     const response = await api.get("/notifications/promotions", {
       params: filters,
     });
@@ -363,7 +363,7 @@ export const getPromotionNotifications = async (filters = {}) => {
  */
 export const getSystemNotifications = async (filters = {}) => {
   try {
-    ("⚙️ Obtendo notificações do sistema");
+    ("Obtendo notificações do sistema");
     const response = await api.get("/notifications/system", {
       params: filters,
     });

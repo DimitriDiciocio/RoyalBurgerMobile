@@ -9,7 +9,7 @@ import api from "./api";
 
 export const getStockOverview = async (filters = {}) => {
   try {
-    ("📦 Obtendo visão geral do estoque");
+    ("Obtendo visão geral do estoque");
     const response = await api.get("/stock/overview", { params: filters });
     return response.data;
   } catch (error) {
@@ -19,7 +19,7 @@ export const getStockOverview = async (filters = {}) => {
 
 export const getLowStockItems = async (threshold = 10) => {
   try {
-    "⚠️ Obtendo itens com estoque baixo (limite:", threshold, ")";
+    "Obtendo itens com estoque baixo (limite:", threshold, ")";
     const response = await api.get("/stock/low-stock", {
       params: { threshold },
     });
@@ -31,7 +31,7 @@ export const getLowStockItems = async (threshold = 10) => {
 
 export const getOutOfStockItems = async () => {
   try {
-    ("❌ Obtendo itens em falta");
+    ("Obtendo itens em falta");
     const response = await api.get("/stock/out-of-stock");
     return response.data;
   } catch (error) {
@@ -41,7 +41,7 @@ export const getOutOfStockItems = async () => {
 
 export const updateStock = async (itemId, quantity, operation = "set") => {
   try {
-    "📦 Atualizando estoque do item:",
+    "Atualizando estoque do item:",
       itemId,
       "quantidade:",
       quantity,
@@ -59,7 +59,7 @@ export const updateStock = async (itemId, quantity, operation = "set") => {
 
 export const addStock = async (itemId, quantity) => {
   try {
-    "➕ Adicionando estoque ao item:", itemId, "quantidade:", quantity;
+    "Adicionando estoque ao item:", itemId, "quantidade:", quantity;
     return await updateStock(itemId, quantity, "add");
   } catch (error) {
     throw error;
@@ -68,7 +68,7 @@ export const addStock = async (itemId, quantity) => {
 
 export const removeStock = async (itemId, quantity) => {
   try {
-    "➖ Removendo estoque do item:", itemId, "quantidade:", quantity;
+    "Removendo estoque do item:", itemId, "quantidade:", quantity;
     return await updateStock(itemId, quantity, "subtract");
   } catch (error) {
     throw error;
@@ -77,7 +77,7 @@ export const removeStock = async (itemId, quantity) => {
 
 export const getStockHistory = async (itemId, filters = {}) => {
   try {
-    "📊 Obtendo histórico de estoque do item:", itemId;
+    "Obtendo histórico de estoque do item:", itemId;
     const response = await api.get(`/stock/${itemId}/history`, {
       params: filters,
     });
@@ -89,7 +89,7 @@ export const getStockHistory = async (itemId, filters = {}) => {
 
 export const getStockAlerts = async () => {
   try {
-    ("🚨 Obtendo alertas de estoque");
+    ("Obtendo alertas de estoque");
     const response = await api.get("/stock/alerts");
     return response.data;
   } catch (error) {
@@ -99,7 +99,7 @@ export const getStockAlerts = async () => {
 
 export const getStockReport = async (filters = {}) => {
   try {
-    ("📋 Gerando relatório de estoque");
+    ("Gerando relatório de estoque");
     const response = await api.get("/stock/report", { params: filters });
     return response.data;
   } catch (error) {
