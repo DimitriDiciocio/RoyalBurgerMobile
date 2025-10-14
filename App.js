@@ -1,4 +1,4 @@
-npimport { StatusBar } from 'expo-status-bar';
+import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
 import { NavigationContainer, useIsFocused } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -15,7 +15,8 @@ import Perfil from "./screens/perfil";
 import ClubeRoyal from "./screens/clubeRoyal";
 import Pedidos from "./screens/pedidos";
 import React, { useEffect, useState } from 'react';
-import { isAuthenticated, getStoredUserData, logout } from "./services";
+import { isAuthenticated, getStoredUserData, logout, getCurrentUserProfile } from "./services";
+import { getLoyaltyBalance } from "./services/customerService";
 
 const Stack = createNativeStackNavigator();
 
@@ -31,10 +32,27 @@ function HomeScreen({ navigation }) {
                 setLoggedIn(!!ok);
                 if (ok) {
                     const user = await getStoredUserData();
+                    let points = '0';
+                    
+                    // Se for um cliente, busca os pontos atualizados da API
+                    if (user && user.role === 'customer' && user.id) {
+                        try {
+                            const loyaltyData = await getLoyaltyBalance(user.id);
+                            points = loyaltyData?.balance?.toString() || '0';
+                        } catch (error) {
+                            console.log('Erro ao buscar pontos:', error);
+                            // Fallback para pontos salvos localmente
+                            points = user.points || '0';
+                        }
+                    } else {
+                        // Para outros tipos de usuário, usa os pontos salvos
+                        points = user?.points || '0';
+                    }
+                    
                     // Normaliza campos esperados pelo Header
                     const normalized = user ? {
                         name: user.full_name || user.name || 'Usuário',
-                        points: user.points || '0',
+                        points: points,
                         address: user.address || undefined,
                         avatar: undefined,
                     } : null;
@@ -43,6 +61,7 @@ function HomeScreen({ navigation }) {
                     setUserInfo(null);
                 }
             } catch (e) {
+                console.log('Erro ao verificar autenticação:', e);
                 setLoggedIn(false);
                 setUserInfo(null);
             }
@@ -152,6 +171,7 @@ function HomeScreen({ navigation }) {
                 <MenuCategory
                     ListHeaderComponent={renderPromotionalHeader}
                     showFixedButton={true}
+                    navigation={navigation}
                 />
             </View>
 

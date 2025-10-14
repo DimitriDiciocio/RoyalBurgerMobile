@@ -131,7 +131,7 @@ export default function CarouselImg() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        marginTop: 40,
+        marginTop: 50,
     },
     imageContainer: {
         width: width,

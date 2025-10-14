@@ -15,7 +15,12 @@
 </svg>`;
 
     export default function Produto({navigation, route}) {
-        const { produto } = route.params || {};
+        const { produto, productId } = route.params || {};
+        
+        // Debug: log do productId recebido
+        console.log('[DEBUG] Produto screen - productId recebido:', productId);
+        console.log('[DEBUG] Produto screen - produto recebido:', produto);
+        
         const [isExpanded, setIsExpanded] = useState(false);
         const rotateValue = useRef(new Animated.Value(0)).current;
         const isFocused = useIsFocused();

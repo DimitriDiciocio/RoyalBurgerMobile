@@ -8,10 +8,12 @@ import {
     Animated,
     Easing,
     ActivityIndicator,
+    Dimensions,
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import CardItemHorizontal from "./CardItemHorizontal";
 import { getAllCategories, getProductsByCategory } from '../services';
+import api from '../services/api';
 
 
 export default function MenuCategory({
@@ -19,16 +21,22 @@ export default function MenuCategory({
                                          ListHeaderComponent = null,
                                          showFixedButton = false,
                                          onCategoryPress = () => {},
-                                         onItemPress = () => {}
+                                         onItemPress = () => {},
+                                         navigation = null
                                      }) {
+    // Debug: log da BASE_URL
+    console.log('[DEBUG] BASE_URL da API:', api.defaults.baseURL);
     const [activeCategory, setActiveCategory] = useState(-1); // -1 = nenhuma categoria selecionada
     const [categories, setCategories] = useState([]);
     const [products, setProducts] = useState({});
     const [loading, setLoading] = useState(true);
     const [loadingProducts, setLoadingProducts] = useState(false);
+    const [showCategoryBar, setShowCategoryBar] = useState(false);
+    const [firstCategoryPosition, setFirstCategoryPosition] = useState(0);
     const flatListRef = useRef(null);
     const categoryListRef = useRef(null);
     const debounceTimeoutRef = useRef(null);
+    const scrollY = useRef(new Animated.Value(0)).current;
 
     // Carregar categorias da API
     useEffect(() => {
@@ -209,6 +217,19 @@ export default function MenuCategory({
         // Usar produtos da API se disponíveis, senão usar dados mock
         const categoryProducts = products[category.id] || category.data || [];
         categoryProducts.forEach((item) => {
+            // Construir URL da imagem
+            const imageUrl = item.image_url ? 
+                `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}` : 
+                null;
+            
+            // Debug: log da URL da imagem
+            console.log(`[DEBUG] Produto ${item.id}:`, {
+                name: item.name,
+                hasImageUrl: !!item.image_url,
+                imageUrl: item.image_url,
+                constructedUrl: imageUrl
+            });
+
             // Transformar produto da API para o formato esperado pelo CardItemHorizontal
             const formattedItem = {
                 id: item.id,
@@ -217,7 +238,7 @@ export default function MenuCategory({
                 price: `R$ ${parseFloat(item.price).toFixed(2).replace('.', ',')}`,
                 deliveryTime: `${item.preparation_time_minutes || 30} min`,
                 deliveryPrice: 'R$ 5,00', // Valor fixo por enquanto
-                imageSource: item.image_url ? { uri: item.image_url } : null,
+                imageSource: imageUrl ? { uri: imageUrl } : null,
                 categoryId: item.category_id,
                 isAvailable: item.is_active !== false
             };
@@ -264,10 +285,37 @@ export default function MenuCategory({
         }
     };
 
-    // Função de scroll (vazia por enquanto)
+    // Função de scroll para detectar quando mostrar a barra de categorias
     const handleScroll = (event) => {
-        // Pode ser usada para futuras funcionalidades
+        const currentScrollY = event.nativeEvent.contentOffset.y;
+        scrollY.setValue(currentScrollY);
+        
+        // Mostrar barra de categorias quando o usuário rolar até a posição da primeira categoria
+        const shouldShow = currentScrollY >= firstCategoryPosition - 100; // 100px de margem
+        if (shouldShow !== showCategoryBar) {
+            setShowCategoryBar(shouldShow);
+        }
     };
+
+    // Calcular posição da primeira categoria
+    const calculateFirstCategoryPosition = () => {
+        // Estimar a posição baseada na altura dos componentes
+        const screenHeight = Dimensions.get('window').height;
+        const headerHeight = 105; // Altura do header
+        const carouselHeight = 200; // Altura estimada do carousel
+        const viewCardHeight = 300; // Altura estimada dos ViewCardItem (3 seções)
+        const padding = 50; // Padding e espaçamentos
+        
+        return headerHeight + carouselHeight + viewCardHeight + padding;
+    };
+
+    // Atualizar posição da primeira categoria quando os dados carregam
+    useEffect(() => {
+        if (!loading && categories.length > 0) {
+            const position = calculateFirstCategoryPosition();
+            setFirstCategoryPosition(position);
+        }
+    }, [loading, categories]);
 
     // Detectar mudança de categoria automaticamente ao rolar
     const handleViewableItemsChanged = ({ viewableItems }) => {
@@ -302,11 +350,29 @@ export default function MenuCategory({
     const renderItem = ({ item }) => {
         if (item.type === 'categoryHeader') {
             return (
-                <View style={styles.categoryHeader}>
-                    <Text style={styles.categoryHeaderText}>{item.category.name || item.category.title}</Text>
-                    {loadingProducts && activeCategory === item.categoryIndex && (
-                        <ActivityIndicator size="small" color="#333" style={styles.loadingIndicator} />
+                <View>
+                    {/* Barra de categorias flutuante - só aparece na primeira categoria */}
+                    {item.categoryIndex === 0 && showCategoryBar && (
+                        <View style={styles.floatingCategoryBar}>
+                            <FontAwesome name="bars" size={20} color="#888888" style={styles.menuIcon} />
+                            <FlatList
+                                ref={categoryListRef}
+                                data={dataToUse}
+                                renderItem={renderCategoryTab}
+                                keyExtractor={(item) => item.id.toString()}
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.categoriesContainer}
+                            />
+                        </View>
                     )}
+                    
+                    <View style={styles.categoryHeader}>
+                        <Text style={styles.categoryHeaderText}>{item.category.name || item.category.title}</Text>
+                        {loadingProducts && activeCategory === item.categoryIndex && (
+                            <ActivityIndicator size="small" color="#333" style={styles.loadingIndicator} />
+                        )}
+                    </View>
                 </View>
             );
         } else {
@@ -320,6 +386,7 @@ export default function MenuCategory({
                     imageSource={item.item.imageSource}
                     isAvailable={item.item.isAvailable}
                     productId={item.item.id}
+                    navigation={navigation}
                     onPress={() => onItemPress(item.item)}
                 />
             );
@@ -363,20 +430,6 @@ export default function MenuCategory({
 
     return (
         <View style={styles.container}>
-            {/* Barra de categorias fixa no topo */}
-            <View style={styles.fixedCategoryBar}>
-                <FontAwesome name="bars" size={20} color="#888888" style={styles.menuIcon} />
-                <FlatList
-                    ref={categoryListRef}
-                    data={dataToUse}
-                    renderItem={renderCategoryTab}
-                    keyExtractor={(item) => item.id.toString()}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.categoriesContainer}
-                />
-            </View>
-
             {/* Lista principal */}
             <FlatList
                 ref={flatListRef}
@@ -399,7 +452,6 @@ export default function MenuCategory({
                 maxToRenderPerBatch={10}
                 windowSize={10}
             />
-
         </View>
     );
 }
@@ -409,26 +461,16 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F6F6F6',
     },
-    fixedCategoryBar: {
+    floatingCategoryBar: {
         backgroundColor: '#fff',
         paddingVertical: 12,
         paddingHorizontal: 15,
         flexDirection: 'row',
         alignItems: 'center',
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E5E5',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 5,
-        zIndex: 1000,
+        marginBottom: 10,
     },
     menuIcon: {
         marginRight: 12,
-    },
-    categoriesContainer: {
-        paddingRight: 15,
     },
     categoryTab: {
         paddingHorizontal: 16,
@@ -465,7 +507,7 @@ const styles = StyleSheet.create({
     listContent: {
         paddingTop: 10,
         paddingBottom: 20,
-        paddingRight: 10,
+        paddingRight: 0,
     },
     listWithButton: {
         paddingBottom: 100,

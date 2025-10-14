@@ -10,12 +10,21 @@ export default function CardItemHorizontal({
                                                imageSource = null,
                                                isAvailable = true,
                                                onPress = () => {},
-                                               productId = null
+                                               productId = null,
+                                               navigation = null
                                            }) {
+    const handlePress = () => {
+        if (navigation && productId) {
+            navigation.navigate('Produto', { productId });
+        } else {
+            onPress();
+        }
+    };
+
     return (
         <TouchableOpacity
             style={[styles.container, !isAvailable && styles.unavailable]}
-            onPress={onPress}
+            onPress={handlePress}
             disabled={!isAvailable}
         >
             <View style={styles.imageWrapper}>
@@ -23,9 +32,12 @@ export default function CardItemHorizontal({
                     style={styles.image}
                     source={imageSource || { uri: 'https://via.placeholder.com/120x100' }}
                     resizeMode="cover"
-                    onError={() => {
-                        // Fallback para imagem padrão em caso de erro
-                        console.log('Erro ao carregar imagem do produto:', productId);
+                    onError={(error) => {
+                        console.log('Erro ao carregar imagem do produto:', productId, error);
+                        console.log('ImageSource recebido:', imageSource);
+                    }}
+                    onLoad={() => {
+                        console.log('Imagem carregada com sucesso para produto:', productId);
                     }}
                 />
                 {!isAvailable && (
