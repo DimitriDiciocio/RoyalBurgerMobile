@@ -39,7 +39,7 @@ export default function CardItemHorizontal({
                 </Text>
                 <Text
                     style={[styles.description, !isAvailable && styles.unavailableText]}
-                    numberOfLines={2}
+                    numberOfLines={1}
                     ellipsizeMode="tail"
                 >
                     {description}

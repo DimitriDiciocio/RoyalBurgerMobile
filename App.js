@@ -248,7 +248,6 @@ function HomeScreen({ navigation }) {
                 <MenuCategory
                     ListHeaderComponent={renderPromotionalHeader}
                     showFixedButton={true}
-                    navigation={navigation}
                 />
             </View>
 
