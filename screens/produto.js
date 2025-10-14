@@ -29,6 +29,7 @@
         const [enderecos, setEnderecos] = useState([]);
         const [enderecoAtivo, setEnderecoAtivo] = useState(null);
         const [loyaltyBalance, setLoyaltyBalance] = useState(0);
+        const [loadingPoints, setLoadingPoints] = useState(false);
 
         const fetchEnderecos = async (userId) => {
             try {
@@ -42,6 +43,7 @@
 
         const fetchLoyaltyBalance = async (userId) => {
             try {
+                setLoadingPoints(true);
                 const balance = await getLoyaltyBalance(userId);
                 const points = balance?.current_balance || 0;
                 setLoyaltyBalance(points);
@@ -50,6 +52,8 @@
                 console.error('Erro ao buscar pontos:', error);
                 setLoyaltyBalance(0);
                 return 0;
+            } finally {
+                setLoadingPoints(false);
             }
         };
 
@@ -148,6 +152,7 @@
                         subtitle={loggedIn ? "Monte do seu jeito!" : "E aproveite nossos produtos"}
                         enderecos={enderecos}
                         onEnderecoAtivoChange={handleEnderecoAtivoChange}
+                        loadingPoints={loadingPoints}
                     />
                 </View>
 

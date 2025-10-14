@@ -13,6 +13,7 @@ export default function Pedidos({ navigation }) {
   const [enderecos, setEnderecos] = useState([]);
   const [enderecoAtivo, setEnderecoAtivo] = useState(null);
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
+  const [loadingPoints, setLoadingPoints] = useState(false);
 
   const fetchEnderecos = async (userId) => {
     try {
@@ -26,6 +27,7 @@ export default function Pedidos({ navigation }) {
 
   const fetchLoyaltyBalance = async (userId) => {
     try {
+      setLoadingPoints(true);
       const balance = await getLoyaltyBalance(userId);
       const points = balance?.current_balance || 0;
       setLoyaltyBalance(points);
@@ -34,6 +36,8 @@ export default function Pedidos({ navigation }) {
       console.error('Erro ao buscar pontos:', error);
       setLoyaltyBalance(0);
       return 0;
+    } finally {
+      setLoadingPoints(false);
     }
   };
 
@@ -111,6 +115,7 @@ export default function Pedidos({ navigation }) {
         subtitle="Acompanhe seus pedidos"
         enderecos={enderecos}
         onEnderecoAtivoChange={handleEnderecoAtivoChange}
+        loadingPoints={loadingPoints}
       />
       
       <View style={styles.content}>

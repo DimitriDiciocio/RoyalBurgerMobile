@@ -1,4 +1,4 @@
-import {StyleSheet, View, Text, TouchableOpacity, Image} from 'react-native';
+import {StyleSheet, View, Text, TouchableOpacity, Image, ActivityIndicator} from 'react-native';
 import ButtonDark from "./Button";
 import React, { useState, useEffect } from "react";
 import { SvgXml } from 'react-native-svg';
@@ -37,7 +37,8 @@ export default function Header({
                                    subtitle = null,
                                    rightButton = null,
                                     enderecos = [],
-                                    onEnderecoAtivoChange = null
+                                    onEnderecoAtivoChange = null,
+                                    loadingPoints = false
                                 }) {
     const [showEnderecosBottomSheet, setShowEnderecosBottomSheet] = useState(false);
     const [showEditarEndereco, setShowEditarEndereco] = useState(false);
@@ -315,9 +316,13 @@ export default function Header({
                                 height={20}
                                 style={styles.crownIcon}
                             />
-                            <Text style={styles.pointsText}>
-                                {userInfo?.points || "0"} pontos
-                            </Text>
+                            {loadingPoints ? (
+                                <ActivityIndicator size="small" color="#FFC700" style={styles.pointsLoading} />
+                            ) : (
+                                <Text style={styles.pointsText}>
+                                    {userInfo?.points || "0"} pontos
+                                </Text>
+                            )}
                         </View>
                         {rightButton && rightButton}
                     </View>
@@ -481,5 +486,8 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#FFC700',
         fontWeight: '600',
+    },
+    pointsLoading: {
+        marginLeft: 6,
     },
 });

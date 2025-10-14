@@ -71,6 +71,7 @@ export default function Perfil({ navigation }) {
   const [enderecos, setEnderecos] = useState([]);
   const [enderecoAtivo, setEnderecoAtivo] = useState(null);
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
+  const [loadingPoints, setLoadingPoints] = useState(false);
   const [loyaltyData, setLoyaltyData] = useState(null);
 
   useEffect(() => {
@@ -163,6 +164,7 @@ export default function Perfil({ navigation }) {
 
   const fetchLoyaltyBalance = async (userId) => {
     try {
+      setLoadingPoints(true);
       const balance = await getLoyaltyBalance(userId);
       setLoyaltyBalance(balance?.current_balance || 0);
       setLoyaltyData(balance);
@@ -170,6 +172,8 @@ export default function Perfil({ navigation }) {
       console.error("Erro ao buscar pontos:", error);
       setLoyaltyBalance(0);
       setLoyaltyData(null);
+    } finally {
+      setLoadingPoints(false);
     }
   };
 

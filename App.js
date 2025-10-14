@@ -24,6 +24,7 @@ function HomeScreen({ navigation }) {
     const isFocused = useIsFocused();
     const [loggedIn, setLoggedIn] = useState(false);
     const [userInfo, setUserInfo] = useState(null);
+    const [loadingPoints, setLoadingPoints] = useState(false);
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -36,13 +37,27 @@ function HomeScreen({ navigation }) {
                     
                     // Se for um cliente, busca os pontos atualizados da API
                     if (user && user.role === 'customer' && user.id) {
+                        setLoadingPoints(true);
                         try {
+                            console.log('Buscando pontos para cliente ID:', user.id);
                             const loyaltyData = await getLoyaltyBalance(user.id);
-                            points = loyaltyData?.balance?.toString() || '0';
+                            console.log('Dados de fidelidade recebidos:', loyaltyData);
+                            
+                            // Tenta diferentes estruturas de dados que a API pode retornar
+                            points = loyaltyData?.current_balance?.toString() || 
+                                    loyaltyData?.balance?.toString() || 
+                                    loyaltyData?.points?.toString() || 
+                                    loyaltyData?.total_points?.toString() || 
+                                    loyaltyData?.loyalty_points?.toString() || 
+                                    '0';
+                            
+                            console.log('Pontos extraídos:', points);
                         } catch (error) {
                             console.log('Erro ao buscar pontos:', error);
                             // Fallback para pontos salvos localmente
                             points = user.points || '0';
+                        } finally {
+                            setLoadingPoints(false);
                         }
                     } else {
                         // Para outros tipos de usuário, usa os pontos salvos
@@ -164,6 +179,7 @@ function HomeScreen({ navigation }) {
                     navigation={navigation} 
                     type={loggedIn ? 'logged' : 'home'}
                     userInfo={userInfo}
+                    loadingPoints={loadingPoints}
                 />
             </View>
 

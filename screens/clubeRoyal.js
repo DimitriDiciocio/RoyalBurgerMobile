@@ -26,6 +26,7 @@ export default function ClubeRoyal({ navigation }) {
   const [enderecoAtivo, setEnderecoAtivo] = useState(null);
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
   const [loyaltyData, setLoyaltyData] = useState(null);
+  const [loadingPoints, setLoadingPoints] = useState(false);
 
   const fetchEnderecos = async (userId) => {
     try {
@@ -39,6 +40,7 @@ export default function ClubeRoyal({ navigation }) {
 
   const fetchLoyaltyBalance = async (userId) => {
     try {
+      setLoadingPoints(true);
       const balance = await getLoyaltyBalance(userId);
       console.log('Dados da API de pontos:', balance); // Debug
       const points = balance?.current_balance || 0;
@@ -50,6 +52,8 @@ export default function ClubeRoyal({ navigation }) {
       setLoyaltyBalance(0);
       setLoyaltyData(null);
       return 0;
+    } finally {
+      setLoadingPoints(false);
     }
   };
 
@@ -151,6 +155,7 @@ export default function ClubeRoyal({ navigation }) {
         subtitle="Seus benefícios exclusivos"
         enderecos={enderecos}
         onEnderecoAtivoChange={handleEnderecoAtivoChange}
+        loadingPoints={loadingPoints}
       />
       
       <ScrollView 

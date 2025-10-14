@@ -43,6 +43,13 @@ export default function MenuCategory({
         loadCategories();
     }, []);
 
+    // Carregar produtos de todas as categorias quando as categorias carregarem
+    useEffect(() => {
+        if (categories.length > 0) {
+            loadAllProducts();
+        }
+    }, [categories]);
+
     const loadCategories = async () => {
         try {
             setLoading(true);
@@ -50,9 +57,8 @@ export default function MenuCategory({
             const categoriesList = response.items || response;
             setCategories(categoriesList);
             
-            // Carregar produtos da primeira categoria automaticamente
+            // Define a primeira categoria como ativa, mas não carrega produtos ainda
             if (categoriesList.length > 0) {
-                await loadProductsForCategory(categoriesList[0].id);
                 setActiveCategory(0);
             }
         } catch (error) {
@@ -78,6 +84,46 @@ export default function MenuCategory({
                 ...prev,
                 [categoryId]: []
             }));
+        } finally {
+            setLoadingProducts(false);
+        }
+    };
+
+    // Carregar produtos de todas as categorias de uma vez
+    const loadAllProducts = async () => {
+        try {
+            setLoadingProducts(true);
+            console.log('Carregando produtos de todas as categorias...');
+            
+            // Carrega produtos de todas as categorias em paralelo
+            const productPromises = categories.map(async (category) => {
+                try {
+                    const response = await getProductsByCategory(category.id, { page_size: 50 });
+                    return {
+                        categoryId: category.id,
+                        products: response.items || []
+                    };
+                } catch (error) {
+                    console.log(`Erro ao carregar produtos da categoria ${category.id}:`, error);
+                    return {
+                        categoryId: category.id,
+                        products: []
+                    };
+                }
+            });
+
+            const results = await Promise.all(productPromises);
+            
+            // Atualiza o estado com todos os produtos
+            const allProducts = {};
+            results.forEach(({ categoryId, products }) => {
+                allProducts[categoryId] = products;
+            });
+            
+            setProducts(allProducts);
+            console.log('Todos os produtos carregados:', allProducts);
+        } catch (error) {
+            console.log('Erro ao carregar todos os produtos:', error);
         } finally {
             setLoadingProducts(false);
         }
@@ -256,12 +302,6 @@ export default function MenuCategory({
     const scrollToCategory = async (categoryIndex) => {
         // Atualizar categoria imediatamente
         setActiveCategory(categoryIndex);
-
-        const category = categories[categoryIndex];
-        if (category && !products[category.id]) {
-            // Carregar produtos da categoria se ainda não foram carregados
-            await loadProductsForCategory(category.id);
-        }
 
         const headerIndex = flattenedData.findIndex(
             item => item.type === 'categoryHeader' && item.categoryIndex === categoryIndex
