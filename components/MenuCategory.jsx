@@ -7,19 +7,31 @@ import {
     TouchableOpacity,
     Animated,
     Easing,
+    ActivityIndicator,
+    Alert,
 } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import CardItemHorizontal from "./CardItemHorizontal";
+import { getMenuCategories } from '../services/menuService';
+import { getAllProducts } from '../services/productService';
 
 export default function MenuCategory({
-                                         categoriesData = [],
                                          ListHeaderComponent = null,
                                          showFixedButton = false,
                                          onCategoryPress = () => {},
-                                         onItemPress = () => {}
+                                         onItemPress = () => {},
+                                         navigation = null
                                      }) {
     const [activeCategory, setActiveCategory] = useState(0);
     const [showStickyHeader, setShowStickyHeader] = useState(false);
+    const [categories, setCategories] = useState([]);
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+    
     const flatListRef = useRef(null);
     const categoryListRef = useRef(null);
 
@@ -28,119 +40,140 @@ export default function MenuCategory({
     const slideAnimatedValue = useRef(new Animated.Value(-70)).current; // Começa fora da tela
     const opacityAnimatedValue = useRef(new Animated.Value(0)).current;
 
-    // Dados mock
-    const mockData = categoriesData.length > 0 ? categoriesData : [
-        {
-            id: 1,
-            title: "Hambúrguers",
-            data: [
-                {
-                    id: 101,
-                    title: "Royal Burger",
-                    description: "Pão brioche, 180g de carne, queijo cheddar, alface, tomate",
-                    price: "R$ 32,90",
-                    deliveryTime: "25-35 min",
-                    deliveryPrice: "R$ 5,00",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 1,
-                    isAvailable: true
-                },
-                {
-                    id: 102,
-                    title: "Classic Cheese",
-                    description: "Hambúrguer clássico com queijo especial da casa",
-                    price: "R$ 28,90",
-                    deliveryTime: "20-30 min",
-                    deliveryPrice: "R$ 4,00",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 1,
-                    isAvailable: true
-                },
-                {
-                    id: 103,
-                    title: "Bacon Supreme",
-                    description: "Burger com bacon crocante e molho especial",
-                    price: "R$ 35,90",
-                    deliveryTime: "30-40 min",
-                    deliveryPrice: "R$ 5,00",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 1,
-                    isAvailable: true
-                }
-            ]
-        },
-        {
-            id: 2,
-            title: "Bebidas",
-            data: [
-                {
-                    id: 201,
-                    title: "Coca-Cola 350ml",
-                    description: "Refrigerante gelado",
-                    price: "R$ 6,50",
-                    deliveryTime: "10-15 min",
-                    deliveryPrice: "R$ 3,00",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 2,
-                    isAvailable: true
-                },
-                {
-                    id: 202,
-                    title: "Suco Natural",
-                    description: "Suco de laranja natural 500ml",
-                    price: "R$ 8,90",
-                    deliveryTime: "15-20 min",
-                    deliveryPrice: "R$ 3,00",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 2,
-                    isAvailable: true
-                }
-            ]
-        },
-        {
-            id: 3,
-            title: "Sobremesas",
-            data: [
-                {
-                    id: 301,
-                    title: "Brownie com Sorvete",
-                    description: "Brownie quente com bola de sorvete de baunilha",
-                    price: "R$ 15,90",
-                    deliveryTime: "15-20 min",
-                    deliveryPrice: "R$ 4,00",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 3,
-                    isAvailable: true
-                },
-                {
-                    id: 302,
-                    title: "Milkshake Chocolate",
-                    description: "Milkshake cremoso de chocolate com chantilly",
-                    price: "R$ 12,90",
-                    deliveryTime: "10-15 min",
-                    deliveryPrice: "R$ 3,50",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 3,
-                    isAvailable: true
-                },
-                {
-                    id: 303,
-                    title: "Sorvete de Ricota",
-                    description: "Um delicioso sorvete de Ricota com Chocolate",
-                    price: "R$ 10,90",
-                    deliveryTime: "10-15 min",
-                    deliveryPrice: "R$ 3,50",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 3,
-                    isAvailable: true
-                }
-            ]
-        },
-    ];
+    // Função para buscar categorias da API
+    const fetchCategories = async () => {
+        try {
+            const response = await getMenuCategories();
+            const categoriesData = response.items || response || [];
+            setCategories(categoriesData);
+            return categoriesData;
+        } catch (error) {
+            console.error('Erro ao buscar categorias:', error);
+            Alert.alert('Erro', 'Não foi possível carregar as categorias');
+            return [];
+        }
+    };
+
+    // Função para buscar produtos da API
+    const fetchProducts = async (page = 1, categoryId = null, reset = false) => {
+        try {
+            setLoadingMore(true);
+            
+            const filters = {
+                page: page,
+                page_size: 20,
+                include_inactive: false
+            };
+            
+            if (categoryId) {
+                filters.category_id = categoryId;
+            }
+            
+            const response = await getAllProducts(filters);
+            const productsData = response.items || [];
+            
+            if (reset) {
+                setProducts(productsData);
+            } else {
+                setProducts(prev => [...prev, ...productsData]);
+            }
+            
+            // Verificar se há mais páginas
+            const totalPages = response.pagination?.total_pages || 1;
+            setHasMore(page < totalPages);
+            setCurrentPage(page);
+            
+            return productsData;
+        } catch (error) {
+            console.error('Erro ao buscar produtos:', error);
+            Alert.alert('Erro', 'Não foi possível carregar os produtos');
+            return [];
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+
+    // Função para mapear produto da API para o formato do componente
+    const mapProductFromAPI = (product) => {
+        return {
+            id: product.id,
+            title: product.name,
+            description: product.description || 'Sem descrição',
+            price: `R$ ${parseFloat(product.price || 0).toFixed(2).replace('.', ',')}`,
+            deliveryTime: `${product.preparation_time_minutes || 0}-${(product.preparation_time_minutes || 0) + 10} min`,
+            deliveryPrice: "R$ 5,00", // Valor fixo por enquanto
+            imageSource: product.image_url ? { uri: product.image_url } : { uri: 'https://via.placeholder.com/120x100' },
+            categoryId: product.category_id,
+            isAvailable: product.is_active !== false
+        };
+    };
+
+    // Função para agrupar produtos por categoria
+    const groupProductsByCategory = (products, categories) => {
+        const grouped = {};
+        
+        // Inicializar todas as categorias
+        categories.forEach(category => {
+            grouped[category.id] = {
+                id: category.id,
+                title: category.name,
+                data: []
+            };
+        });
+        
+        // Adicionar produtos às suas categorias
+        products.forEach(product => {
+            const mappedProduct = mapProductFromAPI(product);
+            if (mappedProduct.categoryId && grouped[mappedProduct.categoryId]) {
+                grouped[mappedProduct.categoryId].data.push(mappedProduct);
+            }
+        });
+        
+        // Filtrar categorias que têm produtos
+        return Object.values(grouped).filter(category => category.data.length > 0);
+    };
+
+    // useEffect para carregar dados iniciais
+    useEffect(() => {
+        loadInitialData();
+    }, []);
+
+    // Função para carregar dados iniciais
+    const loadInitialData = async () => {
+        try {
+            setLoading(true);
+            const categoriesData = await fetchCategories();
+            await fetchProducts(1, null, true);
+        } catch (error) {
+            console.error('Erro ao carregar dados iniciais:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Função para filtrar produtos por categoria
+    const filterProductsByCategory = (categoryId) => {
+        setSelectedCategoryId(categoryId);
+        setActiveCategory(categoryId ? categories.findIndex(cat => cat.id === categoryId) : 0);
+        setProducts([]);
+        setCurrentPage(1);
+        setHasMore(true);
+        fetchProducts(1, categoryId, true);
+    };
+
+    // Função para carregar mais produtos (scroll infinito)
+    const loadMoreProducts = () => {
+        if (!loadingMore && hasMore) {
+            fetchProducts(currentPage + 1, selectedCategoryId, false);
+        }
+    };
+
+    // Dados agrupados por categoria
+    const groupedData = groupProductsByCategory(products, categories);
 
     // Transformar dados em lista plana
     const flattenedData = [];
-    mockData.forEach((category, categoryIndex) => {
+    groupedData.forEach((category, categoryIndex) => {
         flattenedData.push({
             type: 'categoryHeader',
             categoryIndex,
@@ -196,6 +229,18 @@ export default function MenuCategory({
     const scrollToCategory = (categoryIndex) => {
         setActiveCategory(categoryIndex);
 
+        // Se for a primeira categoria (índice 0), mostrar todos os produtos
+        if (categoryIndex === 0) {
+            filterProductsByCategory(null);
+            return;
+        }
+
+        // Filtrar por categoria específica
+        const category = categories[categoryIndex - 1]; // -1 porque "Todos" é o índice 0
+        if (category) {
+            filterProductsByCategory(category.id);
+        }
+
         const headerIndex = flattenedData.findIndex(
             item => item.type === 'categoryHeader' && item.categoryIndex === categoryIndex
         );
@@ -231,7 +276,7 @@ export default function MenuCategory({
         }
     };
 
-    // Detectar quando mostrar header sticky com animação
+    // Detectar quando mostrar header sticky com animação e scroll infinito
     const handleScroll = (event) => {
         const scrollY = event.nativeEvent.contentOffset.y;
         const headerHeight = ListHeaderComponent ? 1000 : 0;
@@ -248,6 +293,14 @@ export default function MenuCategory({
             } else {
                 animateHeaderHide();
             }
+        }
+
+        // Scroll infinito - carregar mais produtos quando próximo do fim
+        const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+        const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 1000;
+        
+        if (isCloseToBottom && !loadingMore && hasMore) {
+            loadMoreProducts();
         }
     };
 
@@ -311,7 +364,13 @@ export default function MenuCategory({
                     deliveryPrice={item.item.deliveryPrice}
                     imageSource={item.item.imageSource}
                     isAvailable={item.item.isAvailable}
-                    onPress={() => onItemPress(item.item)}
+                    onPress={() => {
+                        if (navigation) {
+                            navigation.navigate('Produto', { produto: item.item });
+                        } else {
+                            onItemPress(item.item);
+                        }
+                    }}
                 />
             );
         }
@@ -348,6 +407,12 @@ export default function MenuCategory({
         );
     };
 
+    // Preparar dados para as tabs de categoria (incluindo "Todos")
+    const categoryTabsData = [
+        { id: 'all', title: 'Todos' },
+        ...categories.map(cat => ({ id: cat.id, title: cat.name }))
+    ];
+
     // Header sticky animado
     const AnimatedStickyHeader = () => (
         <Animated.View
@@ -365,7 +430,7 @@ export default function MenuCategory({
             <FontAwesome name="bars" size={20} color="#888888" style={styles.menuIcon} />
             <FlatList
                 ref={categoryListRef}
-                data={mockData}
+                data={categoryTabsData}
                 renderItem={renderCategoryTab}
                 keyExtractor={(item) => item.id.toString()}
                 horizontal
@@ -374,6 +439,16 @@ export default function MenuCategory({
             />
         </Animated.View>
     );
+
+    // Loading inicial
+    if (loading) {
+        return (
+            <View style={[styles.container, styles.loadingContainer]}>
+                <ActivityIndicator size="large" color="#007bff" />
+                <Text style={styles.loadingText}>Carregando cardápio...</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -388,6 +463,14 @@ export default function MenuCategory({
                 onViewableItemsChanged={handleViewableItemsChanged}
                 onScrollToIndexFailed={onScrollToIndexFailed}
                 ListHeaderComponent={ListHeaderComponent}
+                ListFooterComponent={() => (
+                    loadingMore ? (
+                        <View style={styles.loadingMoreContainer}>
+                            <ActivityIndicator size="small" color="#007bff" />
+                            <Text style={styles.loadingMoreText}>Carregando mais produtos...</Text>
+                        </View>
+                    ) : null
+                )}
                 contentContainerStyle={[
                     styles.listContent,
                     showFixedButton && styles.listWithButton
@@ -479,5 +562,26 @@ const styles = StyleSheet.create({
     },
     itemSeparator: {
         height: 12,
+    },
+    loadingContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 50,
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 16,
+        color: '#666',
+    },
+    loadingMoreContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 20,
+    },
+    loadingMoreText: {
+        marginLeft: 10,
+        fontSize: 14,
+        color: '#666',
     },
 });
