@@ -247,48 +247,64 @@ export default function MenuCategory({
     // Transformar dados em lista plana usando dados reais da API
     const flattenedData = [];
     const dataToUse = categories.length > 0 ? categories : mockData;
+    const visibleCategories = [];
+    let visibleCategoryIndex = 0;
     
-    dataToUse.forEach((category, categoryIndex) => {
-        flattenedData.push({
-            type: 'categoryHeader',
-            categoryIndex,
-            category: category,
-            id: `header-${category.id}`
-        });
-
+    dataToUse.forEach((category, originalIndex) => {
         // Usar produtos da API se disponíveis, senão usar dados mock
         const categoryProducts = products[category.id] || category.data || [];
-        categoryProducts.forEach((item) => {
-            // Ignorar itens inativos
-            if (item?.is_active === false || item?.isAvailable === false) {
-                return;
-            }
-            const imageUrl = item?.id
-                ? `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}?t=${Date.now()}`
-                : null;
-            
-            // (logs de debug removidos)
-
-            // Transformar produto da API para o formato esperado pelo CardItemHorizontal
-            const formattedItem = {
-                id: item.id,
-                title: item.name,
-                description: item.description || 'Descrição não disponível',
-                price: `R$ ${parseFloat(item.price).toFixed(2).replace('.', ',')}`,
-                deliveryTime: `${item.preparation_time_minutes || 30} min`,
-                deliveryPrice: 'R$ 5,00', // Valor fixo por enquanto
-                imageSource: imageUrl ? { uri: imageUrl } : null,
-                categoryId: item.category_id,
-                isAvailable: item.is_active !== false
-            };
+        
+        // Filtrar apenas itens ativos
+        const activeProducts = categoryProducts.filter(item => 
+            item?.is_active !== false && item?.isAvailable !== false
+        );
+        
+        // Só adiciona o header se houver produtos ativos
+        if (activeProducts.length > 0) {
+            // Adiciona categoria visível para a barra
+            visibleCategories.push({
+                ...category,
+                originalIndex,
+                visibleIndex: visibleCategoryIndex
+            });
 
             flattenedData.push({
-                type: 'item',
-                categoryIndex,
-                item: formattedItem,
-                id: `item-${item.id}`
+                type: 'categoryHeader',
+                categoryIndex: visibleCategoryIndex,
+                category: category,
+                id: `header-${category.id}`
             });
-        });
+
+            activeProducts.forEach((item) => {
+                const imageUrl = item?.id
+                    ? `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}?t=${Date.now()}`
+                    : null;
+                
+                // (logs de debug removidos)
+
+                // Transformar produto da API para o formato esperado pelo CardItemHorizontal
+                const formattedItem = {
+                    id: item.id,
+                    title: item.name,
+                    description: item.description || 'Descrição não disponível',
+                    price: `R$ ${parseFloat(item.price).toFixed(2).replace('.', ',')}`,
+                    deliveryTime: `${item.preparation_time_minutes || 30} min`,
+                    deliveryPrice: 'R$ 5,00', // Valor fixo por enquanto
+                    imageSource: imageUrl ? { uri: imageUrl } : null,
+                    categoryId: item.category_id,
+                    isAvailable: item.is_active !== false
+                };
+
+                flattenedData.push({
+                    type: 'item',
+                    categoryIndex: visibleCategoryIndex,
+                    item: formattedItem,
+                    id: `item-${item.id}`
+                });
+            });
+            
+            visibleCategoryIndex++;
+        }
     });
 
 
@@ -390,7 +406,7 @@ export default function MenuCategory({
                             <FontAwesome name="bars" size={20} color="#888888" style={styles.menuIcon} />
                             <FlatList
                                 ref={categoryListRef}
-                                data={dataToUse}
+                                data={visibleCategories}
                                 renderItem={renderCategoryTab}
                                 keyExtractor={(item) => item.id.toString()}
                                 horizontal
@@ -427,7 +443,7 @@ export default function MenuCategory({
     };
 
     const renderCategoryTab = ({ item, index }) => {
-        const isActive = activeCategory === index;
+        const isActive = activeCategory === item.visibleIndex;
 
         return (
             <TouchableOpacity
@@ -435,7 +451,7 @@ export default function MenuCategory({
                     styles.categoryTab,
                     isActive && styles.activeCategoryTab
                 ]}
-                onPress={() => scrollToCategory(index)}
+                onPress={() => scrollToCategory(item.visibleIndex)}
                 activeOpacity={1} // Sem efeito de opacidade
             >
                 <Text
