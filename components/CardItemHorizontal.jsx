@@ -28,18 +28,17 @@ export default function CardItemHorizontal({
             disabled={!isAvailable}
         >
             <View style={styles.imageWrapper}>
-                <Image
-                    style={styles.image}
-                    source={imageSource || { uri: 'https://via.placeholder.com/120x100' }}
-                    resizeMode="cover"
-                    onError={(error) => {
-                        console.log('Erro ao carregar imagem do produto:', productId, error);
-                        console.log('ImageSource recebido:', imageSource);
-                    }}
-                    onLoad={() => {
-                        console.log('Imagem carregada com sucesso para produto:', productId);
-                    }}
-                />
+                {imageSource ? (
+                    <Image
+                        style={styles.image}
+                        source={imageSource}
+                        resizeMode="cover"
+                        onError={() => {}}
+                        onLoad={() => {}}
+                    />
+                ) : (
+                    <View style={styles.image} />
+                )}
                 {!isAvailable && (
                     <View style={styles.unavailableOverlay}>
                         <Text style={styles.unavailableText}>Indisponível</Text>

@@ -1,5 +1,5 @@
     import React, {useState, useRef, useEffect} from 'react';
-    import {StyleSheet, View, Text, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Animated} from 'react-native';
+    import {StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Animated, ActivityIndicator, Keyboard} from 'react-native';
     import { SvgXml } from 'react-native-svg';
     import { useIsFocused } from '@react-navigation/native';
     import Header from "../components/Header";
@@ -7,8 +7,13 @@
     import IngredienteMenu from "../components/IngredienteMenuSemLogin";
     import LoginButton from "../components/ButtonView";
     import MenuNavigation from "../components/MenuNavigation";
+    import Observacoes from "../components/Observacoes";
+    import QuantidadePrecoBar from "../components/QuantidadePrecoBar";
     import { isAuthenticated, getStoredUserData } from '../services/userService';
     import { getCustomerAddresses, getLoyaltyBalance } from '../services/customerService';
+    import { getMenuProduct } from '../services/menuService';
+    import { getProductIngredients, getProductById } from '../services/productService';
+    import api from '../services/api';
 
     const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M5.29385 9.29365C4.90322 9.68428 4.90322 10.3187 5.29385 10.7093L11.2938 16.7093C11.6845 17.0999 12.3188 17.0999 12.7095 16.7093C13.1001 16.3187 13.1001 15.6843 12.7095 15.2937L7.41572 9.9999L12.7063 4.70615C13.097 4.31553 13.097 3.68115 12.7063 3.29053C12.3157 2.8999 11.6813 2.8999 11.2907 3.29053L5.29072 9.29053L5.29385 9.29365Z" fill="black"/>
@@ -30,6 +35,12 @@
         const [enderecoAtivo, setEnderecoAtivo] = useState(null);
         const [loyaltyBalance, setLoyaltyBalance] = useState(0);
         const [loadingPoints, setLoadingPoints] = useState(false);
+        const [loadingProduct, setLoadingProduct] = useState(false);
+        const [productData, setProductData] = useState(null);
+        const [productIngredients, setProductIngredients] = useState([]);
+        const [observacoes, setObservacoes] = useState('');
+        const [quantity, setQuantity] = useState(1);
+        const [keyboardVisible, setKeyboardVisible] = useState(false);
 
         const fetchEnderecos = async (userId) => {
             try {
@@ -121,6 +132,82 @@
             checkAuth();
         }, [isFocused]);
 
+        useEffect(() => {
+            let isCancelled = false;
+            const fetchProduct = async () => {
+                try {
+                    setLoadingProduct(true);
+                    // Prioriza productId; se não houver, tenta usar produto.id ou mantém produto
+                    const idToFetch = productId || produto?.id;
+                    let data = null;
+                    if (idToFetch) {
+                        try {
+                            // Buscar do endpoint do menu (exibe somente ativos)
+                            data = await getMenuProduct(idToFetch);
+                            // Algumas APIs retornam wrapper { product: {...} }
+                            if (data && data.product) {
+                                data = data.product;
+                            }
+                        } catch (errMenu) {
+                            // Fallback: tentar serviço de produtos por ID
+                            try {
+                                const p = await getProductById(idToFetch);
+                                data = p && p.product ? p.product : p;
+                            } catch (errProd) {
+                                // Se falhar, ainda tentamos obter ingredientes isolados (opcional)
+                                try {
+                                    const alt = await getProductIngredients(idToFetch);
+                                    if (!isCancelled) setProductIngredients(Array.isArray(alt) ? alt : []);
+                                } catch (errIng) {
+                                    // ignora
+                                }
+                            }
+                        }
+                    } else if (produto) {
+                        data = produto;
+                    }
+
+                    if (!isCancelled) {
+                        // Log para depuração do retorno
+                        console.log('[DEBUG] Produto - dados recebidos da API:', data);
+                        setProductData(data || produto || null);
+                        // Buscar ingredientes somente com ID válido
+                        const pid = idToFetch || data?.id;
+                        if (pid) {
+                            try {
+                                const ingredients = await getProductIngredients(pid);
+                                if (!isCancelled) setProductIngredients(Array.isArray(ingredients) ? ingredients : []);
+                            } catch (e) {
+                                if (!isCancelled) setProductIngredients([]);
+                            }
+                        } else {
+                            setProductIngredients([]);
+                        }
+                    }
+                } catch (e) {
+                    if (!isCancelled) {
+                        setProductData(produto || null);
+                        setProductIngredients([]);
+                    }
+                } finally {
+                    if (!isCancelled) setLoadingProduct(false);
+                }
+            };
+            fetchProduct();
+            return () => { isCancelled = true; };
+        }, [productId, produto]);
+
+        useEffect(() => {
+            const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+            const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+            const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+            const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+            return () => {
+                showSub?.remove();
+                hideSub?.remove();
+            };
+        }, []);
+
         const handleBackPress = () => {
             navigation.goBack();
         };
@@ -138,11 +225,7 @@
         };
 
         return (
-            <KeyboardAvoidingView
-                style={styles.container}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-            >
+            <View style={styles.container}>
                 <View style={styles.headerContainer}>
                     <Header
                         type={loggedIn ? 'logged' : 'home'}
@@ -156,7 +239,12 @@
                     />
                 </View>
 
-                <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+                <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={[styles.scrollContent, keyboardVisible ? { paddingBottom: 20 } : null]}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                >
                     <View style={styles.headerRow}>
                         <TouchableOpacity
                             style={styles.backButton}
@@ -170,19 +258,32 @@
                         </TouchableOpacity>
                         
                         <View style={styles.centerImageContainer}>
-                            <Image
-                                source={require('../assets/img/hamburguer.png')}
-                                style={styles.centerImage}
-                                resizeMode="contain"
-                            />
+                            {loadingProduct ? (
+                                <ActivityIndicator size="large" color="#000" />
+                            ) : (
+                                productData?.image_url ? (
+                                    <Image
+                                        source={{ uri: `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}` }}
+                                        style={styles.centerImage}
+                                        resizeMode="contain"
+                                    />
+                                ) : produto?.imageSource ? (
+                                    <Image
+                                        source={produto.imageSource}
+                                        style={styles.centerImage}
+                                        resizeMode="contain"
+                                    />
+                                ) : (
+                                    <View style={styles.centerImage} />
+                                )
+                            )}
                         </View>
                     </View>
                      <View style={styles.produtoContainer}>
-                         <Text style={styles.produtoTitle}>Nome do Produto</Text>
-                         <Text style={styles.produtoDescription}>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam auctor pellentesque urna nec tincidunt. 
-                             Phasellus ultricies elementum tristique. Nullam ante leo, eleifend blandit tempus nec, viverra at nulla. 
-                             Donec tincidunt lacus nisi, non sollicitudin mi suscipit luctus. Proin ac arcu pellentesque, bibendum massa nec, 
-                             varius arcu.</Text>
+                         <Text style={styles.produtoTitle}>{productData?.name || produto?.name || produto?.title || 'Produto'}</Text>
+                         {!!(productData?.description || produto?.description) && (
+                             <Text style={styles.produtoDescription}>{productData?.description || produto?.description}</Text>
+                         )}
                      </View>
                      
                      <View style={styles.divisionContainer}>
@@ -195,54 +296,54 @@
                      
                      <View style={styles.customizeContainer}>
                          <Text style={styles.produtoTitle}>Monte do seu jeito!</Text>
-                         
-                         <IngredienteMenu
-                             nome="Pão Superior"
-                             valorExtra={0.00}
-                             imagem={require('../assets/img/hamburguerIcon.png')}
-                         />
-                         
-                         <IngredienteMenu
-                             nome="Bacon"
-                             valorExtra={0.00}
-                             imagem={require('../assets/img/baconIcon.png')}
-                         />
-                         
-                         <IngredienteMenu
-                             nome="Queijo Cheedar"
-                             valorExtra={0}
-                             imagem={require('../assets/img/chedarIcon.png')}
-                         />
-                        <IngredienteMenu
-                             nome="Carne"
-                             valorExtra={0}
-                             imagem={require('../assets/img/carneIcon.png')}
-                         />
-                        <IngredienteMenu
-                             nome="Ketchup"
-                             valorExtra={0}
-                             imagem={require('../assets/img/ketchupIcon.png')}
-                         />
-                        <IngredienteMenu
-                             nome="Pão Inferior"
-                             valorExtra={0}
-                             imagem={require('../assets/img/paoIcon.png')}
-                         />
+                         {productIngredients && productIngredients.length > 0 ? (
+                             productIngredients.map((ing) => {
+                                 const displayName = ing.name || ing.nome || 'Ingrediente';
+                                 const extra = parseFloat(ing.extra_price || ing.preco_extra || 0) || 0;
+                                 return (
+                                     <IngredienteMenu
+                                         key={ing.id || displayName}
+                                         nome={displayName}
+                                         valorExtra={extra}
+                                         imagem={require('../assets/img/hamburguerIcon.png')}
+                                     />
+                                 );
+                             })
+                         ) : (
+                             null
+                         )}
                      </View>
+
+                     <Observacoes
+                         value={observacoes}
+                         onChangeText={setObservacoes}
+                         maxLength={140}
+                         style={{ marginTop: 10, marginBottom: 20 }}
+                     />
+
+                     <QuantidadePrecoBar
+                         unitPrice={productData?.price || 0}
+                         initialQuantity={quantity}
+                         onQuantityChange={setQuantity}
+                         onAddPress={({ quantity, total }) => {
+                             // TODO: integrar ao carrinho quando disponível
+                         }}
+                         style={{ marginBottom: 24 }}
+                     />
                      </ScrollView>
                      
-                    {!loggedIn && (
+                    {!loggedIn && !keyboardVisible && (
                         <View style={styles.fixedButtonContainer}>
                             <LoginButton navigation={navigation} />
                         </View>
                     )}
                     
-                    {loggedIn && (
+                    {loggedIn && !keyboardVisible && (
                         <View style={styles.menuNavigationContainer}>
                             <MenuNavigation navigation={navigation} currentRoute="Home" />
                         </View>
                     )}
-            </KeyboardAvoidingView>
+            </View>
         );
     }
 

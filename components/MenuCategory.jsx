@@ -24,8 +24,6 @@ export default function MenuCategory({
                                          onItemPress = () => {},
                                          navigation = null
                                      }) {
-    // Debug: log da BASE_URL
-    console.log('[DEBUG] BASE_URL da API:', api.defaults.baseURL);
     const [activeCategory, setActiveCategory] = useState(-1); // -1 = nenhuma categoria selecionada
     const [categories, setCategories] = useState([]);
     const [products, setProducts] = useState({});
@@ -93,7 +91,6 @@ export default function MenuCategory({
     const loadAllProducts = async () => {
         try {
             setLoadingProducts(true);
-            console.log('Carregando produtos de todas as categorias...');
             
             // Carrega produtos de todas as categorias em paralelo
             const productPromises = categories.map(async (category) => {
@@ -121,7 +118,6 @@ export default function MenuCategory({
             });
             
             setProducts(allProducts);
-            console.log('Todos os produtos carregados:', allProducts);
         } catch (error) {
             console.log('Erro ao carregar todos os produtos:', error);
         } finally {
@@ -263,18 +259,16 @@ export default function MenuCategory({
         // Usar produtos da API se disponíveis, senão usar dados mock
         const categoryProducts = products[category.id] || category.data || [];
         categoryProducts.forEach((item) => {
-            // Construir URL da imagem
-            const imageUrl = item.image_url ? 
-                `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}` : 
-                null;
+            // Ignorar itens inativos
+            if (item?.is_active === false || item?.isAvailable === false) {
+                return;
+            }
+            // Construir URL da imagem sempre pelo ID; servidor retorna 404 se não existir
+            const imageUrl = item?.id
+                ? `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}`
+                : null;
             
-            // Debug: log da URL da imagem
-            console.log(`[DEBUG] Produto ${item.id}:`, {
-                name: item.name,
-                hasImageUrl: !!item.image_url,
-                imageUrl: item.image_url,
-                constructedUrl: imageUrl
-            });
+            // (logs de debug removidos)
 
             // Transformar produto da API para o formato esperado pelo CardItemHorizontal
             const formattedItem = {

@@ -13,11 +13,15 @@ export default function CardItemVertical({
     return (
         <TouchableOpacity style={styles.container} onPress={onPress}>
             <View style={styles.imageWrapper}>
-                <Image
-                    style={styles.image}
-                    source={imageSource || {uri: 'https://via.placeholder.com/140x95'}}
-                    resizeMode="cover"
-                />
+                {imageSource ? (
+                    <Image
+                        style={styles.image}
+                        source={imageSource}
+                        resizeMode="cover"
+                    />
+                ) : (
+                    <View style={styles.image} />
+                )}
             </View>
             <View style={styles.container2}>
                 <Text style={styles.title} numberOfLines={1}
