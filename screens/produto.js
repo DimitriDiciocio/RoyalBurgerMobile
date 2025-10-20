@@ -263,7 +263,7 @@
                             ) : (
                                 productData?.image_url ? (
                                     <Image
-                                        source={{ uri: `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}` }}
+                                        source={{ uri: `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}?t=${Date.now()}` }}
                                         style={styles.centerImage}
                                         resizeMode="contain"
                                     />

@@ -263,9 +263,8 @@ export default function MenuCategory({
             if (item?.is_active === false || item?.isAvailable === false) {
                 return;
             }
-            // Construir URL da imagem sempre pelo ID; servidor retorna 404 se não existir
             const imageUrl = item?.id
-                ? `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}`
+                ? `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}?t=${Date.now()}`
                 : null;
             
             // (logs de debug removidos)
