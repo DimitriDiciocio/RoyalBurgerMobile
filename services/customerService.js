@@ -402,3 +402,69 @@ export const resendVerificationCode = async (email) => {
     throw structuredError;
   }
 };
+
+/**
+ * ========================================
+ * SERVIÇO DE RECUPERAÇÃO DE SENHA
+ * ========================================
+ */
+
+/**
+ * Solicita recuperação de senha.
+ * @param {string} email - Email do usuário
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const requestPasswordReset = async (email) => {
+  try {
+    const response = await api.post("/users/request-password-reset", {
+      email,
+    });
+    return {
+      ok: true,
+      data: response.data,
+      message: response.data?.msg || "E-mail de recuperação enviado",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error.response?.data?.error || 
+             error.response?.data?.msg || 
+             error.response?.data?.message || 
+             error.message || 
+             "Erro ao solicitar recuperação de senha",
+      status: error.response?.status,
+    };
+  }
+};
+
+/**
+ * Redefine a senha usando código de verificação.
+ * @param {string} email - Email do usuário
+ * @param {string} resetCode - Código de recuperação
+ * @param {string} newPassword - Nova senha
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const resetPassword = async (email, resetCode, newPassword) => {
+  try {
+    const response = await api.post("/users/reset-password", {
+      email,
+      reset_code: resetCode,
+      new_password: newPassword,
+    });
+    return {
+      ok: true,
+      data: response.data,
+      message: response.data?.msg || "Senha redefinida com sucesso",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error.response?.data?.error || 
+             error.response?.data?.msg || 
+             error.response?.data?.message || 
+             error.message || 
+             "Erro ao redefinir senha",
+      status: error.response?.status,
+    };
+  }
+};

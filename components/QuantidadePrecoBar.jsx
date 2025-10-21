@@ -6,6 +6,7 @@ export default function QuantidadePrecoBar({
     initialQuantity = 1,
     onQuantityChange = () => {},
     onAddPress = () => {},
+    onAddToBasket = () => {},
     style = {},
     buttonText = 'Adicionar à cesta'
 }) {
@@ -40,6 +41,7 @@ export default function QuantidadePrecoBar({
 
     const handleAdd = () => {
         onAddPress({ quantity, total, unitPrice: priceNumber });
+        onAddToBasket({ quantity, total, unitPrice: priceNumber });
     };
 
     return (
