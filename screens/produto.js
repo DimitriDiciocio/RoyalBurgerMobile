@@ -9,11 +9,13 @@
     import MenuNavigation from "../components/MenuNavigation";
     import Observacoes from "../components/Observacoes";
     import QuantidadePrecoBar from "../components/QuantidadePrecoBar";
-    import { isAuthenticated, getStoredUserData } from '../services/userService';
-    import { getCustomerAddresses, getLoyaltyBalance } from '../services/customerService';
-    import { getMenuProduct } from '../services/menuService';
-    import { getProductIngredients, getProductById } from '../services/productService';
-    import api from '../services/api';
+import { isAuthenticated, getStoredUserData } from '../services/userService';
+import { getCustomerAddresses, getLoyaltyBalance } from '../services/customerService';
+import { getMenuProduct } from '../services/menuService';
+import { getProductIngredients, getProductById } from '../services/productService';
+import { useBasket } from '../contexts/BasketContext';
+import BasketFooter from '../components/BasketFooter';
+import api from '../services/api';
 
     const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M5.29385 9.29365C4.90322 9.68428 4.90322 10.3187 5.29385 10.7093L11.2938 16.7093C11.6845 17.0999 12.3188 17.0999 12.7095 16.7093C13.1001 16.3187 13.1001 15.6843 12.7095 15.2937L7.41572 9.9999L12.7063 4.70615C13.097 4.31553 13.097 3.68115 12.7063 3.29053C12.3157 2.8999 11.6813 2.8999 11.2907 3.29053L5.29072 9.29053L5.29385 9.29365Z" fill="black"/>
@@ -41,6 +43,7 @@
         const [observacoes, setObservacoes] = useState('');
         const [quantity, setQuantity] = useState(1);
         const [keyboardVisible, setKeyboardVisible] = useState(false);
+        const { addToBasket, basketItems, basketTotal, basketItemCount } = useBasket();
 
         const fetchEnderecos = async (userId) => {
             try {
@@ -224,6 +227,11 @@
             setIsExpanded(!isExpanded);
         };
 
+        const handleBasketPress = () => {
+            // Por enquanto, não faz nada
+            console.log('Ver cesta pressionado na tela de produto');
+        };
+
         return (
             <View style={styles.container}>
                 <View style={styles.headerContainer}>
@@ -241,7 +249,11 @@
 
                 <ScrollView
                     style={styles.scrollView}
-                    contentContainerStyle={[styles.scrollContent, keyboardVisible ? { paddingBottom: 20 } : null]}
+                    contentContainerStyle={[
+                        styles.scrollContent, 
+                        keyboardVisible ? { paddingBottom: 20 } : null,
+                        basketItems.length > 0 ? { paddingBottom: 180 } : null
+                    ]}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
                 >
@@ -328,19 +340,48 @@
                          onAddPress={({ quantity, total }) => {
                              // TODO: integrar ao carrinho quando disponível
                          }}
+                         onAddToBasket={({ quantity, total, unitPrice }) => {
+                             // Adiciona à cesta e redireciona para a home
+                             addToBasket({ 
+                                 quantity, 
+                                 total, 
+                                 unitPrice, 
+                                 productName: productData?.name || produto?.name || 'Produto' 
+                             });
+                             navigation.navigate('Home');
+                         }}
                          style={{ marginBottom: 24 }}
                      />
                      </ScrollView>
                      
-                    {!loggedIn && !keyboardVisible && (
+                    {!loggedIn && !keyboardVisible && basketItems.length === 0 && (
                         <View style={styles.fixedButtonContainer}>
                             <LoginButton navigation={navigation} />
+                        </View>
+                    )}
+
+                    {!loggedIn && !keyboardVisible && basketItems.length > 0 && (
+                        <View style={styles.fixedButtonContainer}>
+                            <BasketFooter 
+                                total={basketTotal}
+                                itemCount={basketItemCount}
+                                onPress={handleBasketPress}
+                            />
                         </View>
                     )}
                     
                     {loggedIn && !keyboardVisible && (
                         <View style={styles.menuNavigationContainer}>
                             <MenuNavigation navigation={navigation} currentRoute="Home" />
+                            {basketItems.length > 0 && (
+                                <View style={styles.basketOverlay}>
+                                    <BasketFooter 
+                                        total={basketTotal}
+                                        itemCount={basketItemCount}
+                                        onPress={handleBasketPress}
+                                    />
+                                </View>
+                            )}
                         </View>
                     )}
             </View>
@@ -429,5 +470,13 @@
             left: 0,
             right: 0,
             zIndex: 1000,
+        },
+        basketOverlay: {
+            position: 'absolute',
+            bottom: 100, // Posiciona acima do MenuNavigation
+            left: 16,
+            right: 16,
+            zIndex: 1001,
+            paddingBottom: 16, // Espaçamento entre BasketFooter e MenuNavigation
         },
     });

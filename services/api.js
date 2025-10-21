@@ -64,7 +64,7 @@ api.interceptors.request.use(
       // Lista de rotas que não precisam de token
       const publicRoutes = [
         "/users/login",
-        "/users/forgot-password",
+        "/users/request-password-reset",
         "/users/reset-password",
       ];
 

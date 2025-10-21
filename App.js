@@ -8,15 +8,21 @@ import LoginButton from "./components/ButtonView";
 import ViewCardItem from "./components/ViewCardItem";
 import MenuCategory from "./components/MenuCategory";
 import MenuNavigation from "./components/MenuNavigation";
+import BasketFooter from "./components/BasketFooter";
 import Login from "./screens/login";
 import Cadastro from "./screens/cadastro";
+import EsqueciSenha from "./screens/esqueciSenha";
+import VerificarCodigoSenha from "./screens/verificarCodigoSenha";
+import RedefinirSenha from "./screens/redefinirSenha";
 import Produto from "./screens/produto";
 import Perfil from "./screens/perfil";
 import ClubeRoyal from "./screens/clubeRoyal";
 import Pedidos from "./screens/pedidos";
+import Config from "./screens/config";
 import React, { useEffect, useState } from 'react';
 import { isAuthenticated, getStoredUserData, logout, getCurrentUserProfile } from "./services";
 import { getLoyaltyBalance } from "./services/customerService";
+import { BasketProvider, useBasket } from "./contexts/BasketContext";
 
 const Stack = createNativeStackNavigator();
 
@@ -25,6 +31,7 @@ function HomeScreen({ navigation }) {
     const [loggedIn, setLoggedIn] = useState(false);
     const [userInfo, setUserInfo] = useState(null);
     const [loadingPoints, setLoadingPoints] = useState(false);
+    const { basketItems, basketTotal, basketItemCount, addToBasket } = useBasket();
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -141,6 +148,11 @@ function HomeScreen({ navigation }) {
         }
     };
 
+    const handleBasketPress = () => {
+        // Por enquanto, não faz nada
+        console.log('Ver cesta pressionado');
+    };
+
     // Conteúdo sections
     const renderPromotionalHeader = () => (
         <View style={styles.promotionalContent}>
@@ -191,15 +203,34 @@ function HomeScreen({ navigation }) {
                 />
             </View>
 
-            {!loggedIn && (
+            {!loggedIn && basketItems.length === 0 && (
                 <View style={styles.fixedButtonContainer}>
                     <LoginButton navigation={navigation} />
+                </View>
+            )}
+
+            {!loggedIn && basketItems.length > 0 && (
+                <View style={styles.fixedButtonContainer}>
+                    <BasketFooter 
+                        total={basketTotal}
+                        itemCount={basketItemCount}
+                        onPress={handleBasketPress}
+                    />
                 </View>
             )}
 
             {loggedIn && (
                 <View style={styles.menuNavigationContainer}>
                     <MenuNavigation navigation={navigation} />
+                    {basketItems.length > 0 && (
+                        <View style={styles.basketOverlay}>
+                            <BasketFooter 
+                                total={basketTotal}
+                                itemCount={basketItemCount}
+                                onPress={handleBasketPress}
+                            />
+                        </View>
+                    )}
                 </View>
             )}
     
@@ -210,15 +241,16 @@ function HomeScreen({ navigation }) {
 
 export default function App() {
     return (
-        <NavigationContainer>
-            <Stack.Navigator 
-                initialRouteName="Home"
-                screenOptions={{
-                    headerShown: false,
-                    animation: 'fade',
-                    animationDuration: 200
-                }}
-            >
+        <BasketProvider>
+            <NavigationContainer>
+                <Stack.Navigator 
+                    initialRouteName="Home"
+                    screenOptions={{
+                        headerShown: false,
+                        animation: 'fade',
+                        animationDuration: 200
+                    }}
+                >
                 <Stack.Screen 
                     name="Home" 
                     component={HomeScreen}
@@ -230,6 +262,18 @@ export default function App() {
                 <Stack.Screen 
                     name="Cadastro" 
                     component={Cadastro}
+                />
+                <Stack.Screen 
+                    name="EsqueciSenha" 
+                    component={EsqueciSenha}
+                />
+                <Stack.Screen 
+                    name="VerificarCodigoSenha" 
+                    component={VerificarCodigoSenha}
+                />
+                <Stack.Screen 
+                    name="RedefinirSenha" 
+                    component={RedefinirSenha}
                 />
                 <Stack.Screen 
                     name="Produto" 
@@ -247,8 +291,13 @@ export default function App() {
                     name="Pedidos" 
                     component={Pedidos}
                 />
+                <Stack.Screen 
+                    name="Config" 
+                    component={Config}
+                />
             </Stack.Navigator>
         </NavigationContainer>
+        </BasketProvider>
     );
 }
 
@@ -319,5 +368,13 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         zIndex: 1000,
+    },
+    basketOverlay: {
+        position: 'absolute',
+        bottom: 100, // Posiciona acima do MenuNavigation
+        left: 16,
+        right: 16,
+        zIndex: 1001,
+        paddingBottom: 16, // Espaçamento entre BasketFooter e MenuNavigation
     },
 });

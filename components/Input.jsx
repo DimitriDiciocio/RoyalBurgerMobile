@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {StyleSheet, View, TextInput, Text, TouchableOpacity, Animated} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -23,6 +23,13 @@ export default function Input({
     const isPassword = type === "password";
     const hasValue = value && value.length > 0;
     const shouldLabelFloat = isFocused || hasValue;
+
+    // Efeito para animar o label quando o valor é definido programaticamente
+    useEffect(() => {
+        if (hasValue && !isFocused) {
+            animateLabel(1);
+        }
+    }, [value]);
 
     const togglePasswordVisibility = () => {
         setIsPasswordVisible(!isPasswordVisible);

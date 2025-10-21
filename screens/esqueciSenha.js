@@ -1,17 +1,21 @@
-import React, {useState} from 'react';
-import {StyleSheet, View, Text, TouchableOpacity, Image, TextInput, ScrollView, KeyboardAvoidingView, Platform, Keyboard} from 'react-native';
+import React, {useState, useEffect} from 'react';
+import {StyleSheet, View, Text, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Alert} from 'react-native';
 import Header from "../components/Header";
 import Input from "../components/Input";
-import {login, registerCustomer} from "../services";
-import { requestEmailVerification } from "../services/customerService";
+import { requestPasswordReset } from "../services/customerService";
 
-export default function Login({navigation}) {
+export default function EsqueciSenha({navigation, route}) {
     const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
     const [emailError, setEmailError] = useState('');
-    const [passwordError, setPasswordError] = useState('');
     const [submitError, setSubmitError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Recebe o email do login se foi passado via parâmetros
+    useEffect(() => {
+        if (route?.params?.email) {
+            setEmail(route.params.email);
+        }
+    }, [route?.params?.email]);
 
     // Função para validar email
     const validateEmail = (email) => {
@@ -19,83 +23,38 @@ export default function Login({navigation}) {
         return emailRegex.test(email);
     };
 
-    // Função para validar senha
-    const validatePassword = (password) => {
-        // Senha deve ter pelo menos 6 caracteres
-        return password.length >= 6;
-    };
-
-    const handleLogin = async () => {
+    const handleRequestPasswordReset = async () => {
         // Resetar erros
         setEmailError('');
-        setPasswordError('');
         setSubmitError('');
-
-        let hasError = false;
 
         // Validação de email
         if (!email.trim()) {
             setEmailError('E-mail é obrigatório');
-            hasError = true;
+            return;
         } else if (!validateEmail(email)) {
             setEmailError('Digite um e-mail válido');
-            hasError = true;
-        }
-
-        // Validação de senha
-        if (!password.trim()) {
-            setPasswordError('Senha é obrigatória');
-            hasError = true;
-        } else if (!validatePassword(password)) {
-            setPasswordError('Senha deve ter pelo menos 6 caracteres');
-            hasError = true;
-        }
-
-        if (hasError) {
             return;
         }
 
         setIsSubmitting(true);
         try {
-            const result = await login({ email, password });
+            const result = await requestPasswordReset(email);
             if (result.ok) {
-                navigation.navigate('Home');
+                // Navega para a tela de verificação de código
+                navigation.navigate('VerificarCodigoSenha', { email: email });
             } else {
-                const message = result.error || '';
-                const isUnverified =
-                    result.status === 403 ||
-                    /nao verificado|não verificado|email.*verificar|verify.*email|EMAIL_NOT_VERIFIED|UNVERIFIED/i.test(message);
-
-                if (isUnverified) {
-                    try {
-                        await requestEmailVerification(email);
-                    } catch (e) {
-                        // Silencia erro de reenvio para não bloquear o fluxo
-                    }
-                    navigation.navigate('VerificacaoEmail', { email });
-                    return;
-                }
-
-                setSubmitError(message || 'Não foi possível fazer login.');
+                setSubmitError(result.error || 'Erro ao enviar e-mail de recuperação');
             }
         } catch (e) {
-            setSubmitError('Erro inesperado ao fazer login.');
+            setSubmitError('Erro inesperado ao enviar e-mail de recuperação');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const handleForgotPassword = () => {
-        // Fecha o teclado antes de navegar para evitar piscar
-        Keyboard.dismiss();
-        // Pequeno delay para garantir que o teclado feche completamente
-        setTimeout(() => {
-            navigation.navigate('EsqueciSenha', { email: email });
-        }, 100);
-    };
-
-    const handleRegisterTextd = () => {
-        navigation.navigate('Cadastro');
+    const handleBackToLogin = () => {
+        navigation.goBack();
     };
 
     // Validação em tempo real
@@ -106,18 +65,13 @@ export default function Login({navigation}) {
         }
     };
 
-    const handlePasswordChange = (text) => {
-        setPassword(text);
-        if (passwordError && text.trim() && validatePassword(text)) {
-            setPasswordError('');
-        }
-    };
 
     return (
         <KeyboardAvoidingView 
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            enabled={true}
         >
             <Image
                 source={require('../assets/img/imagemLogin.png')}
@@ -130,8 +84,8 @@ export default function Login({navigation}) {
                     type="login"
                     navigation={navigation}
                     showBackButton={true}
-                    title="Bem-vindo de volta!"
-                    subtitle="Faça login para continuar"
+                    title="Esqueci minha senha"
+                    subtitle="Digite seu e-mail para recuperar"
                 />
             </View>
 
@@ -141,10 +95,14 @@ export default function Login({navigation}) {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 enableOnAndroid={true}
+                keyboardDismissMode="on-drag"
             >
                 <View style={styles.form}>
-                    <Text style={styles.titulo}>Digite o seu
-                        e-mail e senha</Text>
+                    <Text style={styles.titulo}>Digite o seu e-mail</Text>
+                    <Text style={styles.subtitle}>
+                        Enviaremos um código de verificação para você redefinir sua senha
+                    </Text>
+                    
                     <Input
                         label="E-mail"
                         type="email"
@@ -152,36 +110,27 @@ export default function Login({navigation}) {
                         onChangeText={handleEmailChange}
                         error={emailError}
                     />
-
-                    <Input
-                        label="Senha"
-                        type="password"
-                        value={password}
-                        onChangeText={handlePasswordChange}
-                        error={passwordError}
-                    />
+                    
                     {!!submitError && (
-                        <Text style={{ color: '#D32F2F', marginBottom: 8 }}>{submitError}</Text>
+                        <Text style={styles.errorText}>{submitError}</Text>
                     )}
-                    <TouchableOpacity
-                        style={styles.forgotPasswordButton}
-                        onPress={handleForgotPassword}
-                    >
-                        <Text style={styles.jobDescription}>Esqueci minha senha</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.registerText}
-                        onPress={handleRegisterTextd}
-                        disabled={isSubmitting}
-                    >
-                        <Text style={styles.jobDescription}>Ainda não tem uma conta? Cadastre-se já!</Text>
-                    </TouchableOpacity>
+                    
                     <TouchableOpacity
                         style={styles.loginButton}
-                        onPress={handleLogin}
+                        onPress={handleRequestPasswordReset}
                         disabled={isSubmitting}
                     >
-                        <Text style={styles.loginButtonText}>{isSubmitting ? 'Entrando...' : 'Entrar'}</Text>
+                        <Text style={styles.loginButtonText}>
+                            {isSubmitting ? 'Enviando...' : 'Enviar código'}
+                        </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                        style={styles.backButton}
+                        onPress={handleBackToLogin}
+                        disabled={isSubmitting}
+                    >
+                        <Text style={styles.backButtonText}>Voltar ao login</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>
@@ -202,6 +151,9 @@ const styles = StyleSheet.create({
         bottom: 0,
         width: '100%',
         height: '100%',
+    },
+    headerContainer: {
+        zIndex: 10,
     },
     scrollView: {
         flex: 1,
@@ -225,13 +177,21 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 8,
         marginBottom: 30,
-        minHeight: 'auto', // Permite que o formulário se ajuste ao conteúdo
+        minHeight: 'auto',
     },
     titulo: {
         fontSize: 30,
         fontWeight: 'bold',
         textAlign: 'center',
         marginBottom: 10,
+        color: '#101010',
+    },
+    subtitle: {
+        fontSize: 16,
+        textAlign: 'center',
+        marginBottom: 20,
+        color: '#666',
+        lineHeight: 22,
     },
     loginButton: {
         backgroundColor: '#FFC700',
@@ -252,11 +212,18 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '500'
     },
-    jobDescription: {
+    backButton: {
+        paddingVertical: 10,
+        alignItems: 'center',
+    },
+    backButtonText: {
         color: '#AEAEBA',
         fontSize: 14,
         fontWeight: '500',
-        textDecorationLine: 'none',
-        marginBottom: 15,
+    },
+    errorText: {
+        color: '#D32F2F',
+        marginBottom: 8,
+        textAlign: 'center',
     },
 });
