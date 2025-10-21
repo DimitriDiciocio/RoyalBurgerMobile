@@ -257,7 +257,7 @@ export const setDefaultAddress = async (customerId, addressId) => {
  */
 export const getLoyaltyBalance = async (customerId) => {
   try {
-    const response = await api.get(`/customers/${customerId}/loyalty/balance`);
+    const response = await api.get(`/loyalty/balance/${customerId}`);
     return response.data;
   } catch (error) {
     throw error;
@@ -292,7 +292,7 @@ export const calculateDaysUntilExpiration = (expirationDate) => {
  */
 export const getLoyaltyHistory = async (customerId) => {
   try {
-    const response = await api.get(`/customers/${customerId}/loyalty/history`);
+    const response = await api.get(`/loyalty/history/${customerId}`);
     return response.data;
   } catch (error) {
     throw error;
