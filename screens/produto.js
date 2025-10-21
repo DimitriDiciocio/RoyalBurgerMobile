@@ -346,7 +346,12 @@ import api from '../services/api';
                                  quantity, 
                                  total, 
                                  unitPrice, 
-                                 productName: productData?.name || produto?.name || 'Produto' 
+                                 productName: productData?.name || produto?.name || 'Produto',
+                                 description: productData?.description || produto?.description,
+                                 image: productData?.image_url ? 
+                                     `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}` : 
+                                     produto?.imageSource?.uri,
+                                 productId: productData?.id || produto?.id
                              });
                              navigation.navigate('Home');
                          }}

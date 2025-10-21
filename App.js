@@ -19,6 +19,7 @@ import Perfil from "./screens/perfil";
 import ClubeRoyal from "./screens/clubeRoyal";
 import Pedidos from "./screens/pedidos";
 import Config from "./screens/config";
+import Cesta from "./screens/cesta";
 import React, { useEffect, useState } from 'react';
 import { isAuthenticated, getStoredUserData, logout, getCurrentUserProfile } from "./services";
 import { getLoyaltyBalance } from "./services/customerService";
@@ -149,8 +150,7 @@ function HomeScreen({ navigation }) {
     };
 
     const handleBasketPress = () => {
-        // Por enquanto, não faz nada
-        console.log('Ver cesta pressionado');
+        navigation.navigate('Cesta');
     };
 
     // Conteúdo sections
@@ -294,6 +294,10 @@ export default function App() {
                 <Stack.Screen 
                     name="Config" 
                     component={Config}
+                />
+                <Stack.Screen 
+                    name="Cesta" 
+                    component={Cesta}
                 />
             </Stack.Navigator>
         </NavigationContainer>
