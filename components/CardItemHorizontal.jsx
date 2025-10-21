@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, StyleSheet, Image, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import CachedImage from './CachedImage';
 
 export default function CardItemHorizontal({
                                                title = "Nome produto",
@@ -29,12 +30,10 @@ export default function CardItemHorizontal({
         >
             <View style={styles.imageWrapper}>
                 {imageSource ? (
-                    <Image
+                    <CachedImage
                         style={styles.image}
                         source={imageSource}
                         resizeMode="cover"
-                        onError={() => {}}
-                        onLoad={() => {}}
                     />
                 ) : (
                     <View style={styles.image} />

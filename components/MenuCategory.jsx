@@ -277,7 +277,7 @@ export default function MenuCategory({
 
             activeProducts.forEach((item) => {
                 const imageUrl = item?.id
-                    ? `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}?t=${Date.now()}`
+                    ? `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}`
                     : null;
                 
                 // (logs de debug removidos)

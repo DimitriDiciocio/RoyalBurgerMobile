@@ -275,7 +275,7 @@ import api from '../services/api';
                             ) : (
                                 productData?.image_url ? (
                                     <Image
-                                        source={{ uri: `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}?t=${Date.now()}` }}
+                                        source={{ uri: `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}` }}
                                         style={styles.centerImage}
                                         resizeMode="contain"
                                     />

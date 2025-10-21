@@ -1,5 +1,6 @@
 import React from 'react';
-import {View, StyleSheet, Image, Text, TouchableOpacity} from 'react-native';
+import {View, StyleSheet, Text, TouchableOpacity} from 'react-native';
+import CachedImage from './CachedImage';
 
 export default function CardItemVertical({
                                      title = "Nome produto",
@@ -14,7 +15,7 @@ export default function CardItemVertical({
         <TouchableOpacity style={styles.container} onPress={onPress}>
             <View style={styles.imageWrapper}>
                 {imageSource ? (
-                    <Image
+                    <CachedImage
                         style={styles.image}
                         source={imageSource}
                         resizeMode="cover"
