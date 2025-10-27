@@ -20,6 +20,7 @@ import ClubeRoyal from "./screens/clubeRoyal";
 import Pedidos from "./screens/pedidos";
 import Config from "./screens/config";
 import Cesta from "./screens/cesta";
+import Pagamento from "./screens/pagamento";
 import React, { useEffect, useState } from 'react';
 import { isAuthenticated, getStoredUserData, logout, getCurrentUserProfile } from "./services";
 import { getLoyaltyBalance } from "./services/customerService";
@@ -287,7 +288,7 @@ export default function App() {
                     name="ClubeRoyal" 
                     component={ClubeRoyal}
                 />
-                <Stack.Screen 
+                <Stack.Screen   
                     name="Pedidos" 
                     component={Pedidos}
                 />
@@ -298,6 +299,10 @@ export default function App() {
                 <Stack.Screen 
                     name="Cesta" 
                     component={Cesta}
+                />
+                <Stack.Screen 
+                    name="Pagamento" 
+                    component={Pagamento}
                 />
             </Stack.Navigator>
         </NavigationContainer>

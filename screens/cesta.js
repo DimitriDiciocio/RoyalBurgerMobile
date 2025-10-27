@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import Header from '../components/Header';
 import { isAuthenticated, getStoredUserData } from '../services';
@@ -16,6 +16,7 @@ export default function Cesta({ navigation }) {
     const [loggedIn, setLoggedIn] = useState(false);
     const [userInfo, setUserInfo] = useState(null);
     const [loadingPoints, setLoadingPoints] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const { basketItems, removeFromBasket, updateBasketItem, clearBasket, addToBasket } = useBasket();
     
     // Calcular total real dos itens da cesta
@@ -67,6 +68,8 @@ export default function Cesta({ navigation }) {
                 console.log('Erro ao verificar autenticação:', e);
                 setLoggedIn(false);
                 setUserInfo(null);
+            } finally {
+                setIsLoading(false);
             }
         };
         checkAuth();
@@ -215,6 +218,16 @@ export default function Cesta({ navigation }) {
         });
     };
 
+    if (isLoading) {
+        return (
+            <View style={styles.container}>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#FFC700" />
+                </View>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             <Header 
@@ -337,8 +350,14 @@ export default function Cesta({ navigation }) {
                  <TouchableOpacity 
                      style={styles.continuarButton}
                      onPress={() => {
-                         // Navegar para checkout ou próxima tela
-                         console.log('Continuar para checkout');
+                         // Verificar se o usuário está logado
+                         if (loggedIn) {
+                             // Navegar para tela de pagamento
+                             navigation.navigate('Pagamento');
+                         } else {
+                             // Redirecionar para a página de login
+                             navigation.navigate('Login');
+                         }
                      }}
                      activeOpacity={0.8}
                  >
@@ -352,7 +371,7 @@ export default function Cesta({ navigation }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#F6F6F6',
     },
      navigationBar: {
          flexDirection: 'row',
@@ -361,9 +380,7 @@ const styles = StyleSheet.create({
          paddingHorizontal: 16,
          paddingVertical: 16,
          paddingTop: 20,
-         backgroundColor: '#FFFFFF',
-         borderBottomWidth: 1,
-         borderBottomColor: '#E5E5E5',
+         backgroundColor: '#F6F6F6',
      },
     backButton: {
         width: 40,
@@ -408,6 +425,7 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         textAlign: 'left',
         paddingHorizontal: 16,
+        marginTop: 20,
     },
     emptyText: {
         fontSize: 16,
@@ -537,5 +555,11 @@ const styles = StyleSheet.create({
          color: '#000000',
          fontWeight: 'bold',
          textAlign: 'center',
+     },
+     loadingContainer: {
+         flex: 1,
+         justifyContent: 'center',
+         alignItems: 'center',
+         backgroundColor: '#F6F6F6',
      },
  });

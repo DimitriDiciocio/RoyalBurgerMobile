@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SvgXml } from 'react-native-svg';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import BotaoCheck from '../components/BotaoCheck';
 import BotaoSwitch from '../components/BotaoSwitch';
 import AlterarSenhaBottomSheet from '../components/AlterarSenhaBottomSheet';
@@ -26,6 +27,53 @@ export default function Config({ navigation }) {
   const [notificacaoPromocoes, setNotificacaoPromocoes] = useState(false);
   const [verificacaoDuasEtapas, setVerificacaoDuasEtapas] = useState(false);
   const [showAlterarSenha, setShowAlterarSenha] = useState(false);
+
+  // Carregar configurações do AsyncStorage
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const pedidos = await AsyncStorage.getItem('notificacaoPedidos');
+        const promocoes = await AsyncStorage.getItem('notificacaoPromocoes');
+        const duasEtapas = await AsyncStorage.getItem('verificacaoDuasEtapas');
+        
+        if (pedidos !== null) setNotificacaoPedidos(JSON.parse(pedidos));
+        if (promocoes !== null) setNotificacaoPromocoes(JSON.parse(promocoes));
+        if (duasEtapas !== null) setVerificacaoDuasEtapas(JSON.parse(duasEtapas));
+      } catch (error) {
+        console.error('Erro ao carregar configurações:', error);
+      }
+    };
+    
+    loadSettings();
+  }, []);
+
+  // Salvar configurações no AsyncStorage
+  useEffect(() => {
+    const saveSettings = async () => {
+      try {
+        await AsyncStorage.setItem('notificacaoPedidos', JSON.stringify(notificacaoPedidos));
+        await AsyncStorage.setItem('notificacaoPromocoes', JSON.stringify(notificacaoPromocoes));
+        await AsyncStorage.setItem('verificacaoDuasEtapas', JSON.stringify(verificacaoDuasEtapas));
+      } catch (error) {
+        console.error('Erro ao salvar configurações:', error);
+      }
+    };
+    
+    saveSettings();
+  }, [notificacaoPedidos, notificacaoPromocoes, verificacaoDuasEtapas]);
+
+  // Handlers para os toggles
+  const handleNotificacaoPedidos = () => {
+    setNotificacaoPedidos(!notificacaoPedidos);
+  };
+
+  const handleNotificacaoPromocoes = () => {
+    setNotificacaoPromocoes(!notificacaoPromocoes);
+  };
+
+  const handleVerificacaoDuasEtapas = () => {
+    setVerificacaoDuasEtapas(!verificacaoDuasEtapas);
+  };
 
   const handleChangePassword = () => {
     setShowAlterarSenha(true);
@@ -92,14 +140,14 @@ export default function Config({ navigation }) {
             title="Comunicações de pedidos"
             description="Irá receber notificações informando nas etapas do seu pedido"
             value={notificacaoPedidos}
-            onValueChange={setNotificacaoPedidos}
+            onValueChange={handleNotificacaoPedidos}
           />
 
           <BotaoSwitch
             title="Comunicações de promoções"
             description="Irá receber notificações informando nas últimas promoções"
             value={notificacaoPromocoes}
-            onValueChange={setNotificacaoPromocoes}
+            onValueChange={handleNotificacaoPromocoes}
           />
         </View>
 
@@ -111,7 +159,7 @@ export default function Config({ navigation }) {
             title="Verificação em duas etapas"
             description="Adicione um método de verificação adicional além da sua senha"
             value={verificacaoDuasEtapas}
-            onValueChange={setVerificacaoDuasEtapas}
+            onValueChange={handleVerificacaoDuasEtapas}
           />
 
           <BotaoCheck

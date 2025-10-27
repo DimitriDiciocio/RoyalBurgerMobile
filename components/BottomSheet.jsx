@@ -8,6 +8,9 @@ import {
   Dimensions,
   TouchableWithoutFeedback,
   PanResponder,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 
 const { height } = Dimensions.get('window');
@@ -78,7 +81,19 @@ export default function BottomSheet({ visible, onClose, children, heightPercenta
               </View>
 
               {/* Conteúdo */}
-              <View style={styles.content}>{children}</View>
+              <KeyboardAvoidingView 
+                style={styles.content} 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={0}
+              >
+                <ScrollView 
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ flexGrow: 1 }}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {children}
+                </ScrollView>
+              </KeyboardAvoidingView>
             </Animated.View>
           </TouchableWithoutFeedback>
         </View>

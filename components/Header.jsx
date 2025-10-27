@@ -309,7 +309,15 @@ export default function Header({
                                 </TouchableOpacity>
                             </View>
                         </View>
-                        <View style={styles.pointsContainer}>
+                        <TouchableOpacity 
+                            style={styles.pointsContainer}
+                            onPress={() => {
+                                if (navigation) {
+                                    navigation.navigate('ClubeRoyal');
+                                }
+                            }}
+                            activeOpacity={0.7}
+                        >
                             <SvgXml
                                 xml={crownSvg}
                                 width={20}
@@ -323,7 +331,7 @@ export default function Header({
                                     {userInfo?.points || "0"} pontos
                                 </Text>
                             )}
-                        </View>
+                        </TouchableOpacity>
                         {rightButton && rightButton}
                     </View>
                 );

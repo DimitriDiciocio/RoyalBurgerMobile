@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, StyleSheet, Text, Switch } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
+import Toggle from './Toggle';
 
 export default function BotaoSwitch({ title, description, value, onValueChange }) {
   return (
@@ -8,13 +9,7 @@ export default function BotaoSwitch({ title, description, value, onValueChange }
         <Text style={styles.settingTitle}>{title}</Text>
         <Text style={styles.settingDescription}>{description}</Text>
       </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: '#D9D9D9', true: '#D9D9D9' }}
-        thumbColor={value ? '#FFFFFF' : '#FFFFFF'}
-        ios_backgroundColor="#D9D9D9"
-      />
+      <Toggle value={value} onValueChange={onValueChange} />
     </View>
   );
 }
