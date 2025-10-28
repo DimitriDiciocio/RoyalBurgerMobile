@@ -31,10 +31,14 @@ export default function MenuCategory({
     const [loadingProducts, setLoadingProducts] = useState(false);
     const [showCategoryBar, setShowCategoryBar] = useState(false);
     const [firstCategoryPosition, setFirstCategoryPosition] = useState(0);
+    const [isSticky, setIsSticky] = useState(false);
+    const [firstCategoryLayout, setFirstCategoryLayout] = useState(null);
     const flatListRef = useRef(null);
     const categoryListRef = useRef(null);
     const debounceTimeoutRef = useRef(null);
+    const firstCategoryHeaderRef = useRef(null);
     const scrollY = useRef(new Animated.Value(0)).current;
+    const stickyAnimatedValue = useRef(new Animated.Value(0)).current;
 
     // Carregar categorias da API
     useEffect(() => {
@@ -334,7 +338,15 @@ export default function MenuCategory({
         }
     };
 
-    // Função de scroll para detectar quando mostrar a barra de categorias
+    // Função para medir a posição da primeira categoria no layout
+    const handleFirstCategoryLayout = (event) => {
+        const { y, height } = event.nativeEvent.layout;
+        if (!firstCategoryLayout || firstCategoryLayout.y !== y) {
+            setFirstCategoryLayout({ y, height });
+        }
+    };
+
+    // Função de scroll para detectar quando mostrar a barra de categorias e quando ficar sticky
     const handleScroll = (event) => {
         const currentScrollY = event.nativeEvent.contentOffset.y;
         scrollY.setValue(currentScrollY);
@@ -343,6 +355,34 @@ export default function MenuCategory({
         const shouldShow = currentScrollY >= firstCategoryPosition - 100; // 100px de margem
         if (shouldShow !== showCategoryBar) {
             setShowCategoryBar(shouldShow);
+        }
+        
+        // Detectar quando a barra deve ficar sticky
+        // A barra fica sticky quando o primeiro categoryHeader realmente encosta no topo
+        // Usando offset bem grande para só ativar quando visualmente passar do topo
+        const STICKY_THRESHOLD = firstCategoryPosition + 555; 
+        const UNSTICKY_THRESHOLD = STICKY_THRESHOLD - 1; // Hysteresis de 150px
+        
+        if (currentScrollY >= STICKY_THRESHOLD) {
+            if (!isSticky) {
+                setIsSticky(true);
+                Animated.timing(stickyAnimatedValue, {
+                    toValue: 1,
+                    duration: 200,
+                    easing: Easing.out(Easing.ease),
+                    useNativeDriver: true,
+                }).start();
+            }
+        } else if (currentScrollY < UNSTICKY_THRESHOLD) {
+            if (isSticky) {
+                setIsSticky(false);
+                Animated.timing(stickyAnimatedValue, {
+                    toValue: 0,
+                    duration: 200,
+                    easing: Easing.in(Easing.ease),
+                    useNativeDriver: true,
+                }).start();
+            }
         }
     };
 
@@ -399,9 +439,12 @@ export default function MenuCategory({
     const renderItem = ({ item }) => {
         if (item.type === 'categoryHeader') {
             return (
-                <View>
+                <View
+                    ref={item.categoryIndex === 0 ? firstCategoryHeaderRef : null}
+                    onLayout={item.categoryIndex === 0 ? handleFirstCategoryLayout : null}
+                >
                     {/* Barra de categorias flutuante - só aparece na primeira categoria */}
-                    {item.categoryIndex === 0 && showCategoryBar && (
+                    {item.categoryIndex === 0 && showCategoryBar && !isSticky && (
                         <View style={styles.floatingCategoryBar}>
                             <FontAwesome name="bars" size={20} color="#888888" style={styles.menuIcon} />
                             <FlatList
@@ -414,6 +457,11 @@ export default function MenuCategory({
                                 contentContainerStyle={styles.categoriesContainer}
                             />
                         </View>
+                    )}
+                    
+                    {/* Espaço em branco quando a barra fica sticky */}
+                    {item.categoryIndex === 0 && isSticky && (
+                        <View style={styles.stickyPlaceholder} />
                     )}
                     
                     <View style={styles.categoryHeader}>
@@ -479,6 +527,29 @@ export default function MenuCategory({
 
     return (
         <View style={styles.container}>
+            {/* Barra de categorias sticky - aparece quando isSticky é true E já fez scroll */}
+            {isSticky && scrollY._value > 0 && (
+                <Animated.View 
+                    style={[
+                        styles.stickyCategoryBar,
+                        {
+                            opacity: stickyAnimatedValue,
+                        }
+                    ]}
+                >
+                    <FontAwesome name="bars" size={20} color="#888888" style={styles.menuIcon} />
+                    <FlatList
+                        ref={categoryListRef}
+                        data={visibleCategories}
+                        renderItem={renderCategoryTab}
+                        keyExtractor={(item) => item.id.toString()}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.categoriesContainer}
+                    />
+                </Animated.View>
+            )}
+            
             {/* Lista principal */}
             <FlatList
                 ref={flatListRef}
@@ -517,6 +588,27 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 10,
+    },
+    stickyPlaceholder: {
+        height: 44, // paddingVertical 12 + 12 = 24 + altura aproximada da barra
+        marginBottom: 10,
+    },
+    stickyCategoryBar: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#fff',
+        paddingVertical: 12,
+        paddingHorizontal: 15,
+        flexDirection: 'row',
+        alignItems: 'center',
+        zIndex: 1000,
+        shadowColor: '#000',
+        shadowOffset: {width: 0, height: 2},
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 4,
     },
     menuIcon: {
         marginRight: 12,

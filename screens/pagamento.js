@@ -15,7 +15,7 @@ const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none
 </svg>`;
 
 const localizationSvg = `<svg width="9" height="13" viewBox="0 0 9 13" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M-9.7692e-05 4.92031C-9.7692e-05 2.47813 2.01553 0.5 4.4999 0.5C6.98428 0.5 8.9999 2.47813 8.9999 4.92031C8.9999 7.71641 6.18272 11.068 5.00615 12.3453C4.72959 12.6453 4.26787 12.6453 3.99131 12.3453C2.81475 11.068 -0.00244141 7.71641 -0.00244141 4.92031H-9.7692e-05ZM4.4999 6.5C5.32725 6.5 5.9999 5.82734 5.9999 5C5.9999 4.17266 5.32725 3.5 4.4999 3.5C3.67256 3.5 2.9999 4.17266 2.9999 5C2.9999 5.82734 3.67256 6.5 4.4999 6.5Z" fill="#888888"/>
+<path d="M-9.7692e-05 4.92031C-9.7692e-05 2.47813 2.01553 0.5 4.4999 0.5C6.98428 0.5 8.9999 2.47813 8.9999 4.92031C8.9999 7.71641 6.18272 11.068 5.00615 12.3453C4.72959 12.6453 4.26787 12.6453 3.99131 12.3453C2.81475 11.068 -0.00244141 7.71641 -0.00244141 4.92031H-9.7692e-05ZM4.4999 6.5C5.32725 6.5 5.9999 5.82734 5.9999 5C5.9999 4.17266 5.32725 3.5 4.4999 3.5C3.67256 3.5 2.9999 4.17266 2.9999 5C2.9999 5.82734 3.67256 6.5 4.4999 6.5Z" fill="#000000"/>
 </svg>`;
 
 const chevronDownSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -34,12 +34,12 @@ const getCashSvg = (isSelected) => `<svg width="36" height="28" viewBox="0 0 36 
 <path d="M10 0C7.79375 0 6 1.79375 6 4V18C6 20.2062 7.79375 22 10 22H32C34.2062 22 36 20.2062 36 18V4C36 1.79375 34.2062 0 32 0H10ZM21 6C23.7625 6 26 8.2375 26 11C26 13.7625 23.7625 16 21 16C18.2375 16 16 13.7625 16 11C16 8.2375 18.2375 6 21 6ZM10 7.5V4.5C10 4.225 10.225 4 10.5 4H13.5C13.775 4 14.0063 4.225 13.9688 4.5C13.7437 6.3125 12.3062 7.74375 10.5 7.96875C10.225 8 10 7.775 10 7.5ZM10 14.5C10 14.225 10.225 13.9937 10.5 14.0312C12.3125 14.2563 13.7437 15.6938 13.9688 17.5C14 17.775 13.775 18 13.5 18H10.5C10.225 18 10 17.775 10 17.5V14.5ZM31.5 7.96875C29.6875 7.74375 28.2563 6.30625 28.0312 4.5C28 4.225 28.225 4 28.5 4H31.5C31.775 4 32 4.225 32 4.5V7.5C32 7.775 31.775 8.00625 31.5 7.96875ZM32 14.5V17.5C32 17.775 31.775 18 31.5 18H28.5C28.225 18 27.9937 17.775 28.0312 17.5C28.2563 15.6875 29.6938 14.2563 31.5 14.0312C31.775 14 32 14.225 32 14.5ZM3 7.5C3 6.66875 2.33125 6 1.5 6C0.66875 6 0 6.66875 0 7.5V24C0 26.2062 1.79375 28 4 28H28.5C29.3312 28 30 27.3312 30 26.5C30 25.6688 29.3312 25 28.5 25H4C3.45 25 3 24.55 3 24V7.5Z" fill="${isSelected ? '#FFC700' : '#101010'}"/>
 </svg>`;
 
-const cpfSvg = `<svg width="20" height="15" viewBox="0 0 20 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M2.5 0C1.12109 0 0 1.12109 0 2.5V12.5C0 13.8789 1.12109 15 2.5 15H17.5C18.8789 15 20 13.8789 20 12.5V2.5C20 1.12109 18.8789 0 17.5 0H2.5ZM6.25 10C6.25 10.6914 5.69141 11.25 5 11.25C4.30859 11.25 3.75 10.6914 3.75 10C3.75 9.30859 4.30859 8.75 5 8.75C5.69141 8.75 6.25 9.30859 6.25 10ZM5 6.25C4.30859 6.25 3.75 5.69141 3.75 5C3.75 4.30859 4.30859 3.75 5 3.75C5.69141 3.75 6.25 4.30859 6.25 5C6.25 5.69141 5.69141 6.25 5 6.25ZM9.6875 4.0625H15.3125C15.832 4.0625 16.25 4.48047 16.25 5C16.25 5.51953 15.832 5.9375 15.3125 5.9375H9.6875C9.16797 5.9375 8.75 5.51953 8.75 5C8.75 4.48047 9.16797 4.0625 9.6875 4.0625ZM9.6875 9.0625H15.3125C15.832 9.0625 16.25 9.48047 16.25 10C16.25 10.5195 15.832 10.9375 15.3125 10.9375H9.6875C9.16797 10.9375 8.75 10.5195 8.75 10C8.75 9.48047 9.16797 9.0625 9.6875 9.0625Z" fill="#101010"/>
-</svg>`;
-
 const infoSvg = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M8 16C12.4187 16 16 12.4187 16 8C16 3.58125 12.4187 0 8 0C3.58125 0 0 3.58125 0 8C0 12.4187 3.58125 16 8 16ZM7 5C7 4.44688 7.44688 4 8 4C8.55313 4 9 4.44688 9 5C9 5.55312 8.55313 6 8 6C7.44688 6 7 5.55312 7 5ZM6.75 7H8.25C8.66562 7 9 7.33437 9 7.75V10.5H9.25C9.66562 10.5 10 10.8344 10 11.25C10 11.6656 9.66562 12 9.25 12H6.75C6.33437 12 6 11.6656 6 11.25C6 10.8344 6.33437 10.5 6.75 10.5H7.5V8.5H6.75C6.33437 8.5 6 8.16562 6 7.75C6 7.33437 6.33437 7 6.75 7Z" fill="#A0A0A0"/>
+</svg>`;
+
+const motoSvg = `<svg width="29" height="22" viewBox="0 0 29 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M12.375 0C11.7516 0 11.25 0.501562 11.25 1.125C11.25 1.74844 11.7516 2.25 12.375 2.25H15.0281L16.0828 4.53281L11.625 7.875C10.0594 6.69844 8.10938 6 6 6H3.375C2.75156 6 2.25 6.50156 2.25 7.125C2.25 7.74844 2.75156 8.25 3.375 8.25H6C9.67969 8.25 12.7125 11.0437 13.0875 14.625H11.8969C11.3719 11.85 8.92969 9.75 6 9.75C2.68594 9.75 0 12.4359 0 15.75C0 19.0641 2.68594 21.75 6 21.75C8.92969 21.75 11.3672 19.65 11.8969 16.875H14.25C14.8734 16.875 15.375 16.3734 15.375 15.75V14.6953C15.375 12.5813 16.5797 10.6922 18.4453 9.64687L19.0125 10.8703C17.4937 11.9578 16.5047 13.7391 16.5047 15.75C16.5047 19.0641 19.1906 21.75 22.5047 21.75C25.8188 21.75 28.5047 19.0641 28.5047 15.75C28.5047 12.4359 25.8188 9.75 22.5047 9.75C22.0031 9.75 21.5203 9.81094 21.0563 9.92812L19.5844 6.75H22.125C22.7484 6.75 23.25 6.24844 23.25 5.625V3.375C23.25 2.75156 22.7484 2.25 22.125 2.25H19.6266C19.3031 2.25 18.9844 2.35312 18.7266 2.55L17.925 3.15L16.7719 0.651563C16.5891 0.253125 16.1906 0 15.75 0H12.375ZM20.1469 13.3312L21.4781 16.2188C21.7406 16.7812 22.4062 17.0297 22.9688 16.7672C23.5312 16.5047 23.7797 15.8391 23.5172 15.2766L22.1813 12.3891C22.2844 12.3797 22.3875 12.375 22.4953 12.375C24.3609 12.375 25.8703 13.8844 25.8703 15.75C25.8703 17.6156 24.3609 19.125 22.4953 19.125C20.6297 19.125 19.1203 17.6156 19.1203 15.75C19.1203 14.8031 19.5094 13.9453 20.1422 13.3312H20.1469ZM6 19.125C4.13438 19.125 2.625 17.6156 2.625 15.75C2.625 13.8844 4.13438 12.375 6 12.375C7.46719 12.375 8.71875 13.3125 9.18281 14.625H6C5.37656 14.625 4.875 15.1266 4.875 15.75C4.875 16.3734 5.37656 16.875 6 16.875H9.18281C8.71875 18.1875 7.46719 19.125 6 19.125Z" fill="black"/>
 </svg>`;
 
 export default function Pagamento({ navigation }) {
@@ -56,6 +56,8 @@ export default function Pagamento({ navigation }) {
     const [enderecoParaEditar, setEnderecoParaEditar] = useState(null);
     const [showTrocoBottomSheet, setShowTrocoBottomSheet] = useState(false);
     const [trocoValue, setTrocoValue] = useState('');
+    const [showReviewBottomSheet, setShowReviewBottomSheet] = useState(false);
+    const trocoValueRef = useRef('');
     const { basketItems } = useBasket();
 
     useEffect(() => {
@@ -286,8 +288,120 @@ export default function Pagamento({ navigation }) {
             alert('Selecione uma forma de pagamento');
             return;
         }
-        console.log('Revisar pedido');
-        // Navegar para próxima tela
+        // Validar se é pagamento em dinheiro e se o valor foi preenchido
+        if (selectedPayment === 'cash' && (!trocoValue.trim() || !isTrocoValueValid())) {
+            // Abrir o bottom sheet de troco novamente
+            setShowTrocoBottomSheet(true);
+            return;
+        }
+        // Abrir bottom sheet de revisão
+        setShowReviewBottomSheet(true);
+    };
+
+    const getPaymentMethodName = () => {
+        if (selectedPayment === 'pix') return 'Pix';
+        if (selectedPayment === 'credit') return 'Cartão de crédito';
+        if (selectedPayment === 'cash') return 'Dinheiro';
+        return '';
+    };
+
+    const getPaymentSubtitle = () => {
+        if (selectedPayment === 'cash' && trocoValue.trim()) {
+            return `Troco para R$${formatCurrency(trocoValue)}`;
+        }
+        return '';
+    };
+
+    // Formatador de moeda: converte número para formato R$ 0,00
+    const formatCurrency = (value) => {
+        // Remove tudo que não for número
+        const numbers = value.replace(/\D/g, '');
+        // Se está vazio, retorna vazio
+        if (numbers.length === 0) return '';
+        
+        // Se tem apenas 1 dígito
+        if (numbers.length === 1) {
+            return `0,0${numbers}`;
+        }
+        
+        // Se tem 2 dígitos
+        if (numbers.length === 2) {
+            return `0,${numbers}`;
+        }
+        
+        // Se tem 3 ou mais dígitos, separa reais e centavos diretamente
+        const cents = numbers.slice(-2);
+        const reais = numbers.slice(0, -2);
+        
+        // Formata com vírgula (sem zeros à esquerda nos reais)
+        return `${reais},${cents}`;
+    };
+
+    // Processa o input de moeda
+    const handleTrocoValueChange = (text) => {
+        // Extrai TODOS os números do texto
+        const allNumbers = text.replace(/[^0-9]/g, '');
+        
+        // Se está vazio, limpa o estado
+        if (allNumbers.length === 0) {
+            setTrocoValue('');
+            trocoValueRef.current = '';
+            return;
+        }
+        
+        // Converte para verificar se ultrapassa o máximo
+        let valueInCents;
+        if (allNumbers.length <= 2) {
+            valueInCents = parseInt(allNumbers);
+        } else {
+            const cents = parseInt(allNumbers.slice(-2));
+            const reais = parseInt(allNumbers.slice(0, -2));
+            valueInCents = reais * 100 + cents;
+        }
+        
+        // Se ultrapassar R$ 1.000,00, não permite
+        if (valueInCents >= 100001) {
+            return; // Não atualiza
+        }
+        
+        // Remove zeros à esquerda desnecessários
+        let cleanDigits = allNumbers;
+        if (allNumbers.length > 2) {
+            const cents = allNumbers.slice(-2);
+            const reaisPart = allNumbers.slice(0, -2);
+            const cleanReais = reaisPart.replace(/^0+/, '') || '';
+            cleanDigits = cleanReais ? cleanReais + cents : cents;
+        }
+        
+        // Limita a 6 dígitos (R$ 1.000,00 = 100000 centavos)
+        const limited = cleanDigits.slice(0, 6);
+        
+        // Atualiza ref e estado
+        trocoValueRef.current = formatCurrency(limited);
+        setTrocoValue(limited);
+    };
+
+    // Verifica se o valor é válido (entre mínimo e máximo)
+    const isTrocoValueValid = () => {
+        const numbers = trocoValue.replace(/\D/g, '');
+        if (numbers.length === 0) return false;
+        
+        // Converte para centavos
+        let valueInCents;
+        if (numbers.length <= 2) {
+            // Tem apenas 1 ou 2 dígitos, são só centavos
+            valueInCents = parseInt(numbers);
+        } else {
+            // Separa reais e centavos
+            const cents = parseInt(numbers.slice(-2));
+            const reais = parseInt(numbers.slice(0, -2));
+            valueInCents = reais * 100 + cents;
+        }
+        
+        const totalInCents = Math.round(calculateFinalTotal() * 100);
+        const maxCents = 100001; // R$ 1.000,01 (aceita até R$ 1.000,00)
+        
+        return valueInCents >= totalInCents && valueInCents < maxCents;
     };
 
     const formatEndereco = (endereco) => {
@@ -491,16 +605,6 @@ export default function Pagamento({ navigation }) {
                         </Text> pontos Royal
                     </Text>
                 </View>
-
-                {/* CPF na nota */}
-                <View style={styles.cpfCard}>
-                    <SvgXml xml={cpfSvg} width={20} height={15} />
-                    <View style={styles.cpfInfo}>
-                        <Text style={styles.cpfTitle}>CPF na nota</Text>
-                        <Text style={styles.cpfOptional}>Opcional</Text>
-                    </View>
-                    <Text style={styles.cpfAdd}>Adicionar</Text>
-                </View>
             </ScrollView>
 
             {/* Footer fixo */}
@@ -531,20 +635,36 @@ export default function Pagamento({ navigation }) {
                     <Text style={styles.trocoDescription}>
                         Digite o valor em dinheiro que será usado para pagar o pedido, para que assim, caso seja necessário troco, o entregador levar.
                     </Text>
-                    <Text style={styles.trocoInputLabel}>Valor</Text>
+                    <Text style={styles.trocoInputLabel}>Valor mínimo: R$ {calculateFinalTotal().toFixed(2).replace('.', ',')}</Text>
                     <TextInput
-                        style={styles.trocoInput}
+                        style={[styles.trocoInput, !isTrocoValueValid() && trocoValue.length > 0 && styles.trocoInputError]}
                         placeholder="0,00"
-                        value={trocoValue}
-                        onChangeText={setTrocoValue}
+                        value={trocoValue.length > 0 ? formatCurrency(trocoValue) : ''}
+                        onChangeText={handleTrocoValueChange}
                         keyboardType="numeric"
                     />
+                    {!isTrocoValueValid() && trocoValue.length > 0 && (
+                        <Text style={styles.trocoErrorText}>
+                            O valor deve ser maior ou igual a R$ {calculateFinalTotal().toFixed(2).replace('.', ',')}
+                        </Text>
+                    )}
                     <TouchableOpacity 
-                        style={styles.trocoConfirmButton}
-                        onPress={() => setShowTrocoBottomSheet(false)}
+                        style={[styles.trocoConfirmButton, (!trocoValue.trim() || !isTrocoValueValid()) && styles.trocoConfirmButtonDisabled]}
+                        onPress={() => {
+                            if (!trocoValue.trim()) {
+                                alert('Por favor, preencha o valor');
+                                return;
+                            }
+                            if (!isTrocoValueValid()) {
+                                alert(`O valor deve ser maior ou igual a R$ ${calculateFinalTotal().toFixed(2).replace('.', ',')}`);
+                                return;
+                            }
+                            setShowTrocoBottomSheet(false);
+                        }}
                         activeOpacity={0.8}
+                        disabled={!trocoValue.trim() || !isTrocoValueValid()}
                     >
-                        <Text style={styles.trocoConfirmButtonText}>Confirmar</Text>
+                        <Text style={[styles.trocoConfirmButtonText, (!trocoValue.trim() || !isTrocoValueValid()) && styles.trocoConfirmButtonTextDisabled]}>Confirmar</Text>
                     </TouchableOpacity>
                 </View>
             </BottomSheet>
@@ -571,6 +691,78 @@ export default function Pagamento({ navigation }) {
                 onDelete={handleDeleteEndereco}
                 enderecos={enderecos}
             />
+
+            {/* Bottom Sheet de Revisão do Pedido */}
+            <BottomSheet 
+                visible={showReviewBottomSheet} 
+                onClose={() => setShowReviewBottomSheet(false)}
+                heightPercentage={0.7}
+            >
+                <View style={styles.reviewBottomSheetContent}>
+                    <Text style={styles.reviewTitle}>Revise o seu pedido</Text>
+                    
+                    {/* Entrega */}
+                    <View style={styles.reviewInfoCard}>
+                        <View style={styles.reviewIcon}>
+                            <SvgXml xml={motoSvg} width={29} height={22} />
+                        </View>
+                        <View style={styles.reviewInfo}>
+                            <Text style={styles.reviewInfoTitle}>Entrega hoje</Text>
+                            <Text style={styles.reviewInfoSubtitle}>Hoje, 40 - 50 min</Text>
+                        </View>
+                    </View>
+
+                    {/* Endereço */}
+                    <View style={styles.reviewInfoCard}>
+                        <View style={styles.reviewIcon}>
+                            <SvgXml xml={localizationSvg} width={16} height={24} />
+                        </View>
+                        <View style={styles.reviewInfo}>
+                            <Text style={styles.reviewInfoTitle}>{formatEndereco(enderecoSelecionado)}</Text>
+                            <Text style={styles.reviewInfoSubtitle}>
+                                {enderecoSelecionado?.neighborhood || ''} {enderecoSelecionado?.complement ? `- ${enderecoSelecionado.complement}` : ''}
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* Pagamento */}
+                    <View style={styles.reviewInfoCard}>
+                        <View style={styles.reviewIcon}>
+                            <SvgXml xml={
+                                selectedPayment === 'pix' ? getPixSvg(false) :
+                                selectedPayment === 'credit' ? getCreditCardSvg(false) :
+                                getCashSvg(false)
+                            } width={24} height={24} />
+                        </View>
+                        <View style={styles.reviewInfo}>
+                            <Text style={styles.reviewInfoTitle}>Pagamento na entrega</Text>
+                            <Text style={styles.reviewInfoSubtitle}>
+                                {getPaymentMethodName()}{getPaymentSubtitle() ? ` - ${getPaymentSubtitle()}` : ''}
+                            </Text>
+                        </View>
+                    </View>
+
+                    <TouchableOpacity 
+                        style={styles.confirmOrderButton}
+                        onPress={() => {
+                            console.log('Pedido confirmado');
+                            // Aqui você pode navegar para a próxima tela
+                            setShowReviewBottomSheet(false);
+                        }}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={styles.confirmOrderButtonText}>Confirmar pedido</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        style={styles.changeOrderButton}
+                        onPress={() => setShowReviewBottomSheet(false)}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.changeOrderButtonText}>Alterar pedido</Text>
+                    </TouchableOpacity>
+                </View>
+            </BottomSheet>
         </View>
     );
 }
@@ -766,34 +958,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666666',
     },
-    cpfCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        padding: 16,
-        borderRadius: 8,
-        marginTop: 8,
-        marginBottom: 20,
-        marginHorizontal: 16,
-    },
-    cpfInfo: {
-        flex: 1,
-        marginLeft: 12,
-    },
-    cpfTitle: {
-        fontSize: 16,
-        color: '#000000',
-        fontWeight: '500',
-    },
-    cpfOptional: {
-        fontSize: 12,
-        color: '#888888',
-    },
-    cpfAdd: {
-        fontSize: 16,
-        color: '#000000',
-        fontWeight: '500',
-    },
     footer: {
         position: 'absolute',
         bottom: 0,
@@ -872,7 +1036,16 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         fontSize: 16,
         color: '#000000',
-        marginBottom: 32,
+        marginBottom: 8,
+    },
+    trocoInputError: {
+        borderWidth: 1,
+        borderColor: '#FF0000',
+    },
+    trocoErrorText: {
+        fontSize: 12,
+        color: '#FF0000',
+        marginBottom: 24,
     },
     trocoConfirmButton: {
         backgroundColor: '#FFC700',
@@ -884,6 +1057,72 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#000000',
         fontWeight: 'bold',
+    },
+    trocoConfirmButtonDisabled: {
+        backgroundColor: '#D9D9D9',
+    },
+    trocoConfirmButtonTextDisabled: {
+        color: '#888888',
+    },
+    reviewBottomSheetContent: {
+        flex: 1,
+        paddingTop: 20,
+    },
+    reviewTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#000000',
+        marginBottom: 24,
+    },
+    reviewInfoCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    reviewIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#F5F5F5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    reviewInfo: {
+        flex: 1,
+    },
+    reviewInfoTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#000000',
+        marginBottom: 4,
+    },
+    reviewInfoSubtitle: {
+        fontSize: 14,
+        color: '#888888',
+    },
+    confirmOrderButton: {
+        backgroundColor: '#FFC700',
+        borderRadius: 8,
+        paddingVertical: 16,
+        alignItems: 'center',
+        marginTop: 20,
+        marginBottom: 16,
+    },
+    confirmOrderButtonText: {
+        fontSize: 16,
+        color: '#000000',
+        fontWeight: 'bold',
+    },
+    changeOrderButton: {
+        alignItems: 'center',
+        paddingVertical: 12,
+    },
+    changeOrderButtonText: {
+        fontSize: 16,
+        color: '#3D1807',
+        fontWeight: 'bold',
+        textDecorationLine: 'underline',    
     },
 });
 
