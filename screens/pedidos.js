@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import Header from '../components/Header';
 import MenuNavigation from '../components/MenuNavigation';
+import CardPedido from '../components/CardPedido';
 import { isAuthenticated, getStoredUserData } from '../services/userService';
 import { getCustomerAddresses, getLoyaltyBalance } from '../services/customerService';
+import { getMyOrders } from '../services/orderService';
 
 export default function Pedidos({ navigation }) {
   const isFocused = useIsFocused();
@@ -14,6 +16,8 @@ export default function Pedidos({ navigation }) {
   const [enderecoAtivo, setEnderecoAtivo] = useState(null);
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
   const [loadingPoints, setLoadingPoints] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
 
   const fetchEnderecos = async (userId) => {
     try {
@@ -68,6 +72,48 @@ export default function Pedidos({ navigation }) {
     }
   };
 
+  const fetchOrders = async () => {
+    try {
+      setLoadingOrders(true);
+      const response = await getMyOrders();
+      
+      // A API retorna um array diretamente ou um objeto com data
+      let ordersList = [];
+      if (Array.isArray(response)) {
+        ordersList = response;
+      } else if (response && Array.isArray(response.data)) {
+        ordersList = response.data;
+      } else if (response && Array.isArray(response.orders)) {
+        ordersList = response.orders;
+      }
+      
+      setOrders(ordersList);
+    } catch (error) {
+      console.error('Erro ao buscar pedidos:', error);
+      setOrders([]);
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  const handleAcompanharPedido = (pedido) => {
+    // TODO: Implementar navegação para tela de acompanhamento
+    console.log('Acompanhar pedido:', pedido.id);
+    // navigation.navigate('AcompanharPedido', { orderId: pedido.id });
+  };
+
+  const handleVerDetalhes = (pedido) => {
+    // TODO: Implementar navegação para tela de detalhes
+    console.log('Ver detalhes do pedido:', pedido.id);
+    // navigation.navigate('DetalhesPedido', { orderId: pedido.id });
+  };
+
+  const handleAdicionarCesta = (pedido) => {
+    // TODO: Implementar adição dos itens do pedido à cesta
+    console.log('Adicionar à cesta:', pedido.id);
+    // Implementar lógica para adicionar itens do pedido ao carrinho
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -80,6 +126,7 @@ export default function Pedidos({ navigation }) {
           if (user?.id) {
             await fetchEnderecos(user.id);
             const points = await fetchLoyaltyBalance(user.id);
+            await fetchOrders();
             
             // Normaliza campos esperados pelo Header APÓS buscar os pontos
             const normalized = {
@@ -95,11 +142,13 @@ export default function Pedidos({ navigation }) {
         } else {
           setUserInfo(null);
           setEnderecos([]);
+          setOrders([]);
         }
       } catch (e) {
         setLoggedIn(false);
         setUserInfo(null);
         setEnderecos([]);
+        setOrders([]);
       }
     };
     checkAuth();
@@ -119,7 +168,44 @@ export default function Pedidos({ navigation }) {
       />
       
       <View style={styles.content}>
-        {/* Conteúdo dos pedidos será adicionado aqui */}
+        {loadingOrders ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#FFC107" />
+            <Text style={styles.loadingText}>Carregando pedidos...</Text>
+          </View>
+        ) : (!loadingOrders && orders.length === 0) ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyTitle}>
+              Ainda sem pedidos registrados? O trono da Royal Burger está à sua espera, pronto para um sabor real!
+            </Text>
+            <TouchableOpacity
+              style={styles.ctaButton}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('Home')}
+            >
+              <Text style={styles.ctaButtonText}>Ir para o início</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <ScrollView style={styles.ordersList} showsVerticalScrollIndicator={false}>
+            <Text style={styles.sectionTitle}>Histórico de pedidos</Text>
+            {orders
+              .filter(pedido => {
+                const status = pedido.status?.toLowerCase();
+                // Exclui pedidos em andamento
+                return !(status === 'pending' || status === 'processing' || status === 'preparing');
+              })
+              .map((pedido) => (
+                <CardPedido
+                  key={pedido.id}
+                  pedido={pedido}
+                  onAcompanhar={handleAcompanharPedido}
+                  onVerDetalhes={handleVerDetalhes}
+                  onAdicionarCesta={handleAdicionarCesta}
+                />
+              ))}
+          </ScrollView>
+        )}
       </View>
       
       <View style={styles.menuNavigationContainer}>
@@ -138,6 +224,58 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
+  },
+  ordersList: {
+    flex: 1,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#101010',
+    marginBottom: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: '#666',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#101010',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 30,
+  },
+  ctaButton: {
+    backgroundColor: '#FFC107',
+    borderRadius: 12,
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  ctaButtonText: {
+    color: '#101010',
+    fontSize: 16,
+    fontWeight: '600',
   },
   menuNavigationContainer: {
     position: 'absolute',
