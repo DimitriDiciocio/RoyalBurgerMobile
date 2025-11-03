@@ -1,54 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import Header from '../components/Header';
 import MenuNavigation from '../components/MenuNavigation';
 import CardPedido from '../components/CardPedido';
-import { isAuthenticated, getStoredUserData } from '../services/userService';
-import { getCustomerAddresses, getLoyaltyBalance } from '../services/customerService';
-import { getMyOrders, getOrderById } from '../services/orderService';
+import { isAuthenticated } from '../services/userService';
+import { useUserCache } from '../hooks/useUserCache';
+import { getMyOrders } from '../services/orderService';
 
 export default function Pedidos({ navigation }) {
   const isFocused = useIsFocused();
+  const { userInfo: cachedUserInfo, userData, addresses: cachedAddresses, isHeaderReady, loading: cacheLoading } = useUserCache();
   const [loggedIn, setLoggedIn] = useState(false);
-  const [userInfo, setUserInfo] = useState(null);
-  const [customerInfo, setCustomerInfo] = useState(null);
   const [enderecos, setEnderecos] = useState([]);
   const [enderecoAtivo, setEnderecoAtivo] = useState(null);
-  const [loyaltyBalance, setLoyaltyBalance] = useState(0);
-  const [loadingPoints, setLoadingPoints] = useState(false);
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
 
-  const fetchEnderecos = async (userId) => {
-    try {
-      const enderecosData = await getCustomerAddresses(userId);
-      setEnderecos(enderecosData || []);
-      // Selecionar endereço padrão
-      const enderecoPadrao = enderecosData?.find(e => e.is_default || e.isDefault);
-      setEnderecoAtivo(enderecoPadrao || null);
-    } catch (error) {
-      console.error('Erro ao buscar endereços:', error);
-      setEnderecos([]);
-      setEnderecoAtivo(null);
+  // Usa endereços do cache primeiro
+  useEffect(() => {
+    if (cachedAddresses.length > 0) {
+      setEnderecos(cachedAddresses);
+      const enderecoPadrao = cachedAddresses.find(e => e.is_default || e.isDefault);
+      setEnderecoAtivo(enderecoPadrao || cachedAddresses[0] || null);
     }
-  };
-
-  const fetchLoyaltyBalance = async (userId) => {
-    try {
-      setLoadingPoints(true);
-      const balance = await getLoyaltyBalance(userId);
-      const points = balance?.current_balance || 0;
-      setLoyaltyBalance(points);
-      return points;
-    } catch (error) {
-      console.error('Erro ao buscar pontos:', error);
-      setLoyaltyBalance(0);
-      return 0;
-    } finally {
-      setLoadingPoints(false);
-    }
-  };
+  }, [cachedAddresses]);
 
   const handleEnderecoAtivoChange = (data) => {
     // Verificação de segurança para evitar erro quando data é null
@@ -82,7 +58,7 @@ export default function Pedidos({ navigation }) {
       setLoadingOrders(true);
       const response = await getMyOrders();
       
-      // A API retorna um array diretamente ou um objeto com data
+      // A API agora retorna um array diretamente com items e total já incluídos (otimizado)
       let ordersList = [];
       if (Array.isArray(response)) {
         ordersList = response;
@@ -92,47 +68,21 @@ export default function Pedidos({ navigation }) {
         ordersList = response.orders;
       }
       
-      // Buscar detalhes completos de cada pedido se não tiver items/total
-      const ordersWithDetails = await Promise.all(ordersList.map(async (order) => {
-        // Se já tem items e total, retorna como está
-        if (order.items && order.items.length > 0 && (order.total_amount || order.total)) {
-          return order;
-        }
-        
-        // Caso contrário, busca detalhes completos
-        try {
-          const orderId = order.order_id || order.id;
-          const details = await getOrderById(orderId);
-          
-          // Combina dados básicos com detalhes completos
-          return {
-            ...order,
-            ...details,
-            items: details?.items || order.items || [],
-            total: details?.total_amount || order.total_amount || order.total,
-            address: details?.address || order.address
-          };
-        } catch (error) {
-          console.error(`Erro ao buscar detalhes do pedido ${order.order_id}:`, error);
-          return order;
-        }
-      }));
-      
-      // Normalizar os dados para o formato esperado pelo CardPedido
-      const normalizedOrders = ordersWithDetails.map(order => {
-        // Mapear items para o formato esperado
+      // Normalizar os dados - a API já retorna items e total, apenas normalizamos formato
+      const normalizedOrders = ordersList.map(order => {
+        // Items já vêm da API otimizada, apenas garante formato consistente
         const mappedItems = (order.items || []).map(item => ({
-          quantity: item.quantity,
+          quantity: item.quantity || 1,
           name: item.product_name || item.name,
           product_name: item.product_name || item.name
         }));
         
-        // Normalizar endereço
+        // Normalizar endereço (já vem como objeto da API otimizada)
         let address = order.address;
         if (typeof address === 'string') {
           address = { street: address };
-        } else if (!address && order.address_id) {
-          // Se não tem endereço mas tem address_id, pode buscar depois
+        } else if (!address || (typeof address === 'object' && !address.street)) {
+          // Se não tem endereço mas tem address_id, usa fallback
           address = { street: 'Endereço não disponível' };
         } else if (address && typeof address === 'object') {
           // Preserva todos os campos do endereço (street, number, neighborhood, complement, etc)
@@ -145,11 +95,11 @@ export default function Pedidos({ navigation }) {
           created_at: order.created_at,
           order_id: order.order_id || order.id,
           items: mappedItems,
-          total: order.total_amount || order.total,
-          order_total: order.total_amount || order.total,
+          total: order.total_amount || order.total || 0,
+          order_total: order.total_amount || order.total || 0,
           address: address,
           confirmation_code: order.confirmation_code,
-          order_type: order.order_type
+          order_type: order.order_type,
         };
       });
       
@@ -160,29 +110,39 @@ export default function Pedidos({ navigation }) {
         return dateB - dateA;
       });
       
+      // Define pedidos - não precisa mais buscar detalhes em background
+      // A API otimizada já retorna tudo necessário
       setOrders(normalizedOrders);
+      setLoadingOrders(false);
     } catch (error) {
       console.error('Erro ao buscar pedidos:', error);
       setOrders([]);
-    } finally {
       setLoadingOrders(false);
     }
   };
 
-  // Separar pedidos em andamento do histórico
-  const getOrdersInProgress = () => {
+  // Separar pedidos em andamento do histórico (usando useMemo para otimizar)
+  const getOrdersInProgress = useMemo(() => {
     return orders.filter(pedido => {
       const status = pedido.status?.toLowerCase();
       return status === 'pending' || status === 'processing' || status === 'preparing';
     });
-  };
+  }, [orders]);
 
-  const getOrdersHistory = () => {
+  const getOrdersHistory = useMemo(() => {
     return orders.filter(pedido => {
       const status = pedido.status?.toLowerCase();
       return !(status === 'pending' || status === 'processing' || status === 'preparing');
     });
-  };
+  }, [orders]);
+
+  // Informações do cliente para CardPedido (usa cache) - DEVE VIR ANTES DE QUALQUER RETURN CONDICIONAL
+  const customerInfo = useMemo(() => ({
+    name: cachedUserInfo?.name || userData?.full_name || userData?.name || 'Usuário',
+    nomeCompleto: userData?.full_name || userData?.name || 'Usuário',
+    telefone: userData?.phone || userData?.telefone,
+    phone: userData?.phone || userData?.telefone,
+  }), [cachedUserInfo?.name, userData]);
 
   const handleAcompanharPedido = (pedido) => {
     // Mock: Por enquanto apenas mostra um alerta
@@ -208,63 +168,49 @@ export default function Pedidos({ navigation }) {
       try {
         const ok = await isAuthenticated();
         setLoggedIn(!!ok);
-        if (ok) {
-          const user = await getStoredUserData();
-          
-          // Buscar endereços e pontos se o usuário estiver logado
-          if (user?.id) {
-            await fetchEnderecos(user.id);
-            const points = await fetchLoyaltyBalance(user.id);
-            await fetchOrders();
-            
-            // Normaliza campos esperados pelo Header APÓS buscar os pontos
-            const normalized = {
-              name: user.full_name || user.name || 'Usuário',
-              points: points.toString(), // Usa os pontos da API
-              address: user.address || undefined,
-              avatar: undefined,
-            };
-            setUserInfo(normalized);
-            
-            // Salvar informações do cliente para usar no CardPedido
-            setCustomerInfo({
-              name: user.full_name || user.name || 'Usuário',
-              nomeCompleto: user.full_name || user.name,
-              telefone: user.phone || user.telefone,
-              phone: user.phone || user.telefone,
-            });
-          } else {
-            setUserInfo(null);
-            setLoadingOrders(false);
+        if (ok && userData?.id) {
+          // Usa endereços do cache se disponíveis
+          if (cachedAddresses.length > 0) {
+            setEnderecos(cachedAddresses);
+            const enderecoPadrao = cachedAddresses.find(e => e.is_default || e.isDefault);
+            setEnderecoAtivo(enderecoPadrao || cachedAddresses[0] || null);
           }
+          
+          // Busca pedidos imediatamente (sem esperar endereços/pontos)
+          // Isso permite que a tela carregue mais rápido
+          fetchOrders();
         } else {
-          setUserInfo(null);
-          setEnderecos([]);
           setOrders([]);
           setLoadingOrders(false);
         }
       } catch (e) {
+        console.error('Erro ao verificar autenticação:', e);
         setLoggedIn(false);
-        setUserInfo(null);
-        setEnderecos([]);
         setOrders([]);
         setLoadingOrders(false);
       }
     };
     checkAuth();
-  }, [isFocused]);
+  }, [isFocused, userData?.id, cachedAddresses]);
+
+  // Não renderiza enquanto header não estiver pronto
+  if (!isHeaderReady || cacheLoading || !cachedUserInfo?.name) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#FFC700" style={{ flex: 1, justifyContent: 'center' }} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <Header 
         type="logged"
-        userInfo={userInfo}
         navigation={navigation}
         title="Meus Pedidos"
         subtitle="Acompanhe seus pedidos"
-        enderecos={enderecos}
+        enderecos={enderecos.length > 0 ? enderecos : cachedAddresses}
         onEnderecoAtivoChange={handleEnderecoAtivoChange}
-        loadingPoints={loadingPoints}
       />
       
       <View style={styles.content}>
@@ -293,10 +239,10 @@ export default function Pedidos({ navigation }) {
             contentContainerStyle={styles.scrollContent}
           >
             {/* Pedidos em andamento */}
-            {getOrdersInProgress().length > 0 && (
+            {getOrdersInProgress.length > 0 && (
               <>
                 <Text style={styles.sectionTitle}>Pedidos em andamento</Text>
-                {getOrdersInProgress().map((pedido) => (
+                {getOrdersInProgress.map((pedido) => (
                   <CardPedido
                     key={pedido.id}
                     pedido={pedido}
@@ -310,12 +256,12 @@ export default function Pedidos({ navigation }) {
             )}
 
             {/* Histórico de pedidos */}
-            {getOrdersHistory().length > 0 && (
+            {getOrdersHistory.length > 0 && (
               <>
-                <Text style={[styles.sectionTitle, getOrdersInProgress().length > 0 && styles.sectionTitleWithMargin]}>
+                <Text style={[styles.sectionTitle, getOrdersInProgress.length > 0 && styles.sectionTitleWithMargin]}>
                   Histórico de pedidos
                 </Text>
-                {getOrdersHistory().map((pedido) => (
+                {getOrdersHistory.map((pedido) => (
                   <CardPedido
                     key={pedido.id}
                     pedido={pedido}
@@ -329,7 +275,7 @@ export default function Pedidos({ navigation }) {
             )}
 
             {/* Mensagem quando não há pedidos */}
-            {getOrdersInProgress().length === 0 && getOrdersHistory().length === 0 && (
+            {getOrdersInProgress.length === 0 && getOrdersHistory.length === 0 && (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyTitle}>
                   Ainda sem pedidos registrados? O trono da Royal Burger está à sua espera, pronto para um sabor real!
