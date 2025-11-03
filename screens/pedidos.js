@@ -6,19 +6,19 @@ import MenuNavigation from '../components/MenuNavigation';
 import CardPedido from '../components/CardPedido';
 import { isAuthenticated, getStoredUserData } from '../services/userService';
 import { getCustomerAddresses, getLoyaltyBalance } from '../services/customerService';
-import { getMyOrders } from '../services/orderService';
+import { getMyOrders, getOrderById } from '../services/orderService';
 
 export default function Pedidos({ navigation }) {
   const isFocused = useIsFocused();
   const [loggedIn, setLoggedIn] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  const [customerInfo, setCustomerInfo] = useState(null);
   const [enderecos, setEnderecos] = useState([]);
   const [enderecoAtivo, setEnderecoAtivo] = useState(null);
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
   const [loadingPoints, setLoadingPoints] = useState(false);
   const [orders, setOrders] = useState([]);
-
-  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [loadingOrders, setLoadingOrders] = useState(true);
 
   const fetchEnderecos = async (userId) => {
     try {
@@ -92,7 +92,75 @@ export default function Pedidos({ navigation }) {
         ordersList = response.orders;
       }
       
-      setOrders(ordersList);
+      // Buscar detalhes completos de cada pedido se não tiver items/total
+      const ordersWithDetails = await Promise.all(ordersList.map(async (order) => {
+        // Se já tem items e total, retorna como está
+        if (order.items && order.items.length > 0 && (order.total_amount || order.total)) {
+          return order;
+        }
+        
+        // Caso contrário, busca detalhes completos
+        try {
+          const orderId = order.order_id || order.id;
+          const details = await getOrderById(orderId);
+          
+          // Combina dados básicos com detalhes completos
+          return {
+            ...order,
+            ...details,
+            items: details?.items || order.items || [],
+            total: details?.total_amount || order.total_amount || order.total,
+            address: details?.address || order.address
+          };
+        } catch (error) {
+          console.error(`Erro ao buscar detalhes do pedido ${order.order_id}:`, error);
+          return order;
+        }
+      }));
+      
+      // Normalizar os dados para o formato esperado pelo CardPedido
+      const normalizedOrders = ordersWithDetails.map(order => {
+        // Mapear items para o formato esperado
+        const mappedItems = (order.items || []).map(item => ({
+          quantity: item.quantity,
+          name: item.product_name || item.name,
+          product_name: item.product_name || item.name
+        }));
+        
+        // Normalizar endereço
+        let address = order.address;
+        if (typeof address === 'string') {
+          address = { street: address };
+        } else if (!address && order.address_id) {
+          // Se não tem endereço mas tem address_id, pode buscar depois
+          address = { street: 'Endereço não disponível' };
+        } else if (address && typeof address === 'object') {
+          // Preserva todos os campos do endereço (street, number, neighborhood, complement, etc)
+          address = address;
+        }
+        
+        return {
+          id: order.order_id || order.id,
+          status: order.status,
+          created_at: order.created_at,
+          order_id: order.order_id || order.id,
+          items: mappedItems,
+          total: order.total_amount || order.total,
+          order_total: order.total_amount || order.total,
+          address: address,
+          confirmation_code: order.confirmation_code,
+          order_type: order.order_type
+        };
+      });
+      
+      // Ordenar pedidos por data (mais recentes primeiro)
+      normalizedOrders.sort((a, b) => {
+        const dateA = new Date(a.created_at || a.createdAt || 0);
+        const dateB = new Date(b.created_at || b.createdAt || 0);
+        return dateB - dateA;
+      });
+      
+      setOrders(normalizedOrders);
     } catch (error) {
       console.error('Erro ao buscar pedidos:', error);
       setOrders([]);
@@ -101,10 +169,26 @@ export default function Pedidos({ navigation }) {
     }
   };
 
+  // Separar pedidos em andamento do histórico
+  const getOrdersInProgress = () => {
+    return orders.filter(pedido => {
+      const status = pedido.status?.toLowerCase();
+      return status === 'pending' || status === 'processing' || status === 'preparing';
+    });
+  };
+
+  const getOrdersHistory = () => {
+    return orders.filter(pedido => {
+      const status = pedido.status?.toLowerCase();
+      return !(status === 'pending' || status === 'processing' || status === 'preparing');
+    });
+  };
+
   const handleAcompanharPedido = (pedido) => {
-    // TODO: Implementar navegação para tela de acompanhamento
+    // Mock: Por enquanto apenas mostra um alerta
     console.log('Acompanhar pedido:', pedido.id);
-    // navigation.navigate('AcompanharPedido', { orderId: pedido.id });
+    alert(`Acompanhando pedido #${pedido.id}\n\nEm breve, você poderá acompanhar o status do seu pedido em tempo real!`);
+    // TODO: navigation.navigate('AcompanharPedido', { orderId: pedido.id });
   };
 
   const handleVerDetalhes = (pedido) => {
@@ -141,19 +225,30 @@ export default function Pedidos({ navigation }) {
               avatar: undefined,
             };
             setUserInfo(normalized);
+            
+            // Salvar informações do cliente para usar no CardPedido
+            setCustomerInfo({
+              name: user.full_name || user.name || 'Usuário',
+              nomeCompleto: user.full_name || user.name,
+              telefone: user.phone || user.telefone,
+              phone: user.phone || user.telefone,
+            });
           } else {
             setUserInfo(null);
+            setLoadingOrders(false);
           }
         } else {
           setUserInfo(null);
           setEnderecos([]);
           setOrders([]);
+          setLoadingOrders(false);
         }
       } catch (e) {
         setLoggedIn(false);
         setUserInfo(null);
         setEnderecos([]);
         setOrders([]);
+        setLoadingOrders(false);
       }
     };
     checkAuth();
@@ -178,7 +273,7 @@ export default function Pedidos({ navigation }) {
             <ActivityIndicator size="large" color="#FFC107" />
             <Text style={styles.loadingText}>Carregando pedidos...</Text>
           </View>
-        ) : (!loadingOrders && orders.length === 0) ? (
+        ) : orders.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyTitle}>
               Ainda sem pedidos registrados? O trono da Royal Burger está à sua espera, pronto para um sabor real!
@@ -192,23 +287,62 @@ export default function Pedidos({ navigation }) {
             </TouchableOpacity>
           </View>
         ) : (
-          <ScrollView style={styles.ordersList} showsVerticalScrollIndicator={false}>
-            <Text style={styles.sectionTitle}>Histórico de pedidos</Text>
-            {orders
-              .filter(pedido => {
-                const status = pedido.status?.toLowerCase();
-                // Exclui pedidos em andamento
-                return !(status === 'pending' || status === 'processing' || status === 'preparing');
-              })
-              .map((pedido) => (
-                <CardPedido
-                  key={pedido.id}
-                  pedido={pedido}
-                  onAcompanhar={handleAcompanharPedido}
-                  onVerDetalhes={handleVerDetalhes}
-                  onAdicionarCesta={handleAdicionarCesta}
-                />
-              ))}
+          <ScrollView 
+            style={styles.ordersList} 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {/* Pedidos em andamento */}
+            {getOrdersInProgress().length > 0 && (
+              <>
+                <Text style={styles.sectionTitle}>Pedidos em andamento</Text>
+                {getOrdersInProgress().map((pedido) => (
+                  <CardPedido
+                    key={pedido.id}
+                    pedido={pedido}
+                    customerInfo={customerInfo}
+                    onAcompanhar={handleAcompanharPedido}
+                    onVerDetalhes={handleVerDetalhes}
+                    onAdicionarCesta={handleAdicionarCesta}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* Histórico de pedidos */}
+            {getOrdersHistory().length > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, getOrdersInProgress().length > 0 && styles.sectionTitleWithMargin]}>
+                  Histórico de pedidos
+                </Text>
+                {getOrdersHistory().map((pedido) => (
+                  <CardPedido
+                    key={pedido.id}
+                    pedido={pedido}
+                    customerInfo={customerInfo}
+                    onAcompanhar={handleAcompanharPedido}
+                    onVerDetalhes={handleVerDetalhes}
+                    onAdicionarCesta={handleAdicionarCesta}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* Mensagem quando não há pedidos */}
+            {getOrdersInProgress().length === 0 && getOrdersHistory().length === 0 && (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyTitle}>
+                  Ainda sem pedidos registrados? O trono da Royal Burger está à sua espera, pronto para um sabor real!
+                </Text>
+                <TouchableOpacity
+                  style={styles.ctaButton}
+                  activeOpacity={0.8}
+                  onPress={() => navigation.navigate('Home')}
+                >
+                  <Text style={styles.ctaButtonText}>Ir para o início</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </ScrollView>
         )}
       </View>
@@ -233,11 +367,18 @@ const styles = StyleSheet.create({
   ordersList: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 100,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#101010',
     marginBottom: 16,
+    marginTop: 0,
+  },
+  sectionTitleWithMargin: {
+    marginTop: 24,
   },
   loadingContainer: {
     flex: 1,
