@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, ActivityIn
 import { SvgXml } from 'react-native-svg';
 import Header from '../components/Header';
 import { isAuthenticated, getStoredUserData } from '../services';
-import { getLoyaltyBalance } from '../services/customerService';
+import { getLoyaltyBalance, getCustomerAddresses } from '../services/customerService';
 import { useBasket } from '../contexts/BasketContext';
 import ItensCesta from '../components/itensCesta';
 import CardItemVerticalAdd from '../components/CardItemVerticalAdd';
@@ -17,11 +17,54 @@ export default function Cesta({ navigation }) {
     const [userInfo, setUserInfo] = useState(null);
     const [loadingPoints, setLoadingPoints] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [enderecos, setEnderecos] = useState([]);
+    const [enderecoAtivo, setEnderecoAtivo] = useState(null);
     const { basketItems, removeFromBasket, updateBasketItem, clearBasket, addToBasket } = useBasket();
     
     // Calcular total real dos itens da cesta
     const calculateTotal = () => {
         return basketItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+    };
+
+    const fetchEnderecos = async (userId) => {
+        try {
+            const enderecosData = await getCustomerAddresses(userId);
+            setEnderecos(enderecosData || []);
+            // Selecionar endereço padrão
+            const enderecoPadrao = enderecosData?.find(e => e.is_default || e.isDefault);
+            setEnderecoAtivo(enderecoPadrao || null);
+        } catch (error) {
+            console.error('Erro ao buscar endereços:', error);
+            setEnderecos([]);
+            setEnderecoAtivo(null);
+        }
+    };
+
+    const handleEnderecoAtivoChange = (data) => {
+        // Verificação de segurança para evitar erro quando data é null
+        if (!data) return;
+        
+        if (typeof data === 'object' && data.type === 'refresh') {
+            // Atualiza a lista de endereços
+            setEnderecos(data.enderecos);
+            // Se tem endereço ativo específico, usa ele, senão define baseado na lista
+            if (data.enderecoAtivo) {
+                setEnderecoAtivo(data.enderecoAtivo);
+            } else if (data.enderecos && data.enderecos.length > 0) {
+                const enderecoPadrao = data.enderecos.find(e => e.is_default === true || e.isDefault === true);
+                if (enderecoPadrao) {
+                    setEnderecoAtivo(enderecoPadrao);
+                } else {
+                    const enderecosOrdenados = [...data.enderecos].sort((a, b) => 
+                        new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0)
+                    );
+                    setEnderecoAtivo(enderecosOrdenados[0]);
+                }
+            }
+        } else {
+            // Endereço ativo mudou
+            setEnderecoAtivo(data);
+        }
     };
 
     useEffect(() => {
@@ -50,6 +93,9 @@ export default function Cesta({ navigation }) {
                         } finally {
                             setLoadingPoints(false);
                         }
+
+                        // Buscar endereços do cliente
+                        await fetchEnderecos(user.id);
                     } else {
                         points = user?.points || '0';
                     }
@@ -63,11 +109,15 @@ export default function Cesta({ navigation }) {
                     setUserInfo(normalized);
                 } else {
                     setUserInfo(null);
+                    setEnderecos([]);
+                    setEnderecoAtivo(null);
                 }
             } catch (e) {
                 console.log('Erro ao verificar autenticação:', e);
                 setLoggedIn(false);
                 setUserInfo(null);
+                setEnderecos([]);
+                setEnderecoAtivo(null);
             } finally {
                 setIsLoading(false);
             }
@@ -235,6 +285,8 @@ export default function Cesta({ navigation }) {
                 type={loggedIn ? 'logged' : 'home'}
                 userInfo={userInfo}
                 loadingPoints={loadingPoints}
+                enderecos={enderecos}
+                onEnderecoAtivoChange={handleEnderecoAtivoChange}
             />
             
              <ScrollView 

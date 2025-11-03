@@ -17,15 +17,20 @@ export default function Pedidos({ navigation }) {
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
   const [loadingPoints, setLoadingPoints] = useState(false);
   const [orders, setOrders] = useState([]);
+
   const [loadingOrders, setLoadingOrders] = useState(false);
 
   const fetchEnderecos = async (userId) => {
     try {
       const enderecosData = await getCustomerAddresses(userId);
       setEnderecos(enderecosData || []);
+      // Selecionar endereço padrão
+      const enderecoPadrao = enderecosData?.find(e => e.is_default || e.isDefault);
+      setEnderecoAtivo(enderecoPadrao || null);
     } catch (error) {
       console.error('Erro ao buscar endereços:', error);
       setEnderecos([]);
+      setEnderecoAtivo(null);
     }
   };
 

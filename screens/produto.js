@@ -49,9 +49,13 @@ import api from '../services/api';
             try {
                 const enderecosData = await getCustomerAddresses(userId);
                 setEnderecos(enderecosData || []);
+                // Selecionar endereço padrão
+                const enderecoPadrao = enderecosData?.find(e => e.is_default || e.isDefault);
+                setEnderecoAtivo(enderecoPadrao || null);
             } catch (error) {
                 console.error('Erro ao buscar endereços:', error);
                 setEnderecos([]);
+                setEnderecoAtivo(null);
             }
         };
 
