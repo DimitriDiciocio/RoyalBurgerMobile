@@ -21,11 +21,51 @@ export default function Cesta({ navigation }) {
     const [enderecos, setEnderecos] = useState([]);
     const [enderecoAtivo, setEnderecoAtivo] = useState(null);
     const [deliveryFee, setDeliveryFee] = useState(0);
+    const [loyaltyRates, setLoyaltyRates] = useState({
+        gain_rate: 0.1, // valor padrão: 1 ponto vale 0.1 reais (10 centavos)
+    });
     const { basketItems, removeFromBasket, updateBasketItem, clearBasket, addToBasket, basketTotal } = useBasket();
     
     // Calcular total real dos itens da cesta (já inclui adicionais pois usa item.total)
     const calculateTotal = () => {
         return basketItems.reduce((total, item) => total + (item.total || (item.price * item.quantity)), 0);
+    };
+
+    // Calcular descontos de promoções
+    // TODO: Implementar lógica de promoções quando estiver disponível
+    // Por enquanto retorna 0
+    const calculatePromotionDiscounts = () => {
+        let totalDiscount = 0;
+        
+        // TODO: Quando o sistema de promoções estiver pronto, implementar:
+        // 1. Verificar cada item do carrinho se está em promoção
+        // 2. Calcular desconto baseado na promoção (percentual ou valor fixo)
+        // 3. Somar todos os descontos aplicados
+        
+        // Exemplo de como pode ser implementado no futuro:
+        // basketItems.forEach(item => {
+        //     if (item.promotion) {
+        //         if (item.promotion.type === 'percentage') {
+        //             totalDiscount += (item.total * item.promotion.value / 100);
+        //         } else if (item.promotion.type === 'fixed') {
+        //             totalDiscount += item.promotion.value;
+        //         }
+        //     }
+        // });
+        
+        return totalDiscount;
+    };
+
+    // Calcular pontos ganhos na compra
+    // gain_rate é quanto vale 1 ponto em reais (ex: 0.1 = 10 centavos por ponto)
+    // Para calcular pontos ganhos: valor gasto (sem taxa de entrega) / valor de cada ponto
+    // Ex: R$ 10,00 / R$ 0,10 = 100 pontos
+    // IMPORTANTE: A taxa de entrega NÃO conta para ganhar pontos
+    const calculateEarnedPoints = () => {
+        if (loyaltyRates.gain_rate <= 0) return 0;
+        // Calcula apenas o total dos produtos (sem taxa de entrega e sem descontos de promoção)
+        const productsTotal = calculateTotal() - calculatePromotionDiscounts();
+        return Math.floor(productsTotal / loyaltyRates.gain_rate);
     };
 
     const fetchEnderecos = async (userId) => {
@@ -72,13 +112,19 @@ export default function Cesta({ navigation }) {
     useEffect(() => {
         const checkAuth = async () => {
             try {
-                // Buscar configurações públicas (taxa de entrega)
+                // Buscar configurações públicas (taxa de entrega e taxas de conversão)
                 try {
                     const publicSettings = await getPublicSettings();
                     const fee = parseFloat(publicSettings?.delivery_fee || 0);
                     setDeliveryFee(fee);
+                    
+                    if (publicSettings?.loyalty_rates) {
+                        setLoyaltyRates({
+                            gain_rate: parseFloat(publicSettings.loyalty_rates.gain_rate || 0.1),
+                        });
+                    }
                 } catch (error) {
-                    console.log('Erro ao buscar taxa de entrega:', error);
+                    console.log('Erro ao buscar configurações públicas:', error);
                     setDeliveryFee(0);
                 }
 
@@ -500,18 +546,20 @@ export default function Cesta({ navigation }) {
 
                     <View style={styles.resumoItem}>
                         <Text style={styles.resumoLabel}>Descontos</Text>
-                        <Text style={styles.resumoValor}>R$ XX,XX</Text>
+                        <Text style={styles.resumoValor}>
+                            R$ {calculatePromotionDiscounts().toFixed(2).replace('.', ',')}
+                        </Text>
                     </View>
 
                     <View style={styles.resumoItem}>
                         <Text style={styles.resumoTotalLabel}>Total</Text>
                         <Text style={styles.resumoTotalValor}>
-                            R$ {(basketTotal + deliveryFee).toFixed(2).replace('.', ',')}
+                            R$ {(basketTotal + deliveryFee - calculatePromotionDiscounts()).toFixed(2).replace('.', ',')}
                         </Text>
                     </View>
 
                      <Text style={styles.pontosText}>
-                         Nessa compra, você ganhará <Text style={styles.pontosDestaque}>XX</Text> pontos Royal
+                         Nessa compra, você ganhará <Text style={styles.pontosDestaque}>{calculateEarnedPoints()}</Text> pontos Royal
                      </Text>
                  </View>
              </ScrollView>
@@ -522,7 +570,7 @@ export default function Cesta({ navigation }) {
                      <View style={styles.footerLeft}>
                          <Text style={styles.footerTotalLabel}>Total</Text>
                          <Text style={styles.footerTotalValue}>
-                             R$ {(basketTotal + deliveryFee).toFixed(2).replace('.', ',')}
+                             R$ {(basketTotal + deliveryFee - calculatePromotionDiscounts()).toFixed(2).replace('.', ',')}
                          </Text>
                      </View>
                      <TouchableOpacity 
