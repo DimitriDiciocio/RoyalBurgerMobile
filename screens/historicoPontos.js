@@ -62,14 +62,12 @@ export default function HistoricoPontos({ navigation }) {
       return 0;
     }
     
-    if (loyaltyData.points_expiration_date) {
-      return calculateDaysUntilExpiration(loyaltyData.points_expiration_date);
+    // A API retorna a data de expiração como 'expiration_date' no formato 'YYYY-MM-DD'
+    if (loyaltyData.expiration_date) {
+      return calculateDaysUntilExpiration(loyaltyData.expiration_date);
     }
     
-    if (loyaltyData.current_balance > 0) {
-      return 30;
-    }
-    
+    // Se não tiver data de expiração, retorna 0 (não mostra mensagem de expiração)
     return 0;
   };
 

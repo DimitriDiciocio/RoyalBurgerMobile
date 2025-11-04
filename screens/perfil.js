@@ -183,16 +183,12 @@ export default function Perfil({ navigation }) {
       return 0;
     }
     
-    // A API retorna a data de expiração diretamente no objeto
-    if (loyaltyData.points_expiration_date) {
-      return calculateDaysUntilExpiration(loyaltyData.points_expiration_date);
+    // A API retorna a data de expiração como 'expiration_date' no formato 'YYYY-MM-DD'
+    if (loyaltyData.expiration_date) {
+      return calculateDaysUntilExpiration(loyaltyData.expiration_date);
     }
     
-    // Fallback: se não tiver data mas tiver pontos, assume 30 dias
-    if (loyaltyData.current_balance > 0) {
-      return 30;
-    }
-    
+    // Se não tiver data de expiração, retorna 0 (não mostra mensagem de expiração)
     return 0;
   };
 
@@ -381,7 +377,9 @@ export default function Perfil({ navigation }) {
                 key={option.id}
                 style={styles.menuItem}
                 onPress={() => {
-                  if (option.id === "config") {
+                  if (option.id === "cardapio") {
+                    navigation.navigate("Home");
+                  } else if (option.id === "config") {
                     navigation.navigate("Config");
                   } else if (option.id === "dados") {
                     setShowDadosConta(true);

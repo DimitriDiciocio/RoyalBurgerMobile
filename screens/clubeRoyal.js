@@ -73,21 +73,13 @@ export default function ClubeRoyal({ navigation }) {
       return 0;
     }
     
-    console.log('Calculando expiração com dados:', loyaltyData); // Debug
-    
-    // A API retorna a data de expiração diretamente no objeto
-    // Formato: { accumulated_points: 100, spent_points: 0, current_balance: 100, points_expiration_date: "2025-12-06" }
-    if (loyaltyData.points_expiration_date) {
-      const days = calculateDaysUntilExpiration(loyaltyData.points_expiration_date);
-      console.log(`Data de expiração: ${loyaltyData.points_expiration_date}, Dias restantes: ${days}`); // Debug
+    // A API retorna a data de expiração como 'expiration_date' no formato 'YYYY-MM-DD'
+    if (loyaltyData.expiration_date) {
+      const days = calculateDaysUntilExpiration(loyaltyData.expiration_date);
       return days;
     }
     
-    // Fallback: se não tiver data mas tiver pontos, assume 30 dias
-    if (loyaltyData.current_balance > 0) {
-      return 30;
-    }
-    
+    // Se não tiver data de expiração, retorna 0 (não mostra mensagem de expiração)
     return 0;
   };
 
