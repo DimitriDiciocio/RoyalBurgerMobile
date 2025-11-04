@@ -6,6 +6,7 @@ import Header from '../components/Header';
 import MenuNavigation from '../components/MenuNavigation';
 import { isAuthenticated, getStoredUserData } from '../services/userService';
 import { getCustomerAddresses, getLoyaltyBalance, calculateDaysUntilExpiration } from '../services/customerService';
+import { getPublicSettings } from '../services';
 
 // SVGs dos ícones
 const crownSvg = `<svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -27,6 +28,11 @@ export default function ClubeRoyal({ navigation }) {
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
   const [loyaltyData, setLoyaltyData] = useState(null);
   const [loadingPoints, setLoadingPoints] = useState(false);
+  const [loyaltyRates, setLoyaltyRates] = useState({
+    gain_rate: 0.1, // valor padrão: 1 ponto vale 0.1 reais (1 ponto a cada 10 reais)
+    redemption_rate: 0.01, // valor padrão: 1 ponto vale 0.01 reais (100 pontos = 1 real)
+    expiration_days: 30 // valor padrão: 30 dias
+  });
 
   const fetchEnderecos = async (userId) => {
     try {
@@ -115,6 +121,21 @@ export default function ClubeRoyal({ navigation }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        // Buscar configurações públicas (taxas de conversão)
+        try {
+          const publicSettings = await getPublicSettings();
+          if (publicSettings?.loyalty_rates) {
+            setLoyaltyRates({
+              gain_rate: publicSettings.loyalty_rates.gain_rate || 0.1,
+              redemption_rate: publicSettings.loyalty_rates.redemption_rate || 0.01,
+              expiration_days: publicSettings.loyalty_rates.expiration_days || 30
+            });
+          }
+        } catch (error) {
+          console.log('Erro ao buscar taxas de conversão:', error);
+          // Mantém os valores padrão
+        }
+
         const ok = await isAuthenticated();
         setLoggedIn(!!ok);
         if (ok) {
@@ -206,7 +227,7 @@ export default function ClubeRoyal({ navigation }) {
             <View style={styles.infoContent}>
               <Text style={styles.infoTitle}>Acumule pontos!</Text>
               <Text style={styles.infoText}>
-                Ao finalizar uma compra no app, você receberá a quantia gasta em pontos.
+                Ao finalizar uma compra no app, você receberá 1 ponto a cada R$ {loyaltyRates.gain_rate.toFixed(2).replace('.', ',')} gastos.
               </Text>
             </View>
           </View>
@@ -218,7 +239,7 @@ export default function ClubeRoyal({ navigation }) {
             <View style={styles.infoContent}>
               <Text style={styles.infoTitle}>Compre com descontos!</Text>
               <Text style={styles.infoText}>
-                Ao adicionar suas compras à cesta, é possível acionar os pontos e ganhar descontos.
+                Ao adicionar suas compras à cesta, é possível acionar os pontos e ganhar descontos. A cada {(1 / loyaltyRates.redemption_rate).toFixed(0)} pontos, você ganha 1 real de desconto.
               </Text>
             </View>
           </View>
@@ -230,7 +251,7 @@ export default function ClubeRoyal({ navigation }) {
             <View style={styles.infoContent}>
               <Text style={styles.infoTitle}>Como funciona a conversão?</Text>
               <Text style={styles.infoText}>
-                A cada 1 real gasto no app, você receberá 10 pontos Royal e a cada 100 pontos acumulados, você terá 1 real de desconto.
+                A cada R$ {loyaltyRates.gain_rate.toFixed(2).replace('.', ',')} gastos no app, você receberá 1 ponto Royal e a cada {(1 / loyaltyRates.redemption_rate).toFixed(0)} pontos acumulados, você terá 1 real de desconto.
               </Text>
             </View>
           </View>
@@ -242,7 +263,7 @@ export default function ClubeRoyal({ navigation }) {
             <View style={styles.infoContent}>
               <Text style={styles.infoTitle}>Os pontos Royal expiram?</Text>
               <Text style={styles.infoText}>
-                Os pontos Royal expiram após 1 mês da sua última compra. Após realizar uma compra, os pontos se renovam por mais 1 mês.
+                Os pontos Royal expiram após {loyaltyRates.expiration_days} {loyaltyRates.expiration_days === 1 ? 'dia' : 'dias'} da sua última compra. Após realizar uma compra, os pontos se renovam por mais {loyaltyRates.expiration_days} {loyaltyRates.expiration_days === 1 ? 'dia' : 'dias'}.
               </Text>
             </View>
           </View>

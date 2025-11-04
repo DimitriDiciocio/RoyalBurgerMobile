@@ -52,6 +52,10 @@ export default function Pagamento({ navigation }) {
     const [usePoints, setUsePoints] = useState(false);
     const [pointsAvailable, setPointsAvailable] = useState(0);
     const [deliveryFee, setDeliveryFee] = useState(0);
+    const [loyaltyRates, setLoyaltyRates] = useState({
+        gain_rate: 0.1, // valor padrão: 1 ponto vale 0.1 reais (10 centavos)
+        redemption_rate: 0.01, // valor padrão: 1 ponto vale 0.01 reais (100 pontos = 1 real)
+    });
     const [showEnderecosBottomSheet, setShowEnderecosBottomSheet] = useState(false);
     const [showEditarEndereco, setShowEditarEndereco] = useState(false);
     const [enderecoParaEditar, setEnderecoParaEditar] = useState(null);
@@ -64,13 +68,20 @@ export default function Pagamento({ navigation }) {
     useEffect(() => {
         const checkAuth = async () => {
             try {
-                // Buscar configurações públicas (taxa de entrega)
+                // Buscar configurações públicas (taxa de entrega e taxas de conversão)
                 try {
                     const publicSettings = await getPublicSettings();
                     const fee = parseFloat(publicSettings?.delivery_fee || 0);
                     setDeliveryFee(fee);
+                    
+                    if (publicSettings?.loyalty_rates) {
+                        setLoyaltyRates({
+                            gain_rate: publicSettings.loyalty_rates.gain_rate || 0.1,
+                            redemption_rate: publicSettings.loyalty_rates.redemption_rate || 0.01,
+                        });
+                    }
                 } catch (error) {
-                    console.log('Erro ao buscar taxa de entrega:', error);
+                    console.log('Erro ao buscar configurações públicas:', error);
                     setDeliveryFee(0);
                 }
 
@@ -141,8 +152,9 @@ export default function Pagamento({ navigation }) {
 
     const calculateDiscountPoints = () => {
         if (!usePoints) return 0;
-        // A cada 100 pontos = R$ 1,00 de desconto
-        return Math.floor(pointsAvailable / 100);
+        // redemption_rate é quanto vale 1 ponto em reais (ex: 0.01 = 1 centavo por ponto)
+        // Para calcular o desconto: pontos disponíveis * valor de cada ponto
+        return pointsAvailable * loyaltyRates.redemption_rate;
     };
 
     const calculateFinalTotal = () => {
@@ -152,7 +164,11 @@ export default function Pagamento({ navigation }) {
     };
 
     const calculateEarnedPoints = () => {
-        return Math.floor(calculateFinalTotal() * 10); // 10 pontos por real gasto
+        // gain_rate é quanto vale 1 ponto em reais (ex: 0.1 = 10 centavos por ponto)
+        // Para calcular pontos ganhos: valor gasto / valor de cada ponto
+        // Ex: R$ 10,00 / R$ 0,10 = 100 pontos
+        if (loyaltyRates.gain_rate <= 0) return 0;
+        return Math.floor(calculateFinalTotal() / loyaltyRates.gain_rate);
     };
 
     const handleBack = () => {
