@@ -17,22 +17,23 @@ import RedefinirSenha from "./screens/redefinirSenha";
 import Produto from "./screens/produto";
 import Perfil from "./screens/perfil";
 import ClubeRoyal from "./screens/clubeRoyal";
+import HistoricoPontos from "./screens/historicoPontos";
 import Pedidos from "./screens/pedidos";
 import Config from "./screens/config";
 import Cesta from "./screens/cesta";
 import Pagamento from "./screens/pagamento";
 import React, { useEffect, useState } from 'react';
-import { isAuthenticated, getStoredUserData, logout, getCurrentUserProfile } from "./services";
-import { getLoyaltyBalance, getCustomerAddresses } from "./services/customerService";
+import { isAuthenticated } from "./services";
+import { useUserCache } from "./hooks/useUserCache";
+import { getCustomerAddresses } from "./services/customerService";
 import { BasketProvider, useBasket } from "./contexts/BasketContext";
 
 const Stack = createNativeStackNavigator();
 
 function HomeScreen({ navigation }) {
     const isFocused = useIsFocused();
+    const { userInfo, userData, isHeaderReady, addresses: cachedAddresses } = useUserCache();
     const [loggedIn, setLoggedIn] = useState(false);
-    const [userInfo, setUserInfo] = useState(null);
-    const [loadingPoints, setLoadingPoints] = useState(false);
     const [enderecos, setEnderecos] = useState([]);
     const [enderecoAtivo, setEnderecoAtivo] = useState(null);
     const { basketItems, basketTotal, basketItemCount, addToBasket } = useBasket();
@@ -83,65 +84,26 @@ function HomeScreen({ navigation }) {
             try {
                 const ok = await isAuthenticated();
                 setLoggedIn(!!ok);
-                if (ok) {
-                    const user = await getStoredUserData();
-                    let points = '0';
-                    
-                    // Se for um cliente, busca os pontos atualizados da API
-                    if (user && user.role === 'customer' && user.id) {
-                        setLoadingPoints(true);
-                        try {
-                            console.log('Buscando pontos para cliente ID:', user.id);
-                            const loyaltyData = await getLoyaltyBalance(user.id);
-                            console.log('Dados de fidelidade recebidos:', loyaltyData);
-                            
-                            // Tenta diferentes estruturas de dados que a API pode retornar
-                            points = loyaltyData?.current_balance?.toString() || 
-                                    loyaltyData?.balance?.toString() || 
-                                    loyaltyData?.points?.toString() || 
-                                    loyaltyData?.total_points?.toString() || 
-                                    loyaltyData?.loyalty_points?.toString() || 
-                                    '0';
-                            
-                            console.log('Pontos extraídos:', points);
-                        } catch (error) {
-                            console.log('Erro ao buscar pontos:', error);
-                            // Fallback para pontos salvos localmente
-                            points = user.points || '0';
-                        } finally {
-                            setLoadingPoints(false);
-                        }
-
-                        // Buscar endereços do cliente
-                        await fetchEnderecos(user.id);
+                if (ok && userData?.id) {
+                    // Usa endereços do cache se disponíveis
+                    if (cachedAddresses.length > 0) {
+                        setEnderecos(cachedAddresses);
                     } else {
-                        // Para outros tipos de usuário, usa os pontos salvos
-                        points = user?.points || '0';
+                        await fetchEnderecos(userData.id);
                     }
-                    
-                    // Normaliza campos esperados pelo Header
-                    const normalized = user ? {
-                        name: user.full_name || user.name || 'Usuário',
-                        points: points,
-                        address: user.address || undefined,
-                        avatar: undefined,
-                    } : null;
-                    setUserInfo(normalized);
                 } else {
-                    setUserInfo(null);
                     setEnderecos([]);
                     setEnderecoAtivo(null);
                 }
             } catch (e) {
                 console.log('Erro ao verificar autenticação:', e);
                 setLoggedIn(false);
-                setUserInfo(null);
                 setEnderecos([]);
                 setEnderecoAtivo(null);
             }
         };
         checkAuth();
-    }, [isFocused]);
+    }, [isFocused, userData, cachedAddresses]);
     const mostOrderedData = [
         {
             title: "Hambúrguer Clássico",
@@ -192,9 +154,9 @@ function HomeScreen({ navigation }) {
 
     const handleLogout = async () => {
         try {
+            const { logout } = require('./services');
             await logout();
             setLoggedIn(false);
-            setUserInfo(null);
         } catch (error) {
             console.error('Erro ao fazer logout:', error);
         }
@@ -241,9 +203,7 @@ function HomeScreen({ navigation }) {
                 <Header 
                     navigation={navigation} 
                     type={loggedIn ? 'logged' : 'home'}
-                    userInfo={userInfo}
-                    loadingPoints={loadingPoints}
-                    enderecos={enderecos}
+                    enderecos={enderecos.length > 0 ? enderecos : cachedAddresses}
                     onEnderecoAtivoChange={handleEnderecoAtivoChange}
                 />
             </View>
@@ -339,6 +299,10 @@ export default function App() {
                 <Stack.Screen 
                     name="ClubeRoyal" 
                     component={ClubeRoyal}
+                />
+                <Stack.Screen 
+                    name="HistoricoPontos" 
+                    component={HistoricoPontos}
                 />
                 <Stack.Screen   
                     name="Pedidos" 

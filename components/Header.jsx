@@ -1,4 +1,5 @@
 import {StyleSheet, View, Text, TouchableOpacity, Image, ActivityIndicator} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ButtonDark from "./Button";
 import React, { useState, useEffect } from "react";
 import { SvgXml } from 'react-native-svg';
@@ -7,7 +8,7 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import EnderecosBottomSheet from './EnderecosBottomSheet';
 import EditarEnderecoBottomSheet from './EditarEnderecoBottomSheet';
 import { setDefaultAddress, getCustomerAddresses, addCustomerAddress, updateCustomerAddress, removeCustomerAddress } from '../services/customerService';
-import { getStoredUserData } from '../services/userService';
+import { useUserCache } from '../hooks/useUserCache';
 
 const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M5.29385 9.29365C4.90322 9.68428 4.90322 10.3187 5.29385 10.7093L11.2938 16.7093C11.6845 17.0999 12.3188 17.0999 12.7095 16.7093C13.1001 16.3187 13.1001 15.6843 12.7095 15.2937L7.41572 9.9999L12.7063 4.70615C13.097 4.31553 13.097 3.68115 12.7063 3.29053C12.3157 2.8999 11.6813 2.8999 11.2907 3.29053L5.29072 9.29053L5.29385 9.29365Z" fill="black"/>
@@ -30,7 +31,7 @@ const crownSvg = `<svg width="15" height="15" viewBox="0 0 15 15" fill="none" xm
 export default function Header({
                                    navigation,
                                    type = 'home',
-                                   userInfo = null,
+                                   userInfo: userInfoProp = null,
                                    onBackPress = null,
                                    showBackButton = false,
                                    title = null,
@@ -38,8 +39,48 @@ export default function Header({
                                    rightButton = null,
                                     enderecos = [],
                                     onEnderecoAtivoChange = null,
-                                    loadingPoints = false
+                                    loadingPoints: loadingPointsProp = false
                                 }) {
+    // Usa hook para cache, mas permite override via props
+    const { 
+      userInfo: cachedUserInfo, 
+      loadingPoints: cachedLoadingPoints,
+      loyaltyPoints: cachedLoyaltyPoints,
+      userData,
+      defaultAddress: cachedDefaultAddress,
+      addresses: cachedAddresses,
+      loading: cacheLoading,
+      isHeaderReady,
+      refreshAddresses,
+      updateDefaultAddress
+    } = useUserCache();
+    
+    // Prioriza props, depois cache
+    const userInfo = userInfoProp || cachedUserInfo;
+    const loadingPoints = loadingPointsProp !== false ? loadingPointsProp : cachedLoadingPoints;
+    
+    // Mostra o valor do localStorage primeiro, sem loading
+    // Só mostra loading se não tiver nada no localStorage E estiver carregando
+    const hasCachedPoints = cachedLoyaltyPoints !== null && cachedLoyaltyPoints !== undefined;
+    const hasValidPoints = userInfo?.points !== null && userInfo?.points !== undefined && userInfo?.points !== '';
+    
+    // Só mostra loading se não tiver cache E estiver carregando
+    const shouldShowLoading = !hasCachedPoints && loadingPoints;
+    
+    // Prioriza: userInfo.points (da API, se diferente) > cachedLoyaltyPoints (do localStorage) > 0
+    // Se tem cache, mostra imediatamente sem loading
+    // Se userInfo.points existe e é diferente do cache, usa o da API
+    const pointsFromAPI = hasValidPoints && userInfo?.points !== cachedLoyaltyPoints?.toString();
+    const pointsValue = pointsFromAPI
+      ? userInfo?.points 
+      : (hasCachedPoints ? cachedLoyaltyPoints.toString() : '0');
+    
+    // Usa endereços do cache se não vierem via props
+    const addressesToUse = enderecos.length > 0 ? enderecos : cachedAddresses;
+    const defaultAddressToUse = enderecos.length > 0 
+      ? enderecos.find(e => e.is_default || e.isDefault) || enderecos[0]
+      : cachedDefaultAddress;
+    
     const [showEnderecosBottomSheet, setShowEnderecosBottomSheet] = useState(false);
     const [showEditarEndereco, setShowEditarEndereco] = useState(false);
     const [enderecoSelecionado, setEnderecoSelecionado] = useState(null);
@@ -62,19 +103,30 @@ export default function Header({
 
     // Define o endereço ativo quando os endereços mudarem
     useEffect(() => {
-        if (enderecos && enderecos.length > 0) {
+        const enderecosToProcess = addressesToUse.length > 0 ? addressesToUse : enderecos;
+        
+        if (enderecosToProcess && enderecosToProcess.length > 0) {
             // Primeiro, procura por um endereço marcado como padrão
-            const enderecoPadrao = enderecos.find(e => e.is_default === true || e.isDefault === true);
+            const enderecoPadrao = enderecosToProcess.find(e => e.is_default === true || e.isDefault === true);
             
             if (enderecoPadrao) {
                 // Se encontrou um endereço padrão, usa ele
-                setEnderecoAtivo(enderecoPadrao);
+                if (enderecoAtivo?.id !== enderecoPadrao.id) {
+                    setEnderecoAtivo(enderecoPadrao);
+                    updateDefaultAddress(enderecoPadrao);
+                    if (onEnderecoAtivoChange) {
+                        onEnderecoAtivoChange(enderecoPadrao);
+                    }
+                }
+            } else if (defaultAddressToUse && enderecoAtivo?.id !== defaultAddressToUse.id) {
+                // Usa endereço padrão do cache
+                setEnderecoAtivo(defaultAddressToUse);
                 if (onEnderecoAtivoChange) {
-                    onEnderecoAtivoChange(enderecoPadrao);
+                    onEnderecoAtivoChange(defaultAddressToUse);
                 }
             } else if (!enderecoAtivo) {
                 // Se não há endereço padrão e não há endereço ativo definido, usa o mais recente
-                const enderecosOrdenados = [...enderecos].sort((a, b) => 
+                const enderecosOrdenados = [...enderecosToProcess].sort((a, b) => 
                     new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0)
                 );
                 const enderecoMaisRecente = enderecosOrdenados[0];
@@ -84,13 +136,13 @@ export default function Header({
                     onEnderecoAtivoChange(enderecoMaisRecente);
                 }
             }
-        } else {
+        } else if (enderecosToProcess.length === 0) {
             setEnderecoAtivo(null);
             if (onEnderecoAtivoChange) {
                 onEnderecoAtivoChange(null);
             }
         }
-    }, [enderecos]);
+    }, [addressesToUse, enderecos, defaultAddressToUse, enderecoAtivo, onEnderecoAtivoChange, updateDefaultAddress]);
     const handlePress = () => {
         if (navigation) {
             navigation.navigate('Login');
@@ -100,20 +152,25 @@ export default function Header({
     const handleSelectEndereco = async (endereco) => {
         try {
             // Chama a API para definir o endereço como padrão
-            const user = await getStoredUserData();
-            if (user?.id && endereco?.id) {
-                await setDefaultAddress(user.id, endereco.id);
+            if (userData?.id && endereco?.id) {
+                await setDefaultAddress(userData.id, endereco.id);
             }
             
-            // Atualiza o estado local
+            // Atualiza o estado local e cache
             setEnderecoAtivo(endereco);
+            await updateDefaultAddress(endereco);
+            
             if (onEnderecoAtivoChange) {
                 onEnderecoAtivoChange(endereco);
             }
+            
+            // Atualiza endereços no cache
+            await refreshAddresses();
         } catch (error) {
             console.error('Erro ao definir endereço padrão:', error);
             // Mesmo com erro, atualiza o estado local para melhor UX
             setEnderecoAtivo(endereco);
+            await updateDefaultAddress(endereco);
             if (onEnderecoAtivoChange) {
                 onEnderecoAtivoChange(endereco);
             }
@@ -122,12 +179,11 @@ export default function Header({
 
     const handleSaveEndereco = async (formData) => {
         try {
-            const user = await getStoredUserData();
-            if (!user?.id) return;
+            if (!userData?.id) return;
 
             if (formData.id) {
                 // Editar endereço existente
-                await updateCustomerAddress(user.id, formData.id, {
+                await updateCustomerAddress(userData.id, formData.id, {
                     street: formData.street,
                     number: formData.number,
                     complement: formData.complement,
@@ -138,7 +194,7 @@ export default function Header({
                 });
             } else {
                 // Adicionar novo endereço
-                await addCustomerAddress(user.id, {
+                await addCustomerAddress(userData.id, {
                     street: formData.street,
                     number: formData.number,
                     complement: formData.complement,
@@ -149,12 +205,15 @@ export default function Header({
                 });
             }
 
+            // Atualiza endereços no cache após salvar
+            await refreshAddresses();
+            
             // Se é um novo endereço, define como padrão via API
             if (!formData.id) {
                 // Aguarda um pouco para garantir que o endereço foi adicionado
                 setTimeout(async () => {
                     try {
-                        const enderecosAtualizados = await getCustomerAddresses(user.id);
+                        const enderecosAtualizados = await getCustomerAddresses(userData.id);
                         if (enderecosAtualizados && enderecosAtualizados.length > 0) {
                             // Pega o endereço mais recente (primeiro da lista ordenada)
                             const enderecosOrdenados = [...enderecosAtualizados].sort((a, b) => 
@@ -163,10 +222,14 @@ export default function Header({
                             const enderecoMaisRecente = enderecosOrdenados[0];
                             
                             // Define como padrão via API
-                            await setDefaultAddress(user.id, enderecoMaisRecente.id);
+                            await setDefaultAddress(userData.id, enderecoMaisRecente.id);
                             
-                            // Atualiza o estado local imediatamente
+                            // Atualiza o estado local e cache
                             setEnderecoAtivo(enderecoMaisRecente);
+                            await updateDefaultAddress(enderecoMaisRecente);
+                            
+                            // Salva endereços atualizados no cache
+                            await AsyncStorage.setItem('user_addresses', JSON.stringify(enderecosAtualizados));
                             
                             // Notifica o componente pai com o novo endereço ativo
                             if (onEnderecoAtivoChange) {
@@ -183,7 +246,11 @@ export default function Header({
                 }, 500);
             } else {
                 // Para edição, apenas atualiza a lista
-                const enderecosAtualizados = await getCustomerAddresses(user.id);
+                const enderecosAtualizados = await getCustomerAddresses(userData.id);
+                // Salva no cache
+                await AsyncStorage.setItem('user_addresses', JSON.stringify(enderecosAtualizados));
+                await refreshAddresses();
+                
                 if (onEnderecoAtivoChange) {
                     onEnderecoAtivoChange({ type: 'refresh', enderecos: enderecosAtualizados });
                 }
@@ -199,13 +266,22 @@ export default function Header({
 
     const handleDeleteEndereco = async (enderecoId) => {
         try {
-            const user = await getStoredUserData();
-            if (!user?.id) return;
+            if (!userData?.id) return;
 
-            await removeCustomerAddress(user.id, enderecoId);
+            await removeCustomerAddress(userData.id, enderecoId);
 
-            // Atualizar lista de endereços
-            const enderecosAtualizados = await getCustomerAddresses(user.id);
+            // Atualizar lista de endereços e cache
+            const enderecosAtualizados = await getCustomerAddresses(userData.id);
+            await AsyncStorage.setItem('user_addresses', JSON.stringify(enderecosAtualizados));
+            await refreshAddresses();
+            
+            // Se o endereço deletado era o ativo, seleciona outro
+            if (enderecoAtivo?.id === enderecoId && enderecosAtualizados.length > 0) {
+                const novoEndereco = enderecosAtualizados.find(e => e.is_default || e.isDefault) || enderecosAtualizados[0];
+                setEnderecoAtivo(novoEndereco);
+                await updateDefaultAddress(novoEndereco);
+            }
+            
             if (onEnderecoAtivoChange) {
                 onEnderecoAtivoChange({ type: 'refresh', enderecos: enderecosAtualizados });
             }
@@ -324,11 +400,11 @@ export default function Header({
                                 height={20}
                                 style={styles.crownIcon}
                             />
-                            {loadingPoints ? (
+                            {shouldShowLoading ? (
                                 <ActivityIndicator size="small" color="#FFC700" style={styles.pointsLoading} />
                             ) : (
                                 <Text style={styles.pointsText}>
-                                    {userInfo?.points || "0"} pontos
+                                    {pointsValue} pontos
                                 </Text>
                             )}
                         </TouchableOpacity>
@@ -354,6 +430,19 @@ export default function Header({
         }
     };
 
+    // Não renderiza se o header não estiver pronto (evita flash de conteúdo)
+    if (type === 'logged' && cacheLoading && !userInfoProp) {
+        return (
+            <View style={[styles.container, styles[`${type}Container`]]}>
+                <View style={styles.loggedContainer}>
+                    <View style={styles.userInfo}>
+                        <ActivityIndicator size="small" color="#888888" />
+                    </View>
+                </View>
+            </View>
+        );
+    }
+
     return (
         <>
             <View style={[styles.container, styles[`${type}Container`]]}>
@@ -363,11 +452,11 @@ export default function Header({
             <EnderecosBottomSheet
                 visible={showEnderecosBottomSheet}
                 onClose={handleCloseEnderecosBottomSheet}
-                enderecos={enderecos}
+                enderecos={addressesToUse.length > 0 ? addressesToUse : enderecos}
                 onAddNew={handleAddNewEndereco}
                 onEdit={handleEditEndereco}
                 onSelect={handleSelectEndereco}
-                enderecoAtivo={enderecoAtivo}
+                enderecoAtivo={enderecoAtivo || defaultAddressToUse}
             />
 
             <EditarEnderecoBottomSheet
