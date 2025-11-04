@@ -188,7 +188,10 @@ export default function ClubeRoyal({ navigation }) {
                   : 'Você não possui pontos para expirar'
               }
             </Text>
-            <TouchableOpacity style={styles.historyButton}>
+            <TouchableOpacity 
+              style={styles.historyButton}
+              onPress={() => navigation.navigate('HistoricoPontos')}
+            >
               <Text style={styles.historyButtonText}>Histórico de pontos</Text>
             </TouchableOpacity>
           </View>

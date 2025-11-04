@@ -17,6 +17,7 @@ import RedefinirSenha from "./screens/redefinirSenha";
 import Produto from "./screens/produto";
 import Perfil from "./screens/perfil";
 import ClubeRoyal from "./screens/clubeRoyal";
+import HistoricoPontos from "./screens/historicoPontos";
 import Pedidos from "./screens/pedidos";
 import Config from "./screens/config";
 import Cesta from "./screens/cesta";
@@ -339,6 +340,10 @@ export default function App() {
                 <Stack.Screen 
                     name="ClubeRoyal" 
                     component={ClubeRoyal}
+                />
+                <Stack.Screen 
+                    name="HistoricoPontos" 
+                    component={HistoricoPontos}
                 />
                 <Stack.Screen   
                     name="Pedidos" 
