@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Animated, TextInput } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import Header from '../components/Header';
 import EnderecosBottomSheet from '../components/EnderecosBottomSheet';
@@ -8,6 +8,7 @@ import BottomSheet from '../components/BottomSheet';
 import Toggle from '../components/Toggle';
 import { isAuthenticated, getStoredUserData, getPublicSettings } from '../services';
 import { getLoyaltyBalance, getCustomerAddresses, setDefaultAddress, addCustomerAddress, updateCustomerAddress, removeCustomerAddress } from '../services/customerService';
+import { createOrder } from '../services/orderService';
 import { useBasket } from '../contexts/BasketContext';
 
 const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -62,8 +63,10 @@ export default function Pagamento({ navigation }) {
     const [showTrocoBottomSheet, setShowTrocoBottomSheet] = useState(false);
     const [trocoValue, setTrocoValue] = useState('');
     const [showReviewBottomSheet, setShowReviewBottomSheet] = useState(false);
+    const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+    const [redemptionRate, setRedemptionRate] = useState(0.01); // Taxa padrão até carregar das settings
     const trocoValueRef = useRef('');
-    const { basketItems } = useBasket();
+    const { basketItems, clearBasket } = useBasket();
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -74,15 +77,21 @@ export default function Pagamento({ navigation }) {
                     const fee = parseFloat(publicSettings?.delivery_fee || 0);
                     setDeliveryFee(fee);
                     
+                    // Salva ambas as taxas de pontos (ganho e resgate)
                     if (publicSettings?.loyalty_rates) {
                         setLoyaltyRates({
-                            gain_rate: publicSettings.loyalty_rates.gain_rate || 0.1,
-                            redemption_rate: publicSettings.loyalty_rates.redemption_rate || 0.01,
+                            gain_rate: parseFloat(publicSettings.loyalty_rates.gain_rate || 0.1),
+                            redemption_rate: parseFloat(publicSettings.loyalty_rates.redemption_rate || 0.01),
                         });
+                        setRedemptionRate(parseFloat(publicSettings.loyalty_rates.redemption_rate || 0.01));
+                    } else {
+                        // Fallback para valores padrão
+                        setRedemptionRate(0.01);
                     }
                 } catch (error) {
                     console.log('Erro ao buscar configurações públicas:', error);
                     setDeliveryFee(0);
+                    setRedemptionRate(0.01); // Fallback
                 }
 
                 const ok = await isAuthenticated();
@@ -150,11 +159,14 @@ export default function Pagamento({ navigation }) {
         return basketItems.reduce((total, item) => total + (item.total || (item.price * item.quantity)), 0);
     };
 
+    // Versão síncrona para cálculos na UI (usa estado já carregado)
     const calculateDiscountPoints = () => {
         if (!usePoints) return 0;
-        // redemption_rate é quanto vale 1 ponto em reais (ex: 0.01 = 1 centavo por ponto)
-        // Para calcular o desconto: pontos disponíveis * valor de cada ponto
-        return pointsAvailable * loyaltyRates.redemption_rate;
+        // Calcula desconto baseado nos pontos disponíveis e taxa de resgate
+        // redemptionRate = valor de 1 ponto em reais (ex: 0.01 = R$ 0,01 por ponto)
+        // Se tem 100 pontos e taxa é 0.01, desconto = 100 * 0.01 = R$ 1,00
+        // Usa redemptionRate que é mais atualizado
+        return pointsAvailable * redemptionRate;
     };
 
     const calculateFinalTotal = () => {
@@ -445,6 +457,198 @@ export default function Pagamento({ navigation }) {
         if (endereco.complement) details.push(endereco.complement);
         
         return enderecoStr + (details.length > 0 ? `\n${details.join(' - ')}` : '');
+    };
+
+    // Mapeia métodos de pagamento do mobile para a API
+    const mapPaymentMethodToAPI = (mobileMethod) => {
+        const mapping = {
+            'pix': 'pix',
+            'credit': 'credit_card',
+            'cash': 'money'
+        };
+        return mapping[mobileMethod] || mobileMethod;
+    };
+
+    // Converte valor do troco de string formatada para número
+    const convertTrocoValueToNumber = () => {
+        if (!trocoValue.trim()) return null;
+        const numbers = trocoValue.replace(/\D/g, '');
+        if (numbers.length === 0) return null;
+        
+        if (numbers.length <= 2) {
+            return parseInt(numbers) / 100; // Centavos
+        } else {
+            const cents = parseInt(numbers.slice(-2));
+            const reais = parseInt(numbers.slice(0, -2));
+            return reais + (cents / 100);
+        }
+    };
+
+    // Calcula pontos a resgatar baseado no desconto (usa estado já carregado)
+    const calculatePointsToRedeem = () => {
+        if (!usePoints) return 0;
+        
+        const discount = calculateDiscountPoints();
+        // Calcula quantos pontos são necessários para o desconto
+        // redemptionRate = valor de 1 ponto em reais (ex: 0.01 = R$ 0,01 por ponto)
+        // Para R$ 1,00 de desconto com taxa 0.01, precisa de 100 pontos
+        // Mas como já calculamos o desconto baseado nos pontos disponíveis,
+        // vamos usar os pontos disponíveis diretamente (limitado pelo desconto máximo)
+        const maxDiscount = calculateTotal() + deliveryFee; // Não pode descontar mais que o total
+        const actualDiscount = Math.min(discount, maxDiscount);
+        
+        // Retorna pontos proporcional ao desconto aplicado
+        if (redemptionRate > 0) {
+            return Math.floor(actualDiscount / redemptionRate);
+        }
+        return 0;
+    };
+
+    const handleConfirmOrder = async () => {
+        if (!enderecoSelecionado) {
+            alert('Selecione um endereço antes de continuar');
+            return;
+        }
+        if (!selectedPayment) {
+            alert('Selecione uma forma de pagamento');
+            return;
+        }
+        if (selectedPayment === 'cash' && (!trocoValue.trim() || !isTrocoValueValid())) {
+            alert('Por favor, informe o valor para troco');
+            setShowTrocoBottomSheet(true);
+            return;
+        }
+        if (!basketItems || basketItems.length === 0) {
+            alert('Seu carrinho está vazio');
+            return;
+        }
+
+        try {
+            setIsCreatingOrder(true);
+            
+            // Calcula pontos a resgatar (usa estado já carregado)
+            const pointsToRedeem = calculatePointsToRedeem();
+            
+            // Converte itens do carrinho local para o formato da API
+            const orderItems = basketItems.map(item => {
+                const apiItem = {
+                    product_id: item.originalProductId || item.productId,
+                    quantity: item.quantity,
+                    extras: [],
+                    base_modifications: [],
+                };
+                
+                // Adiciona observações se houver
+                if (item.observacoes) {
+                    apiItem.notes = item.observacoes;
+                }
+                
+                // Converte extras (selectedExtras)
+                // selectedExtras é um objeto {ingredientId: quantity}
+                if (item.selectedExtras && typeof item.selectedExtras === 'object') {
+                    Object.keys(item.selectedExtras).forEach(ingredientId => {
+                        const quantity = item.selectedExtras[ingredientId];
+                        if (quantity > 0) {
+                            apiItem.extras.push({
+                                ingredient_id: parseInt(ingredientId),
+                                quantity: quantity
+                            });
+                        }
+                    });
+                }
+                
+                // Converte modificações da base (defaultIngredientsQuantities)
+                // defaultIngredientsQuantities é um objeto {ingredientId: {min, max, current}}
+                // onde current é a quantidade modificada (delta)
+                if (item.defaultIngredientsQuantities && typeof item.defaultIngredientsQuantities === 'object') {
+                    Object.keys(item.defaultIngredientsQuantities).forEach(ingredientId => {
+                        const mod = item.defaultIngredientsQuantities[ingredientId];
+                        // Se é um objeto com current, usa o delta
+                        if (mod && typeof mod === 'object' && mod.current !== undefined) {
+                            const delta = mod.current - (mod.default || 0);
+                            if (delta !== 0) {
+                                apiItem.base_modifications.push({
+                                    ingredient_id: parseInt(ingredientId),
+                                    delta: delta
+                                });
+                            }
+                        }
+                    });
+                }
+                
+                return apiItem;
+            });
+            
+            // Prepara dados do pedido
+            const orderData = {
+                use_cart: false, // Não usa carrinho da API, envia items diretamente
+                items: orderItems,
+                address_id: enderecoSelecionado.id,
+                payment_method: mapPaymentMethodToAPI(selectedPayment),
+                order_type: 'delivery', // Por padrão é delivery, pode ser configurável depois
+                points_to_redeem: pointsToRedeem,
+                notes: '', // Pode adicionar campo de observações depois
+            };
+
+            // Se for pagamento em dinheiro, adiciona amount_paid
+            if (selectedPayment === 'cash') {
+                const amountPaid = convertTrocoValueToNumber();
+                if (amountPaid) {
+                    orderData.amount_paid = amountPaid;
+                }
+            }
+
+            console.log('Criando pedido com dados:', orderData);
+
+            // Cria o pedido
+            const newOrder = await createOrder(orderData);
+            
+            console.log('Pedido criado com sucesso:', newOrder);
+
+            // Limpa o carrinho
+            clearBasket();
+
+            // Fecha o bottom sheet
+            setShowReviewBottomSheet(false);
+
+            // Navega para a tela de pedidos
+            navigation.navigate('Pedidos', { 
+                orderId: newOrder.id || newOrder.order_id,
+                showSuccess: true 
+            });
+
+        } catch (error) {
+            console.error('Erro ao criar pedido:', error);
+            
+            let errorMessage = 'Erro ao criar pedido. Tente novamente.';
+            
+            if (error.response) {
+                const errorData = error.response.data;
+                if (errorData.error) {
+                    errorMessage = errorData.error;
+                } else if (errorData.message) {
+                    errorMessage = errorData.message;
+                }
+                
+                // Tratamento de erros específicos
+                if (error.response.status === 409) {
+                    // Loja fechada ou conflito
+                    errorMessage = errorData.error || 'A loja está fechada no momento';
+                } else if (error.response.status === 422) {
+                    // Erro de estoque
+                    errorMessage = errorData.error || 'Algum produto está sem estoque';
+                } else if (error.response.status === 400) {
+                    // Erro de validação
+                    errorMessage = errorData.error || 'Dados do pedido inválidos';
+                }
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            alert(errorMessage);
+        } finally {
+            setIsCreatingOrder(false);
+        }
     };
 
     return (
@@ -767,15 +971,14 @@ export default function Pagamento({ navigation }) {
                     </View>
 
                     <TouchableOpacity 
-                        style={styles.confirmOrderButton}
-                        onPress={() => {
-                            console.log('Pedido confirmado');
-                            // Aqui você pode navegar para a próxima tela
-                            setShowReviewBottomSheet(false);
-                        }}
+                        style={[styles.confirmOrderButton, isCreatingOrder && styles.confirmOrderButtonDisabled]}
+                        onPress={handleConfirmOrder}
                         activeOpacity={0.8}
+                        disabled={isCreatingOrder}
                     >
-                        <Text style={styles.confirmOrderButtonText}>Confirmar pedido</Text>
+                        <Text style={[styles.confirmOrderButtonText, isCreatingOrder && styles.confirmOrderButtonTextDisabled]}>
+                            {isCreatingOrder ? 'Criando pedido...' : 'Confirmar pedido'}
+                        </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity 
@@ -1137,6 +1340,12 @@ const styles = StyleSheet.create({
          fontSize: 16,
          color: '#000000',
          fontWeight: 'bold',
+     },
+     confirmOrderButtonDisabled: {
+         backgroundColor: '#D9D9D9',
+     },
+     confirmOrderButtonTextDisabled: {
+         color: '#888888',
      },
      changeOrderButton: {
         alignItems: 'center',

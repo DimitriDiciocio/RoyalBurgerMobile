@@ -185,18 +185,85 @@ export default function Cesta({ navigation }) {
     };
 
     const handleRemoveItem = (item) => {
-        removeFromBasket(item.id);
+        // Remove todos os itens similares (mesmo produto, modificações e observações)
+        if (item.similarItemIds) {
+            // Se tem similarItemIds, remove todos eles
+            item.similarItemIds.forEach(id => removeFromBasket(id));
+        } else {
+            // Fallback: encontra e remove itens similares
+            const similarItems = basketItems.filter(basketItem => 
+                (basketItem.originalProductId || basketItem.productId) === (item.originalProductId || item.productId) &&
+                JSON.stringify(basketItem.selectedExtras) === JSON.stringify(item.selectedExtras) &&
+                JSON.stringify(basketItem.defaultIngredientsQuantities) === JSON.stringify(item.defaultIngredientsQuantities) &&
+                basketItem.observacoes === item.observacoes
+            );
+            similarItems.forEach(similarItem => removeFromBasket(similarItem.id));
+        }
     };
 
     const handleUpdateQuantity = (item, newQuantity) => {
         if (newQuantity <= 0) {
-            removeFromBasket(item.id);
-        } else {
-            updateBasketItem(item.id, { 
-                quantity: newQuantity,
-                price: item.price
+            // Remove todos os itens similares
+            if (item.similarItemIds) {
+                item.similarItemIds.forEach(id => removeFromBasket(id));
+            } else {
+                // Fallback: encontra e remove itens similares
+                const similarItems = basketItems.filter(basketItem => 
+                    (basketItem.originalProductId || basketItem.productId) === (item.originalProductId || item.productId) &&
+                    JSON.stringify(basketItem.selectedExtras) === JSON.stringify(item.selectedExtras) &&
+                    JSON.stringify(basketItem.defaultIngredientsQuantities) === JSON.stringify(item.defaultIngredientsQuantities) &&
+                    basketItem.observacoes === item.observacoes
+                );
+                similarItems.forEach(similarItem => removeFromBasket(similarItem.id));
+            }
+            return;
+        }
+        
+        // Encontra todos os itens similares (mesmo produto, modificações e observações)
+        const similarItems = basketItems.filter(basketItem => 
+            (basketItem.originalProductId || basketItem.productId) === (item.originalProductId || item.productId) &&
+            JSON.stringify(basketItem.selectedExtras) === JSON.stringify(item.selectedExtras) &&
+            JSON.stringify(basketItem.defaultIngredientsQuantities) === JSON.stringify(item.defaultIngredientsQuantities) &&
+            basketItem.observacoes === item.observacoes
+        );
+        
+        const currentQuantity = similarItems.length;
+        const quantityDifference = newQuantity - currentQuantity;
+        
+        if (quantityDifference > 0) {
+            // Aumentar quantidade = duplicar o item completo
+            // Calcula o total unitário baseado no primeiro item similar (para manter preço correto)
+            const firstSimilarItem = similarItems[0];
+            // O total unitário é o total do primeiro item (que já inclui preço base + adicionais)
+            const unitTotal = firstSimilarItem.total || item.total / currentQuantity;
+            
+            // Duplica o item com todas as suas modificações e observações
+            for (let i = 0; i < quantityDifference; i++) {
+                addToBasket({
+                    quantity: 1,
+                    total: unitTotal, // Total unitário (preço base + adicionais por unidade)
+                    unitPrice: firstSimilarItem.price || item.price,
+                    productName: firstSimilarItem.name || item.name,
+                    description: firstSimilarItem.description || item.description,
+                    image: firstSimilarItem.image || item.image,
+                    productId: firstSimilarItem.originalProductId || firstSimilarItem.productId || item.originalProductId || item.productId,
+                    observacoes: firstSimilarItem.observacoes || item.observacoes || '',
+                    selectedExtras: firstSimilarItem.selectedExtras ? { ...firstSimilarItem.selectedExtras } : (item.selectedExtras ? { ...item.selectedExtras } : {}),
+                    defaultIngredientsQuantities: firstSimilarItem.defaultIngredientsQuantities ? { ...firstSimilarItem.defaultIngredientsQuantities } : (item.defaultIngredientsQuantities ? { ...item.defaultIngredientsQuantities } : {}),
+                    modifications: firstSimilarItem.modifications ? [...firstSimilarItem.modifications] : (item.modifications ? [...item.modifications] : [])
+                });
+            }
+        } else if (quantityDifference < 0) {
+            // Diminuir quantidade = remover itens duplicados
+            const itemsToRemove = Math.abs(quantityDifference);
+            
+            // Remove itens similares (excluindo o primeiro para manter pelo menos um)
+            const itemsToRemoveArray = similarItems.slice(0, itemsToRemove);
+            itemsToRemoveArray.forEach(similarItem => {
+                removeFromBasket(similarItem.id);
             });
         }
+        // Se quantityDifference === 0, não faz nada
     };
 
     const handleAddMoreItems = () => {
@@ -342,15 +409,50 @@ export default function Cesta({ navigation }) {
                 <Text style={styles.sectionTitle}>Itens adicionados</Text>
                 
                 {basketItems.length > 0 ? (
-                    basketItems.map((item, index) => (
-                        <ItensCesta
-                            key={item.id || index}
-                            item={item}
-                            onEdit={handleEditItem}
-                            onRemove={handleRemoveItem}
-                            onUpdateQuantity={handleUpdateQuantity}
-                        />
-                    ))
+                    (() => {
+                        // Agrupa itens similares e mostra quantidade total
+                        const groupedItems = [];
+                        const processedIds = new Set();
+                        
+                        basketItems.forEach(item => {
+                            if (processedIds.has(item.id)) return;
+                            
+                            // Encontra todos os itens similares (mesmo produto, modificações e observações)
+                            const similarItems = basketItems.filter(basketItem => 
+                                (basketItem.originalProductId || basketItem.productId) === (item.originalProductId || item.productId) &&
+                                JSON.stringify(basketItem.selectedExtras) === JSON.stringify(item.selectedExtras) &&
+                                JSON.stringify(basketItem.defaultIngredientsQuantities) === JSON.stringify(item.defaultIngredientsQuantities) &&
+                                basketItem.observacoes === item.observacoes
+                            );
+                            
+                            // Marca todos como processados
+                            similarItems.forEach(similarItem => processedIds.add(similarItem.id));
+                            
+                            // Calcula total dos itens similares
+                            const totalQuantity = similarItems.length;
+                            const totalPrice = similarItems.reduce((sum, similarItem) => sum + (similarItem.total || 0), 0);
+                            
+                            // Cria um item agrupado com quantidade total
+                            const groupedItem = {
+                                ...item,
+                                quantity: totalQuantity,
+                                total: totalPrice,
+                                similarItemIds: similarItems.map(si => si.id) // Guarda IDs para remoção
+                            };
+                            
+                            groupedItems.push(groupedItem);
+                        });
+                        
+                        return groupedItems.map((item, index) => (
+                            <ItensCesta
+                                key={item.id || index}
+                                item={item}
+                                onEdit={handleEditItem}
+                                onRemove={handleRemoveItem}
+                                onUpdateQuantity={handleUpdateQuantity}
+                            />
+                        ));
+                    })()
                 ) : (
                     <Text style={styles.emptyText}>Nenhum item na cesta</Text>
                 )}

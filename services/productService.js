@@ -238,6 +238,44 @@ export const removeIngredientFromProduct = async (productId, ingredientId) => {
 };
 
 /**
+ * Obtém produtos mais pedidos.
+ * @param {object} options - Opções de paginação
+ * @returns {Promise<object>} - Lista de produtos mais pedidos
+ */
+export const getMostOrderedProducts = async (options = {}) => {
+  try {
+    console.log("Obtendo produtos mais pedidos com opções:", options);
+    const { page = 1, page_size = 10 } = options;
+    const response = await api.get("/products/most-ordered", {
+      params: { page, page_size },
+    });
+    return response.data;
+  } catch (error) {
+    console.log("Erro ao obter produtos mais pedidos:", error);
+    throw error;
+  }
+};
+
+/**
+ * Obtém produtos recentemente adicionados (novidades).
+ * @param {object} options - Opções de paginação
+ * @returns {Promise<object>} - Lista de produtos recentemente adicionados
+ */
+export const getRecentlyAddedProducts = async (options = {}) => {
+  try {
+    console.log("Obtendo produtos recentemente adicionados com opções:", options);
+    const { page = 1, page_size = 10 } = options;
+    const response = await api.get("/products/recently-added", {
+      params: { page, page_size },
+    });
+    return response.data;
+  } catch (error) {
+    console.log("Erro ao obter produtos recentemente adicionados:", error);
+    throw error;
+  }
+};
+
+/**
  * Obtém todas as seções de produtos.
  * @returns {Promise<Array>} - Lista de seções
  */

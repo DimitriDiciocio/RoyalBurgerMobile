@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text, Platform } from 'react-native';
 import { NavigationContainer, useIsFocused } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Header from "./components/Header";
@@ -26,7 +26,10 @@ import Pagamento from "./screens/pagamento";
 import React, { useEffect, useState } from 'react';
 import { isAuthenticated, getStoredUserData, logout, getCurrentUserProfile } from "./services";
 import { getLoyaltyBalance, getCustomerAddresses } from "./services/customerService";
+import { getMostOrderedProducts, getRecentlyAddedProducts } from "./services/productService";
+import { getAllPromotions } from "./services/promotionService";
 import { BasketProvider, useBasket } from "./contexts/BasketContext";
+import api from "./services/api";
 
 const Stack = createNativeStackNavigator();
 
@@ -38,6 +41,12 @@ function HomeScreen({ navigation }) {
     const [enderecos, setEnderecos] = useState([]);
     const [enderecoAtivo, setEnderecoAtivo] = useState(null);
     const { basketItems, basketTotal, basketItemCount, addToBasket } = useBasket();
+    
+    // Estados para as seções da home
+    const [mostOrderedData, setMostOrderedData] = useState([]);
+    const [promotionsData, setPromotionsData] = useState([]);
+    const [comboData, setComboData] = useState([]);
+    const [loadingSections, setLoadingSections] = useState(true);
 
     const fetchEnderecos = async (userId) => {
         try {
@@ -144,52 +153,124 @@ function HomeScreen({ navigation }) {
         };
         checkAuth();
     }, [isFocused]);
-    const mostOrderedData = [
-        {
-            title: "Hambúrguer Clássico",
-            description: "Pão, carne, queijo, alface",
-            price: "R$ 25,90",
-            deliveryTime: "30 - 40 min",
-            deliveryPrice: "R$ 5,00",
-            imageSource: { uri: "https://exemplo.com/burger1.jpg" }
-        },
-    ];
 
-    const promotionsData = [
-        {
-            title: "Combo Especial",
-            description: "Burger + Batata + Refrigerante",
-            price: "R$ 28,90",
-            deliveryTime: "35 - 45 min",
-            deliveryPrice: "R$ 4,00",
-            imageSource: { uri: "https://exemplo.com/combo1.jpg" }
-        },
-    ];
+    // Função helper para formatar produtos da API para o formato esperado pelo ViewCardItem
+    const formatProductForCard = (product, promotion = null) => {
+        const basePrice = parseFloat(product.price || 0);
+        const finalPrice = promotion ? (basePrice - parseFloat(promotion.discount_value || 0)) : basePrice;
+        const priceFormatted = `R$ ${finalPrice.toFixed(2).replace('.', ',')}`;
+        
+        // Monta URL da imagem - usa o baseURL da API
+        let imageUrl = null;
+        if (product.image_url) {
+            // Se a URL já contém http, usa direto
+            if (product.image_url.startsWith('http')) {
+                imageUrl = product.image_url;
+            } else if (product.id) {
+                // Usa o endpoint de imagem da API (igual ao MenuCategory)
+                const baseUrl = api.defaults.baseURL.replace('/api', '');
+                imageUrl = `${baseUrl}/api/products/image/${product.id}`;
+            } else {
+                // Fallback: constrói URL manualmente
+                const baseUrl = api.defaults.baseURL.replace('/api', '');
+                imageUrl = product.image_url.startsWith('/') 
+                    ? `${baseUrl}${product.image_url}` 
+                    : `${baseUrl}/api/${product.image_url}`;
+            }
+        }
+        
+        return {
+            id: product.id,
+            title: product.name || 'Produto',
+            description: product.description || 'Descrição não disponível',
+            price: priceFormatted,
+            deliveryTime: `${product.preparation_time_minutes || 30} - ${(product.preparation_time_minutes || 30) + 10} min`,
+            deliveryPrice: "R$ 5,00", // Valor fixo por enquanto, pode vir das settings depois
+            imageSource: imageUrl ? { uri: imageUrl } : null,
+            expires_at: promotion?.expires_at || null, // Para o timer de promoção
+            ...product // Inclui todos os dados originais para uso na tela de produto
+        };
+    };
 
-    const comboData = [
-        {
-            title: "Combo Especial",
-            description: "Burger + Batata + Refrigerante",
-            price: "R$ 28,90",
-            deliveryTime: "35 - 45 min",
-            deliveryPrice: "R$ 4,00",
-            imageSource: { uri: "https://exemplo.com/combo1.jpg" }
-        },
-        {
-            title: "Hambúrguer Clássico",
-            description: "Pão, carne, queijo, alface",
-            price: "R$ 25,90",
-            deliveryTime: "30 - 40 min",
-            deliveryPrice: "R$ 5,00",
-            imageSource: { uri: "https://exemplo.com/burger1.jpg" }
-        },
-    ];
+    // Carrega dados das seções da home
+    useEffect(() => {
+        const loadHomeSections = async () => {
+            try {
+                setLoadingSections(true);
+                
+                // Carrega mais pedidos
+                try {
+                    const mostOrderedResponse = await getMostOrderedProducts({ page_size: 10 });
+                    const mostOrderedItems = mostOrderedResponse.items || mostOrderedResponse || [];
+                    const formattedMostOrdered = mostOrderedItems.map(product => formatProductForCard(product));
+                    setMostOrderedData(formattedMostOrdered);
+                } catch (error) {
+                    console.log('Erro ao carregar mais pedidos:', error);
+                    setMostOrderedData([]);
+                }
 
-    const promoEndTime = new Date();
-    promoEndTime.setHours(promoEndTime.getHours() + 1);
+                // Carrega promoções
+                try {
+                    const promotionsResponse = await getAllPromotions();
+                    const promotions = promotionsResponse.items || promotionsResponse || [];
+                    const formattedPromotions = promotions.map(promotion => {
+                        const product = promotion.product || promotion;
+                        return formatProductForCard(product, promotion);
+                    });
+                    setPromotionsData(formattedPromotions);
+                } catch (error) {
+                    console.log('Erro ao carregar promoções:', error);
+                    setPromotionsData([]);
+                }
+
+                // Carrega novidades (combos)
+                try {
+                    const recentlyAddedResponse = await getRecentlyAddedProducts({ page_size: 10 });
+                    const recentlyAddedItems = recentlyAddedResponse.items || recentlyAddedResponse || [];
+                    const formattedRecentlyAdded = recentlyAddedItems.map(product => formatProductForCard(product));
+                    setComboData(formattedRecentlyAdded);
+                } catch (error) {
+                    console.log('Erro ao carregar novidades:', error);
+                    setComboData([]);
+                }
+            } catch (error) {
+                console.log('Erro ao carregar seções da home:', error);
+            } finally {
+                setLoadingSections(false);
+            }
+        };
+
+        loadHomeSections();
+    }, [isFocused]);
+
+    // Calcula tempo de expiração da primeira promoção (se houver)
+    const getPromoEndTime = () => {
+        if (promotionsData.length > 0 && promotionsData[0].expires_at) {
+            return new Date(promotionsData[0].expires_at);
+        }
+        // Fallback: 1 hora a partir de agora
+        const defaultTime = new Date();
+        defaultTime.setHours(defaultTime.getHours() + 1);
+        return defaultTime;
+    };
 
     const handlePromoExpire = () => {
         console.log('Promoção expirou!');
+        // Recarrega promoções quando uma expira
+        const loadPromotions = async () => {
+            try {
+                const promotionsResponse = await getAllPromotions();
+                const promotions = promotionsResponse.items || promotionsResponse || [];
+                const formattedPromotions = promotions.map(promotion => {
+                    const product = promotion.product || promotion;
+                    return formatProductForCard(product, promotion);
+                });
+                setPromotionsData(formattedPromotions);
+            } catch (error) {
+                console.log('Erro ao recarregar promoções:', error);
+            }
+        };
+        loadPromotions();
     };
 
     const handleLogout = async () => {
@@ -213,27 +294,33 @@ function HomeScreen({ navigation }) {
                 <CarouselImg />
             </View>
 
-            <ViewCardItem
-                title="Os mais pedidos"
-                data={mostOrderedData}
-                navigation={navigation}
-            />
+            {mostOrderedData.length > 0 && (
+                <ViewCardItem
+                    title="Os mais pedidos"
+                    data={mostOrderedData}
+                    navigation={navigation}
+                />
+            )}
 
-            <ViewCardItem
-                title="Em promoção"
-                data={promotionsData}
-                promoTimer={{
-                    endTime: promoEndTime,
-                    onExpire: handlePromoExpire
-                }}
-                navigation={navigation}
-            />
+            {promotionsData.length > 0 && (
+                <ViewCardItem
+                    title="Em promoção"
+                    data={promotionsData}
+                    promoTimer={{
+                        endTime: getPromoEndTime(),
+                        onExpire: handlePromoExpire
+                    }}
+                    navigation={navigation}
+                />
+            )}
 
-            <ViewCardItem
-                title="Combos"
-                data={comboData}
-                navigation={navigation}
-            />
+            {comboData.length > 0 && (
+                <ViewCardItem
+                    title="Combos"
+                    data={comboData}
+                    navigation={navigation}
+                />
+            )}
         </View>
     );
 

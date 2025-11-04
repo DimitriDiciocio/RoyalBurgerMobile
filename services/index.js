@@ -86,6 +86,8 @@ export {
   createSection,
   updateSection,
   deleteSection,
+  getMostOrderedProducts,
+  getRecentlyAddedProducts,
 } from "./productService";
 
 // Categorias
@@ -273,3 +275,10 @@ export {
 
 // Atualização de senha
 export { updatePassword } from "./userService";
+
+// Promoções
+export {
+  getAllPromotions,
+  getPromotionById,
+  getPromotionByProductId,
+} from "./promotionService";
