@@ -32,26 +32,11 @@ export const login = async (userData) => {
     await AsyncStorage.setItem("user_token", access_token);
 
     // Se a API devolveu o objeto do usuário, salva direto; senão, monta um básico
-    let toStoreUser = user || {
+    const toStoreUser = user || {
       email: userData?.email,
       full_name: full_name || "Usuário",
       role: Array.isArray(roles) && roles.length > 0 ? roles[0] : "customer",
     };
-
-    // Busca perfil completo do usuário para ter todos os dados necessários
-    try {
-      const profileResponse = await api.get("/users/profile");
-      if (profileResponse.data) {
-        // Mescla dados do login com dados do perfil completo
-        toStoreUser = {
-          ...toStoreUser,
-          ...profileResponse.data,
-        };
-      }
-    } catch (profileError) {
-      // Se falhar ao buscar perfil, continua com dados do login
-      console.warn("Não foi possível buscar perfil completo no login:", profileError);
-    }
 
     await AsyncStorage.setItem("user_data", JSON.stringify(toStoreUser));
 
@@ -164,52 +149,6 @@ export const getCurrentUserProfile = async () => {
 };
 
 /**
- * Atualiza o cache do usuário no AsyncStorage com novos dados.
- * Usado quando há mudanças no perfil, pontos, endereços, etc.
- * @param {object} userData - Novos dados do usuário para atualizar no cache
- * @returns {Promise<void>}
- */
-export const updateUserCache = async (userData) => {
-  try {
-    if (!userData) return;
-    
-    // Busca dados atuais do cache
-    const currentData = await getStoredUserData();
-    
-    // Mescla dados atuais com novos dados
-    const updatedData = {
-      ...currentData,
-      ...userData,
-      // Garante que campos importantes não sejam perdidos
-      id: userData.id || currentData?.id,
-      email: userData.email || currentData?.email,
-      full_name: userData.full_name || userData.name || currentData?.full_name || currentData?.name,
-      name: userData.name || userData.full_name || currentData?.name || currentData?.full_name,
-    };
-    
-    await AsyncStorage.setItem("user_data", JSON.stringify(updatedData));
-  } catch (error) {
-    console.error("Erro ao atualizar cache do usuário:", error);
-  }
-};
-
-/**
- * Busca perfil completo do usuário e atualiza o cache.
- * Usado quando necessário sincronizar dados com o servidor.
- * @returns {Promise<object|null>} - Dados atualizados do usuário
- */
-export const refreshUserProfile = async () => {
-  try {
-    const userData = await getCurrentUserProfile();
-    return userData;
-  } catch (error) {
-    console.error("Erro ao atualizar perfil do usuário:", error);
-    // Retorna dados do cache se a busca falhar
-    return await getStoredUserData();
-  }
-};
-
-/**
  * Testa se o token atual é válido fazendo uma requisição simples.
  * @returns {Promise<boolean>} - True se o token é válido
  */
@@ -269,26 +208,17 @@ export const updateProfile = async (userData) => {
   try {
     // Para clientes, usa a rota de customers
     const user = await getStoredUserData();
-    let response;
-    
     if (user && user.role === "customer") {
-      response = await api.put(`/customers/${user.id}`, userData);
-    } else {
-      // Para outros usuários, usa a rota de users
-      response = await api.put("/users/profile", userData);
+      const response = await api.put(`/customers/${user.id}`, userData);
+      return response.data;
     }
+
+    // Para outros usuários, usa a rota de users
+    const response = await api.put("/users/profile", userData);
 
     // Atualiza os dados locais se a atualização foi bem-sucedida
     if (response.data) {
-      // Busca perfil completo atualizado para garantir todos os dados
-      try {
-        const updatedProfile = await getCurrentUserProfile();
-        return updatedProfile;
-      } catch (profileError) {
-        // Se falhar, atualiza com os dados retornados
-        await updateUserCache(response.data);
-        return response.data;
-      }
+      await AsyncStorage.setItem("user_data", JSON.stringify(response.data));
     }
 
     return response.data;
