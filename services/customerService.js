@@ -1,6 +1,4 @@
 import api from "./api";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { updateUserCache } from "./userService";
 
 /**
  * ========================================
@@ -170,30 +168,10 @@ export const getCustomerOrderHistory = async (customerId, filters = {}) => {
  */
 export const getCustomerAddresses = async (customerId) => {
   try {
-    if (!customerId) {
-      throw new Error('ID do cliente é obrigatório');
-    }
-    
     const response = await api.get(`/customers/${customerId}/addresses`);
-    const addresses = response.data;
-    
-    // Atualiza cache de endereços apenas se for um array válido
-    if (addresses && Array.isArray(addresses)) {
-      try {
-        await AsyncStorage.setItem('user_addresses', JSON.stringify(addresses));
-      } catch (storageError) {
-        console.warn('Erro ao salvar endereços no cache:', storageError);
-        // Continua mesmo se falhar ao salvar no cache
-      }
-    }
-    
-    // Retorna array vazio se não for um array válido
-    return Array.isArray(addresses) ? addresses : [];
+    return response.data;
   } catch (error) {
-    // Log do erro mas não propaga para não quebrar a UI
-    console.error('Erro ao buscar endereços:', error);
-    // Retorna array vazio em caso de erro
-    return [];
+    throw error;
   }
 };
 
@@ -280,17 +258,7 @@ export const setDefaultAddress = async (customerId, addressId) => {
 export const getLoyaltyBalance = async (customerId) => {
   try {
     const response = await api.get(`/loyalty/balance/${customerId}`);
-    const balance = response.data;
-    
-    // Atualiza cache com os pontos atuais
-    if (balance?.current_balance !== undefined) {
-      await updateUserCache({ 
-        loyalty_points: balance.current_balance,
-        loyalty_data: balance 
-      });
-    }
-    
-    return balance;
+    return response.data;
   } catch (error) {
     throw error;
   }

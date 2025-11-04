@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { SvgXml } from 'react-native-svg';
 import Header from '../components/Header';
 import MenuNavigation from '../components/MenuNavigation';
-import { isAuthenticated } from '../services/userService';
+import { isAuthenticated, getStoredUserData } from '../services/userService';
 import { getCustomerAddresses, getLoyaltyBalance, calculateDaysUntilExpiration } from '../services/customerService';
-import { useUserCache } from '../hooks/useUserCache';
 
 // SVGs dos ícones
 const crownSvg = `<svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -21,13 +20,13 @@ const circleSvg = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" x
 
 export default function ClubeRoyal({ navigation }) {
   const isFocused = useIsFocused();
-  const { userInfo, userData, loadingPoints: cachedLoadingPoints, refreshPoints, updateCache, isHeaderReady, addresses: cachedAddresses, loyaltyPoints: cachedLoyaltyPoints } = useUserCache();
   const [loggedIn, setLoggedIn] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
   const [enderecos, setEnderecos] = useState([]);
   const [enderecoAtivo, setEnderecoAtivo] = useState(null);
-  const [loyaltyBalance, setLoyaltyBalance] = useState(null); // null para indicar que ainda não foi carregado
+  const [loyaltyBalance, setLoyaltyBalance] = useState(0);
   const [loyaltyData, setLoyaltyData] = useState(null);
-  const [isLoadingScreen, setIsLoadingScreen] = useState(true); // Estado para controlar se a tela está carregando
+  const [loadingPoints, setLoadingPoints] = useState(false);
 
   const fetchEnderecos = async (userId) => {
     try {
@@ -45,41 +44,37 @@ export default function ClubeRoyal({ navigation }) {
 
   const fetchLoyaltyBalance = async (userId) => {
     try {
+      setLoadingPoints(true);
       const balance = await getLoyaltyBalance(userId);
-      const points = balance?.current_balance ?? 0;
-      
-      // Só atualiza se o valor for diferente do cache
-      if (points !== cachedLoyaltyPoints) {
-        setLoyaltyBalance(points);
-        setLoyaltyData(balance);
-        // Atualiza cache com os pontos
-        await updateCache({ loyalty_points: points, loyalty_data: balance });
-      }
-      // Se for igual, não faz nada (mantém o valor do cache que já está sendo exibido)
-      
+      console.log('Dados da API de pontos:', balance); // Debug
+      const points = balance?.current_balance || 0;
+      setLoyaltyBalance(points);
+      setLoyaltyData(balance);
       return points;
     } catch (error) {
       console.error('Erro ao buscar pontos:', error);
-      // Se falhar, mantém os pontos do cache se existirem (não muda nada)
-      if (cachedLoyaltyPoints === null || cachedLoyaltyPoints === undefined) {
-        setLoyaltyBalance(null);
-      }
-      // Se tiver cache, não faz nada (mantém o valor do cache)
+      setLoyaltyBalance(0);
       setLoyaltyData(null);
-      return cachedLoyaltyPoints;
+      return 0;
+    } finally {
+      setLoadingPoints(false);
     }
   };
 
-  // Função para calcular dias restantes até expiração (usando useMemo para evitar recalcular infinitamente)
-  const daysUntilExpiration = React.useMemo(() => {
+  // Função para calcular dias restantes até expiração
+  const getDaysUntilExpiration = () => {
     if (!loyaltyData) {
       return 0;
     }
     
+    console.log('Calculando expiração com dados:', loyaltyData); // Debug
+    
     // A API retorna a data de expiração diretamente no objeto
     // Formato: { accumulated_points: 100, spent_points: 0, current_balance: 100, points_expiration_date: "2025-12-06" }
     if (loyaltyData.points_expiration_date) {
-      return calculateDaysUntilExpiration(loyaltyData.points_expiration_date);
+      const days = calculateDaysUntilExpiration(loyaltyData.points_expiration_date);
+      console.log(`Data de expiração: ${loyaltyData.points_expiration_date}, Dias restantes: ${days}`); // Debug
+      return days;
     }
     
     // Fallback: se não tiver data mas tiver pontos, assume 30 dias
@@ -88,7 +83,7 @@ export default function ClubeRoyal({ navigation }) {
     }
     
     return 0;
-  }, [loyaltyData?.points_expiration_date, loyaltyData?.current_balance]);
+  };
 
   const handleEnderecoAtivoChange = (data) => {
     // Verificação de segurança para evitar erro quando data é null
@@ -120,83 +115,51 @@ export default function ClubeRoyal({ navigation }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        setIsLoadingScreen(true);
         const ok = await isAuthenticated();
         setLoggedIn(!!ok);
-        if (ok && userData?.id) {
-          // Carrega pontos do cache primeiro para exibição imediata
-          if (cachedLoyaltyPoints !== null && cachedLoyaltyPoints !== undefined) {
-            setLoyaltyBalance(cachedLoyaltyPoints);
-            // Se tiver loyalty_data no cache do usuário, usa também
-            if (userData?.loyalty_data) {
-              setLoyaltyData(userData.loyalty_data);
-            }
+        if (ok) {
+          const user = await getStoredUserData();
+          
+          // Buscar endereços e pontos se o usuário estiver logado
+          if (user?.id) {
+            await fetchEnderecos(user.id);
+            const points = await fetchLoyaltyBalance(user.id);
+            
+            // Normaliza campos esperados pelo Header APÓS buscar os pontos
+            const normalized = {
+              name: user.full_name || user.name || 'Usuário',
+              points: points.toString(), // Usa os pontos da API
+              address: user.address || undefined,
+              avatar: undefined,
+            };
+            setUserInfo(normalized);
           } else {
-            // Se não tiver no cache, mantém null para mostrar loading
-            setLoyaltyBalance(null);
-          }
-          
-          // Usa endereços do cache se disponíveis, senão busca
-          if (cachedAddresses.length > 0) {
-            setEnderecos(cachedAddresses);
-          } else {
-            try {
-              await fetchEnderecos(userData.id);
-            } catch (error) {
-              console.error('Erro ao buscar endereços:', error);
-              setEnderecos([]);
-            }
-          }
-          
-          // Marca como carregado pois já temos dados do cache (nome e estrutura)
-          // Só renderiza se tiver userInfo (nome do usuário)
-          if (userInfo?.name) {
-            setIsLoadingScreen(false);
-          }
-          
-          // Sempre busca pontos atualizados em background para verificar se mudou
-          // Se tiver cache, carrega silenciosamente sem mostrar loading
-          try {
-            await fetchLoyaltyBalance(userData.id);
-          } catch (error) {
-            console.error('Erro ao buscar pontos:', error);
+            setUserInfo(null);
           }
         } else {
+          setUserInfo(null);
           setEnderecos([]);
-          setLoyaltyBalance(0);
-          setLoyaltyData(null);
-          setIsLoadingScreen(false);
         }
       } catch (e) {
-        console.error('Erro ao verificar autenticação:', e);
         setLoggedIn(false);
+        setUserInfo(null);
         setEnderecos([]);
-        setLoyaltyBalance(0);
-        setLoyaltyData(null);
-        setIsLoadingScreen(false);
       }
     };
     checkAuth();
-  }, [isFocused, userData?.id, cachedLoyaltyPoints, userInfo?.name]); // Adicionado userInfo?.name para reagir quando nome estiver disponível
-  
-  // Não renderiza enquanto header não estiver pronto, não tiver nome do usuário, ou estiver carregando dados básicos
-  if (!isHeaderReady || isLoadingScreen || !userInfo?.name) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#FFC700" style={{ flex: 1, justifyContent: 'center' }} />
-      </View>
-    );
-  }
+  }, [isFocused]);
 
   return (
     <View style={styles.container}>
       <Header 
         type="logged"
+        userInfo={userInfo}
         navigation={navigation}
         title="Clube Royal"
         subtitle="Seus benefícios exclusivos"
-        enderecos={enderecos.length > 0 ? enderecos : cachedAddresses}
+        enderecos={enderecos}
         onEnderecoAtivoChange={handleEnderecoAtivoChange}
+        loadingPoints={loadingPoints}
       />
       
       <ScrollView 
@@ -215,31 +178,17 @@ export default function ClubeRoyal({ navigation }) {
           <View style={styles.pointsContent}>
             <View style={styles.pointsDisplay}>
               <SvgXml xml={crownSvg} width={40} height={40} />
-              {/* Só mostra loading se não tiver cache E estiver carregando */}
-              {cachedLoadingPoints && cachedLoyaltyPoints === null && loyaltyBalance === null ? (
-                <ActivityIndicator size="small" color="#FFC700" style={styles.loadingIndicator} />
-              ) : (
-                <Text style={styles.pointsNumber}>
-                  {loyaltyBalance !== null && loyaltyBalance !== undefined 
-                    ? loyaltyBalance 
-                    : (cachedLoyaltyPoints !== null && cachedLoyaltyPoints !== undefined 
-                        ? cachedLoyaltyPoints 
-                        : 0)}
-                </Text>
-              )}
+              <Text style={styles.pointsNumber}>{loyaltyBalance}</Text>
             </View>
             <Text style={styles.pointsExpiration}>
-              {daysUntilExpiration > 0 
-                ? `Faltam ${daysUntilExpiration} dias para seus pontos expirarem`
-                : (loyaltyBalance ?? cachedLoyaltyPoints ?? 0) > 0 
+              {getDaysUntilExpiration() > 0 
+                ? `Faltam ${getDaysUntilExpiration()} dias para seus pontos expirarem`
+                : loyaltyBalance > 0 
                   ? 'Seus pontos expiraram'
                   : 'Você não possui pontos para expirar'
               }
             </Text>
-            <TouchableOpacity 
-              style={styles.historyButton}
-              onPress={() => navigation.navigate('HistoricoPontos')}
-            >
+            <TouchableOpacity style={styles.historyButton}>
               <Text style={styles.historyButtonText}>Histórico de pontos</Text>
             </TouchableOpacity>
           </View>
@@ -358,11 +307,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 15,
-    gap: 8,
-  },
-  loadingIndicator: {
-    marginLeft: 12,
-    marginRight: 4,
   },
   pointsNumber: {
     fontSize: 28,

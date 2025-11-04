@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   StyleSheet,
   Text,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
 } from "react-native";
 import { SvgXml } from "react-native-svg";
 import { useIsFocused } from "@react-navigation/native";
@@ -24,7 +23,6 @@ import { calculateDaysUntilExpiration } from "../services/customerService";
     removeCustomerAddress,
     setDefaultAddress,
   } from "../services/customerService";
-import { useUserCache } from '../hooks/useUserCache';
 import MenuNavigation from "../components/MenuNavigation";
 import DadosContaBottomSheet from "../components/DadosContaBottomSheet";
 import EnderecosBottomSheet from "../components/EnderecosBottomSheet";
@@ -65,68 +63,75 @@ const infoSvg = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xml
 
 export default function Perfil({ navigation }) {
   const isFocused = useIsFocused();
-  const { userInfo: cachedUserInfo, userData, loyaltyPoints: cachedLoyaltyPoints, loadingPoints: cachedLoadingPoints, isHeaderReady, loading: cacheLoading } = useUserCache();
+  const [userInfo, setUserInfo] = useState(null);
   const [showDadosConta, setShowDadosConta] = useState(false);
   const [showEnderecos, setShowEnderecos] = useState(false);
   const [showEditarEndereco, setShowEditarEndereco] = useState(false);
   const [enderecoSelecionado, setEnderecoSelecionado] = useState(null);
   const [enderecos, setEnderecos] = useState([]);
   const [enderecoAtivo, setEnderecoAtivo] = useState(null);
-  const [loyaltyBalance, setLoyaltyBalance] = useState(null); // null para indicar que ainda não foi carregado
-  const [loadingPoints, setLoadingPoints] = useState(true); // Começa como true para mostrar loading
+  const [loyaltyBalance, setLoyaltyBalance] = useState(0);
+  const [loadingPoints, setLoadingPoints] = useState(false);
   const [loyaltyData, setLoyaltyData] = useState(null);
 
   useEffect(() => {
     const getUserData = async () => {
       try {
         const ok = await isAuthenticated();
-        if (ok && userData?.id) {
-          // Carrega pontos do cache primeiro para exibição imediata
-          if (cachedLoyaltyPoints !== null && cachedLoyaltyPoints !== undefined) {
-            setLoyaltyBalance(cachedLoyaltyPoints);
-            setLoadingPoints(false); // Já temos pontos do cache, não mostra loading
-            // Tenta carregar loyalty_data do cache também
-            const cachedUser = await getStoredUserData();
-            if (cachedUser?.loyalty_data) {
-              setLoyaltyData(cachedUser.loyalty_data);
-            }
-          } else {
-            // Se não tiver pontos no cache, mantém null e mostra loading
-            setLoyaltyBalance(null);
-            setLoadingPoints(true);
+        if (ok) {
+          // Primeiro tenta obter dados atualizados da API
+          let user;
+          try {
+            user = await getCurrentUserProfile();
+          } catch (apiError) {
+            // Se falhar, usa dados locais como fallback
+            console.warn(
+              "Erro ao obter dados da API, usando dados locais:",
+              apiError
+            );
+            user = await getStoredUserData();
           }
-          
-          // Busca dados atualizados da API em background (sempre verifica se mudou)
-          setTimeout(async () => {
-            try {
-              // Testa o token antes de fazer as requisições
-              const tokenValid = await testTokenValidity();
 
-              if (tokenValid && userData?.id) {
-                await fetchEnderecos(userData.id);
-                // Sempre busca pontos da API para verificar se mudou
-                await fetchLoyaltyBalance(userData.id);
+          // Mantém todos os dados do usuário
+          const normalized = user
+            ? {
+                ...user, // Mantém todos os campos do usuário
+                name: user.full_name || user.name || "Usuário",
+                points: user.points || "0",
+                address: user.address || undefined,
+                avatar: undefined,
               }
-            } catch (error) {
-              console.error("Erro ao buscar dados do usuário:", error);
-            }
-          }, 100);
+            : null;
+          setUserInfo(normalized);
+
+          // Buscar endereços e pontos do usuário de forma sequencial
+          if (user?.id) {
+            // Testa o token antes de fazer as requisições
+            setTimeout(async () => {
+              try {
+                const tokenValid = await testTokenValidity();
+
+                if (tokenValid) {
+                  await fetchEnderecos(user.id);
+                  await fetchLoyaltyBalance(user.id);
+                }
+              } catch (error) {
+                console.error("Erro ao buscar dados do usuário:", error);
+              }
+            }, 100);
+          }
         } else {
+          setUserInfo(null);
           setEnderecos([]);
-          setLoyaltyBalance(null); // Mantém null para mostrar loading
-          setLoyaltyData(null);
-          setLoadingPoints(true);
         }
       } catch (e) {
         console.error("Erro ao obter dados do usuário:", e);
+        setUserInfo(null);
         setEnderecos([]);
-        setLoyaltyBalance(null); // Mantém null para mostrar loading
-        setLoyaltyData(null);
-        setLoadingPoints(true);
       }
     };
     getUserData();
-  }, [isFocused, cachedLoyaltyPoints, userData?.id]);
+  }, [isFocused]);
 
   const fetchEnderecos = async (userId) => {
     try {
@@ -159,38 +164,21 @@ export default function Perfil({ navigation }) {
 
   const fetchLoyaltyBalance = async (userId) => {
     try {
-      // Não mostra loading se já tem cache (carrega em background silenciosamente)
-      const hadCache = cachedLoyaltyPoints !== null && cachedLoyaltyPoints !== undefined;
-      if (!hadCache) {
-        setLoadingPoints(true);
-      }
-      
+      setLoadingPoints(true);
       const balance = await getLoyaltyBalance(userId);
-      const points = balance?.current_balance ?? 0; // Só usa 0 se a API realmente retornar 0
-      
-      // Só atualiza se o valor for diferente do cache
-      if (points !== cachedLoyaltyPoints) {
-        setLoyaltyBalance(points);
-        setLoyaltyData(balance);
-      }
-      // Se for igual, não faz nada (mantém o valor do cache que já está sendo exibido)
+      setLoyaltyBalance(balance?.current_balance || 0);
+      setLoyaltyData(balance);
     } catch (error) {
       console.error("Erro ao buscar pontos:", error);
-      // Se falhar, mantém os pontos do cache se existirem (não muda nada)
-      if (cachedLoyaltyPoints === null || cachedLoyaltyPoints === undefined) {
-        // Só mantém null se não tiver cache
-        setLoyaltyBalance(null);
-      }
-      // Se tiver cache, não faz nada (mantém o valor do cache)
+      setLoyaltyBalance(0);
       setLoyaltyData(null);
     } finally {
       setLoadingPoints(false);
     }
   };
 
-  // Função para calcular dias restantes até expiração (usando useMemo para evitar recalcular infinitamente)
-  // DEVE estar antes de qualquer return condicional para seguir as regras dos hooks
-  const daysUntilExpiration = useMemo(() => {
+  // Função para calcular dias restantes até expiração
+  const getDaysUntilExpiration = () => {
     if (!loyaltyData) {
       return 0;
     }
@@ -206,17 +194,7 @@ export default function Perfil({ navigation }) {
     }
     
     return 0;
-  }, [loyaltyData?.points_expiration_date, loyaltyData?.current_balance]);
-
-  // Não renderiza enquanto não tiver dados básicos do usuário (nome completo)
-  // Usa a mesma lógica do header - espera até ter o nome completo carregado
-  if (!isHeaderReady || !cachedUserInfo?.name || cacheLoading) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#FFC700" style={{ flex: 1, justifyContent: 'center' }} />
-      </View>
-    );
-  }
+  };
 
   const handleAddEndereco = () => {
     setEnderecoSelecionado(null);
@@ -233,8 +211,8 @@ export default function Perfil({ navigation }) {
   const handleSelectEndereco = async (endereco) => {
     try {
       // Chama a API para definir o endereço como padrão
-      if (userData?.id && endereco?.id) {
-        await setDefaultAddress(userData.id, endereco.id);
+      if (userInfo?.id && endereco?.id) {
+        await setDefaultAddress(userInfo.id, endereco.id);
       }
       
       // Atualiza o estado local
@@ -248,11 +226,11 @@ export default function Perfil({ navigation }) {
 
   const handleSaveEndereco = async (formData) => {
     try {
-      if (!userData?.id) return;
+      if (!userInfo?.id) return;
 
       if (formData.id) {
         // Editar endereço existente
-        await updateCustomerAddress(userData.id, formData.id, {
+        await updateCustomerAddress(userInfo.id, formData.id, {
           street: formData.street,
           number: formData.number,
           complement: formData.complement,
@@ -263,7 +241,7 @@ export default function Perfil({ navigation }) {
         });
       } else {
         // Adicionar novo endereço
-        await addCustomerAddress(userData.id, {
+        await addCustomerAddress(userInfo.id, {
           street: formData.street,
           number: formData.number,
           complement: formData.complement,
@@ -275,14 +253,14 @@ export default function Perfil({ navigation }) {
       }
 
       // Atualizar lista de endereços
-      await fetchEnderecos(userData.id);
+      await fetchEnderecos(userInfo.id);
       
       // Se é um novo endereço, define como padrão via API
       if (!formData.id) {
         // Aguarda um pouco para garantir que o endereço foi adicionado
         setTimeout(async () => {
           try {
-            const enderecosAtualizados = await getCustomerAddresses(userData.id);
+            const enderecosAtualizados = await getCustomerAddresses(userInfo.id);
             if (enderecosAtualizados && enderecosAtualizados.length > 0) {
               // Pega o endereço mais recente (primeiro da lista ordenada)
               const enderecosOrdenados = [...enderecosAtualizados].sort((a, b) => 
@@ -291,7 +269,7 @@ export default function Perfil({ navigation }) {
               const enderecoMaisRecente = enderecosOrdenados[0];
               
               // Define como padrão via API
-              await setDefaultAddress(userData.id, enderecoMaisRecente.id);
+              await setDefaultAddress(userInfo.id, enderecoMaisRecente.id);
               setEnderecoAtivo(enderecoMaisRecente);
             }
           } catch (error) {
@@ -310,12 +288,12 @@ export default function Perfil({ navigation }) {
 
   const handleDeleteEndereco = async (enderecoId) => {
     try {
-      if (!userData?.id) return;
+      if (!userInfo?.id) return;
 
-      await removeCustomerAddress(userData.id, enderecoId);
+      await removeCustomerAddress(userInfo.id, enderecoId);
 
       // Atualizar lista de endereços
-      await fetchEnderecos(userData.id);
+      await fetchEnderecos(userInfo.id);
       setShowEditarEndereco(false);
       setShowEnderecos(true);
     } catch (error) {
@@ -385,14 +363,14 @@ export default function Perfil({ navigation }) {
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
-                {getInitials(cachedUserInfo?.name)}
+                {getInitials(userInfo?.name)}
               </Text>
             </View>
           </View>
 
           {/* Nome */}
           <View style={styles.userNameContainer}>
-            <Text style={styles.userName}>{capitalizeName(cachedUserInfo?.name)}</Text>
+            <Text style={styles.userName}>{capitalizeName(userInfo?.name)}</Text>
             <View style={styles.borderLine} />
           </View>
 
@@ -446,23 +424,12 @@ export default function Perfil({ navigation }) {
           <View style={styles.pointsContent}>
             <View style={styles.pointsDisplay}>
               <SvgXml xml={crownSvg} width={40} height={40} />
-              {/* Só mostra loading se não tiver cache E estiver carregando */}
-              {(loadingPoints || cachedLoadingPoints) && cachedLoyaltyPoints === null && loyaltyBalance === null ? (
-                <ActivityIndicator size="small" color="#FFC700" style={styles.loadingIndicator} />
-              ) : (
-                <Text style={styles.pointsNumber}>
-                  {loyaltyBalance !== null && loyaltyBalance !== undefined 
-                    ? loyaltyBalance 
-                    : (cachedLoyaltyPoints !== null && cachedLoyaltyPoints !== undefined 
-                        ? cachedLoyaltyPoints 
-                        : 0)}
-                </Text>
-              )}
+              <Text style={styles.pointsNumber}>{loyaltyBalance}</Text>
             </View>
             <Text style={styles.pointsExpiration}>
-              {daysUntilExpiration > 0 
-                ? `Faltam ${daysUntilExpiration} dias para seus pontos expirarem`
-                : (loyaltyBalance !== null ? loyaltyBalance : (cachedLoyaltyPoints !== null ? cachedLoyaltyPoints : 0)) > 0 
+              {getDaysUntilExpiration() > 0 
+                ? `Faltam ${getDaysUntilExpiration()} dias para seus pontos expirarem`
+                : loyaltyBalance > 0 
                   ? 'Seus pontos expiraram'
                   : 'Você não possui pontos para expirar'
               }
@@ -479,23 +446,57 @@ export default function Perfil({ navigation }) {
       <DadosContaBottomSheet
         visible={showDadosConta}
         onClose={() => setShowDadosConta(false)}
-        userData={userData}
+        userData={userInfo}
         onUserDataUpdate={() => {
           // Recarrega os dados do usuário quando houver atualização
-          // O hook useUserCache já gerencia isso automaticamente
-          if (userData?.id) {
-            setTimeout(async () => {
-              try {
-                await fetchEnderecos(userData.id);
-                await fetchLoyaltyBalance(userData.id);
-              } catch (error) {
-                console.error(
-                  "Erro ao atualizar dados do usuário:",
-                  error
-                );
+          const getUserData = async () => {
+            try {
+              const ok = await isAuthenticated();
+              if (ok) {
+                // Tenta obter dados atualizados da API
+                let user;
+                try {
+                  user = await getCurrentUserProfile();
+                } catch (apiError) {
+                  console.warn(
+                    "Erro ao obter dados da API, usando dados locais:",
+                    apiError
+                  );
+                  user = await getStoredUserData();
+                }
+
+                const normalized = user
+                  ? {
+                      ...user,
+                      name: user.full_name || user.name || "Usuário",
+                      points: user.points || "0",
+                      address: user.address || undefined,
+                      avatar: undefined,
+                    }
+                  : null;
+                setUserInfo(normalized);
+
+                // Atualiza endereços e pontos se o usuário tem ID
+                if (user?.id) {
+                  setTimeout(async () => {
+                    try {
+                      await fetchEnderecos(user.id);
+                      await fetchLoyaltyBalance(user.id);
+                    } catch (error) {
+                      console.error(
+                        "Erro ao atualizar dados do usuário:",
+                        error
+                      );
+                    }
+                  }, 100);
+                }
               }
-            }, 100);
-          }
+            } catch (e) {
+              console.error("Erro ao recarregar dados do usuário:", e);
+              setUserInfo(null);
+            }
+          };
+          getUserData();
         }}
       />
 
@@ -674,11 +675,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 15,
-    gap: 8,
-  },
-  loadingIndicator: {
-    marginLeft: 12,
-    marginRight: 4,
   },
   pointsNumber: {
     fontSize: 28,
