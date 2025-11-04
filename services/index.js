@@ -236,6 +236,7 @@ export {
 
 // Configurações
 export {
+  getPublicSettings,
   getSystemSettings,
   updateSystemSettings,
   getUserSettings,

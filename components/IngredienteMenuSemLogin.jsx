@@ -58,6 +58,8 @@ export default function IngredienteMenu({
 
     // Mostrar botão de diminuir se quantidade > minQuantity (ou > 0 se não tiver min)
     const showDecrement = quantity > (minQuantity || 0);
+    // Ocultar botão de aumentar se atingiu o máximo
+    const showIncrement = maxQuantity === null || quantity < maxQuantity;
 
     return (
         <View style={styles.container}>
@@ -81,13 +83,15 @@ export default function IngredienteMenu({
                             {String(quantity).padStart(2, '0')}
                         </Text>
                     </View>
-                    <TouchableOpacity 
-                        style={styles.plusButton}
-                        onPress={handleIncrement}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.plusText}>+</Text>
-                    </TouchableOpacity>
+                    {showIncrement && (
+                        <TouchableOpacity 
+                            style={styles.plusButton}
+                            onPress={handleIncrement}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.plusText}>+</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
         </View>
@@ -126,15 +130,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginLeft: 16,
+        backgroundColor: '#E0E0E0',
+        borderRadius: 8,
+        overflow: 'hidden',
+        height: 36,
     },
     minusButton: {
-        backgroundColor: '#E0E0E0',
-        width: 32,
-        height: 32,
-        borderRadius: 4,
+        width: 36,
+        height: 36,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 8,
     },
     minusText: {
         fontSize: 20,
@@ -142,13 +147,13 @@ const styles = StyleSheet.create({
         color: '#FF4444',
     },
     quantityBox: {
-        backgroundColor: '#E0E0E0',
         paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 4,
-        minWidth: 40,
+        height: 36,
+        minWidth: 44,
         alignItems: 'center',
         justifyContent: 'center',
+        borderLeftWidth: 0,
+        borderRightWidth: 0,
     },
     quantityText: {
         fontSize: 14,
@@ -156,13 +161,10 @@ const styles = StyleSheet.create({
         color: '#000000',
     },
     plusButton: {
-        backgroundColor: '#E0E0E0',
-        width: 32,
-        height: 32,
-        borderRadius: 4,
+        width: 36,
+        height: 36,
         alignItems: 'center',
         justifyContent: 'center',
-        marginLeft: 8,
     },
     plusText: {
         fontSize: 20,

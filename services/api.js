@@ -66,6 +66,7 @@ api.interceptors.request.use(
         "/users/login",
         "/users/request-password-reset",
         "/users/reset-password",
+        "/settings/public",
       ];
 
       // Rotas específicas que são públicas (usando match exato)

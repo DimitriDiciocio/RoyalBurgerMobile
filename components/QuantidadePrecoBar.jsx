@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 export default function QuantidadePrecoBar({
     unitPrice = 0,
     initialQuantity = 1,
+    additionalTotal = 0,
     onQuantityChange = () => {},
     onAddPress = () => {},
     onAddToBasket = () => {},
@@ -12,12 +13,24 @@ export default function QuantidadePrecoBar({
 }) {
     const [quantity, setQuantity] = useState(Math.max(1, parseInt(initialQuantity || 1, 10)));
 
+    // Atualizar quantidade quando initialQuantity mudar (útil para edição)
+    useEffect(() => {
+        const newQuantity = Math.max(1, parseInt(initialQuantity || 1, 10));
+        if (newQuantity !== quantity) {
+            setQuantity(newQuantity);
+            onQuantityChange(newQuantity);
+        }
+    }, [initialQuantity]);
+
     const priceNumber = useMemo(() => {
         const num = typeof unitPrice === 'string' ? parseFloat(unitPrice.replace('R$', '').replace('.', '').replace(',', '.')) : Number(unitPrice || 0);
         return isNaN(num) ? 0 : num;
     }, [unitPrice]);
 
-    const total = useMemo(() => priceNumber * quantity, [priceNumber, quantity]);
+    const total = useMemo(() => {
+        const baseTotal = priceNumber * quantity;
+        return baseTotal + (additionalTotal || 0);
+    }, [priceNumber, quantity, additionalTotal]);
 
     const formatCurrency = (value) => {
         try {

@@ -7,6 +7,7 @@ import { getLoyaltyBalance, getCustomerAddresses } from '../services/customerSer
 import { useBasket } from '../contexts/BasketContext';
 import ItensCesta from '../components/itensCesta';
 import CardItemVerticalAdd from '../components/CardItemVerticalAdd';
+import { getPublicSettings } from '../services';
 
 const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M5.29385 9.29365C4.90322 9.68428 4.90322 10.3187 5.29385 10.7093L11.2938 16.7093C11.6845 17.0999 12.3188 17.0999 12.7095 16.7093C13.1001 16.3187 13.1001 15.6843 12.7095 15.2937L7.41572 9.9999L12.7063 4.70615C13.097 4.31553 13.097 3.68115 12.7063 3.29053C12.3157 2.8999 11.6813 2.8999 11.2907 3.29053L5.29072 9.29053L5.29385 9.29365Z" fill="black"/>
@@ -19,11 +20,12 @@ export default function Cesta({ navigation }) {
     const [isLoading, setIsLoading] = useState(true);
     const [enderecos, setEnderecos] = useState([]);
     const [enderecoAtivo, setEnderecoAtivo] = useState(null);
-    const { basketItems, removeFromBasket, updateBasketItem, clearBasket, addToBasket } = useBasket();
+    const [deliveryFee, setDeliveryFee] = useState(0);
+    const { basketItems, removeFromBasket, updateBasketItem, clearBasket, addToBasket, basketTotal } = useBasket();
     
-    // Calcular total real dos itens da cesta
+    // Calcular total real dos itens da cesta (já inclui adicionais pois usa item.total)
     const calculateTotal = () => {
-        return basketItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+        return basketItems.reduce((total, item) => total + (item.total || (item.price * item.quantity)), 0);
     };
 
     const fetchEnderecos = async (userId) => {
@@ -70,6 +72,16 @@ export default function Cesta({ navigation }) {
     useEffect(() => {
         const checkAuth = async () => {
             try {
+                // Buscar configurações públicas (taxa de entrega)
+                try {
+                    const publicSettings = await getPublicSettings();
+                    const fee = parseFloat(publicSettings?.delivery_fee || 0);
+                    setDeliveryFee(fee);
+                } catch (error) {
+                    console.log('Erro ao buscar taxa de entrega:', error);
+                    setDeliveryFee(0);
+                }
+
                 const ok = await isAuthenticated();
                 setLoggedIn(!!ok);
                 if (ok) {
@@ -159,8 +171,17 @@ export default function Cesta({ navigation }) {
     };
 
     const handleEditItem = (item) => {
-        // Navegar para edição do item
-        console.log('Editar item:', item);
+        // Navegar para edição do item com todas as informações
+        navigation.navigate('ProdutoEditar', {
+            productId: item.originalProductId || item.productId,
+            editItem: {
+                id: item.id,
+                quantity: item.quantity,
+                observacoes: item.observacoes || '',
+                selectedExtras: item.selectedExtras || {},
+                defaultIngredientsQuantities: item.defaultIngredientsQuantities || {}
+            }
+        });
     };
 
     const handleRemoveItem = (item) => {
@@ -370,7 +391,9 @@ export default function Cesta({ navigation }) {
                     
                     <View style={styles.resumoItem}>
                         <Text style={styles.resumoLabel}>Taxa de entrega</Text>
-                        <Text style={styles.resumoValor}>R$ XX,XX</Text>
+                        <Text style={styles.resumoValor}>
+                            R$ {deliveryFee.toFixed(2).replace('.', ',')}
+                        </Text>
                     </View>
 
                     <View style={styles.resumoItem}>
@@ -381,7 +404,7 @@ export default function Cesta({ navigation }) {
                     <View style={styles.resumoItem}>
                         <Text style={styles.resumoTotalLabel}>Total</Text>
                         <Text style={styles.resumoTotalValor}>
-                            R$ {calculateTotal().toFixed(2).replace('.', ',')}
+                            R$ {(basketTotal + deliveryFee).toFixed(2).replace('.', ',')}
                         </Text>
                     </View>
 
@@ -392,30 +415,32 @@ export default function Cesta({ navigation }) {
              </ScrollView>
 
              {/* Footer fixo */}
-             <View style={styles.footer}>
-                 <View style={styles.footerLeft}>
-                     <Text style={styles.footerTotalLabel}>Total</Text>
-                     <Text style={styles.footerTotalValue}>
-                         R$ {calculateTotal().toFixed(2).replace('.', ',')}
-                     </Text>
+             {(basketItems && basketItems.length > 0) && (
+                 <View style={styles.footer}>
+                     <View style={styles.footerLeft}>
+                         <Text style={styles.footerTotalLabel}>Total</Text>
+                         <Text style={styles.footerTotalValue}>
+                             R$ {(basketTotal + deliveryFee).toFixed(2).replace('.', ',')}
+                         </Text>
+                     </View>
+                     <TouchableOpacity 
+                         style={styles.continuarButton}
+                         onPress={() => {
+                             // Verificar se o usuário está logado
+                             if (loggedIn) {
+                                 // Navegar para tela de pagamento
+                                 navigation.navigate('Pagamento');
+                             } else {
+                                 // Redirecionar para a página de login
+                                 navigation.navigate('Login');
+                             }
+                         }}
+                         activeOpacity={0.8}
+                     >
+                         <Text style={styles.continuarButtonText}>Continuar</Text>
+                     </TouchableOpacity>
                  </View>
-                 <TouchableOpacity 
-                     style={styles.continuarButton}
-                     onPress={() => {
-                         // Verificar se o usuário está logado
-                         if (loggedIn) {
-                             // Navegar para tela de pagamento
-                             navigation.navigate('Pagamento');
-                         } else {
-                             // Redirecionar para a página de login
-                             navigation.navigate('Login');
-                         }
-                     }}
-                     activeOpacity={0.8}
-                 >
-                     <Text style={styles.continuarButtonText}>Continuar</Text>
-                 </TouchableOpacity>
-             </View>
+             )}
          </View>
      );
 }

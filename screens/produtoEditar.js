@@ -1,4 +1,4 @@
-    import React, {useState, useRef, useEffect, useMemo} from 'react';
+    import React, {useState, useRef, useEffect, useMemo, useCallback} from 'react';
 import {StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Animated, ActivityIndicator, Keyboard, Modal} from 'react-native';
     import { SvgXml } from 'react-native-svg';
     import { useIsFocused } from '@react-navigation/native';
@@ -8,7 +8,7 @@ import {StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, 
     import LoginButton from "../components/ButtonView";
     import MenuNavigation from "../components/MenuNavigation";
     import Observacoes from "../components/Observacoes";
-    import QuantidadePrecoBar from "../components/QuantidadePrecoBar";
+    // QuantidadePrecoBar removido - usando botão Salvar no lugar
 import { isAuthenticated, getStoredUserData } from '../services/userService';
 import { getCustomerAddresses, getLoyaltyBalance } from '../services/customerService';
 import { getMenuProduct } from '../services/menuService';
@@ -22,13 +22,13 @@ import api from '../services/api';
 <path d="M5.29385 9.29365C4.90322 9.68428 4.90322 10.3187 5.29385 10.7093L11.2938 16.7093C11.6845 17.0999 12.3188 17.0999 12.7095 16.7093C13.1001 16.3187 13.1001 15.6843 12.7095 15.2937L7.41572 9.9999L12.7063 4.70615C13.097 4.31553 13.097 3.68115 12.7063 3.29053C12.3157 2.8999 11.6813 2.8999 11.2907 3.29053L5.29072 9.29053L5.29385 9.29365Z" fill="black"/>
 </svg>`;
 
-    export default function Produto({navigation, route}) {
+    export default function ProdutoEditar({navigation, route}) {
         const { produto, productId, editItem } = route.params || {};
         
         // Debug: log do productId recebido
-        console.log('[DEBUG] Produto screen - productId recebido:', productId);
-        console.log('[DEBUG] Produto screen - produto recebido:', produto);
-        console.log('[DEBUG] Produto screen - editItem recebido:', editItem);
+        console.log('[DEBUG] ProdutoEditar screen - productId recebido:', productId);
+        console.log('[DEBUG] ProdutoEditar screen - produto recebido:', produto);
+        console.log('[DEBUG] ProdutoEditar screen - editItem recebido:', editItem);
         
         const [isExpanded, setIsExpanded] = useState(false);
         const rotateValue = useRef(new Animated.Value(0)).current;
@@ -50,6 +50,10 @@ import api from '../services/api';
         const [tempSelectedExtras, setTempSelectedExtras] = useState({}); // Estado temporário para a modal
         const [ingredientsCache, setIngredientsCache] = useState(null); // Cache de ingredientes da API
         const [defaultIngredientsQuantities, setDefaultIngredientsQuantities] = useState({}); // {ingredientId: quantity}
+        const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false); // Rastrear alterações não salvas
+        const [showUnsavedModal, setShowUnsavedModal] = useState(false); // Modal de confirmação
+        const initialValuesRef = useRef({ quantity: 1, observacoes: '', selectedExtras: {}, defaultIngredientsQuantities: {} }); // Valores iniciais para comparação
+        const isSavingRef = useRef(false); // Flag para indicar que estamos salvando intencionalmente
         const { addToBasket, updateBasketItem, removeFromBasket, basketItems, basketTotal, basketItemCount } = useBasket();
 
         const fetchEnderecos = async (userId) => {
@@ -308,7 +312,136 @@ import api from '../services/api';
             };
         }, []);
 
+        // Interceptar navegação antes de sair
+        useEffect(() => {
+            const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+                // Se está salvando intencionalmente, permitir saída sem mostrar modal
+                if (isSavingRef.current) {
+                    return;
+                }
+
+                if (!hasUnsavedChanges) {
+                    // Se não há alterações, permitir saída normalmente
+                    return;
+                }
+
+                // Prevenir ação padrão de saída
+                e.preventDefault();
+
+                // Mostrar modal de confirmação
+                setShowUnsavedModal(true);
+            });
+
+            return unsubscribe;
+        }, [navigation, hasUnsavedChanges]);
+
         const handleBackPress = () => {
+            if (hasUnsavedChanges) {
+                setShowUnsavedModal(true);
+            } else {
+                navigation.goBack();
+            }
+        };
+
+        const handleSaveAndExit = () => {
+            // Calcular total com adicionais
+            const unitPrice = parseFloat(productData?.price || 0);
+            const baseTotal = unitPrice * quantity;
+            const total = baseTotal + totalAdditionalPrice;
+            
+            // Gerar lista de modificações para exibição
+            const modifications = [];
+            
+            // Ingredientes padrão modificados
+            defaultIngredients.forEach((ing, index) => {
+                const ingredientId = ing.id || ing.ingredient_id || index;
+                const initialQty = parseFloat(ing.portions || 0) || 0;
+                const currentQty = defaultIngredientsQuantities[ingredientId] !== undefined 
+                    ? defaultIngredientsQuantities[ingredientId] 
+                    : initialQty;
+                
+                if (currentQty > initialQty) {
+                    const extra = findIngredientPrice(ing, ingredientId);
+                    const additionalQty = currentQty - initialQty;
+                    if (additionalQty > 0 && extra > 0) {
+                        modifications.push({
+                            name: ing.name || ing.nome || 'Ingrediente',
+                            quantity: additionalQty,
+                            additionalPrice: extra * additionalQty
+                        });
+                    }
+                }
+            });
+            
+            // Extras adicionados (quantidade adicional acima do mínimo)
+            extraIngredients.forEach((ing, index) => {
+                const ingredientId = ing.id || ing.ingredient_id || `extra-${index}`;
+                const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+                const currentQty = selectedExtras[ingredientId] !== undefined ? selectedExtras[ingredientId] : minQty;
+                
+                // Mostrar apenas se quantidade atual é maior que o mínimo
+                if (currentQty > minQty) {
+                    const extra = findIngredientPrice(ing, ingredientId);
+                    const additionalQty = currentQty - minQty;
+                    if (additionalQty > 0 && extra > 0) {
+                        modifications.push({
+                            name: ing.name || ing.nome || 'Ingrediente',
+                            quantity: additionalQty,
+                            additionalPrice: extra * additionalQty
+                        });
+                    }
+                }
+            });
+            
+            // Atualizar o item existente ao invés de criar um novo
+            if (editItem?.id) {
+                updateBasketItem(editItem.id, {
+                    quantity: quantity,
+                    total: total,
+                    price: unitPrice,
+                    productName: productData?.name || produto?.name || 'Produto',
+                    description: productData?.description || produto?.description,
+                    image: productData?.image_url ? 
+                        `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}` : 
+                        produto?.imageSource?.uri,
+                    observacoes: observacoes,
+                    selectedExtras: selectedExtras,
+                    defaultIngredientsQuantities: defaultIngredientsQuantities,
+                    modifications: modifications
+                });
+            } else {
+                // Se não houver editItem (não deveria acontecer nesta tela), adiciona normalmente
+                addToBasket({ 
+                    quantity, 
+                    total, 
+                    unitPrice, 
+                    productName: productData?.name || produto?.name || 'Produto',
+                    description: productData?.description || produto?.description,
+                    image: productData?.image_url ? 
+                        `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}` : 
+                        produto?.imageSource?.uri,
+                    productId: productData?.id || produto?.id,
+                    observacoes: observacoes,
+                    selectedExtras: selectedExtras,
+                    defaultIngredientsQuantities: defaultIngredientsQuantities,
+                    modifications: modifications
+                });
+            }
+            
+            // Resetar alterações não salvas e marcar que está salvando
+            setHasUnsavedChanges(false);
+            setShowUnsavedModal(false);
+            isSavingRef.current = true; // Marcar que estamos salvando intencionalmente
+            navigation.navigate('Cesta');
+            // Resetar a flag após um pequeno delay para garantir que a navegação foi processada
+            setTimeout(() => {
+                isSavingRef.current = false;
+            }, 100);
+        };
+
+        const handleExitWithoutSaving = () => {
+            setShowUnsavedModal(false);
+            setHasUnsavedChanges(false);
             navigation.goBack();
         };
 
@@ -370,26 +503,48 @@ import api from '../services/api';
                     initialQuantities[ingredientId] = initialQty;
                 });
                 setDefaultIngredientsQuantities(initialQuantities);
+                
+                // Atualizar valores iniciais no ref se estiver editando
+                if (editItem) {
+                    initialValuesRef.current.defaultIngredientsQuantities = initialQuantities;
+                }
             }
         }, [productIngredients, editItem]);
 
         // Aplicar dados de edição quando editItem estiver presente
         useEffect(() => {
             if (editItem) {
-                // Aplicar quantidade
-                if (editItem.quantity) {
-                    setQuantity(editItem.quantity);
-                }
-                // Aplicar observações
-                if (editItem.observacoes) {
-                    setObservacoes(editItem.observacoes);
-                }
-                // Aplicar extras selecionados
-                if (editItem.selectedExtras) {
-                    setSelectedExtras(editItem.selectedExtras);
-                }
+                const initialQuantity = editItem.quantity || 1;
+                const initialObservacoes = editItem.observacoes || '';
+                const initialSelectedExtras = editItem.selectedExtras || {};
+                const initialDefaultQuantities = editItem.defaultIngredientsQuantities || {};
+                
+                setQuantity(initialQuantity);
+                setObservacoes(initialObservacoes);
+                setSelectedExtras(initialSelectedExtras);
+                
+                // Salvar valores iniciais para comparação
+                initialValuesRef.current = {
+                    quantity: initialQuantity,
+                    observacoes: initialObservacoes,
+                    selectedExtras: initialSelectedExtras,
+                    defaultIngredientsQuantities: initialDefaultQuantities
+                };
             }
         }, [editItem]);
+
+        // Detectar mudanças nos valores
+        useEffect(() => {
+            if (!editItem || Object.keys(defaultIngredientsQuantities).length === 0) return;
+            
+            const hasChanges = 
+                quantity !== initialValuesRef.current.quantity ||
+                observacoes !== initialValuesRef.current.observacoes ||
+                JSON.stringify(selectedExtras) !== JSON.stringify(initialValuesRef.current.selectedExtras) ||
+                JSON.stringify(defaultIngredientsQuantities) !== JSON.stringify(initialValuesRef.current.defaultIngredientsQuantities);
+            
+            setHasUnsavedChanges(hasChanges);
+        }, [quantity, observacoes, selectedExtras, defaultIngredientsQuantities, editItem]);
 
         // Calcular total de adicionais dos ingredientes padrão
         const defaultIngredientsTotal = useMemo(() => {
@@ -397,10 +552,12 @@ import api from '../services/api';
             defaultIngredients.forEach((ing, index) => {
                 const ingredientId = ing.id || ing.ingredient_id || index;
                 const extra = findIngredientPrice(ing, ingredientId);
-                const currentQty = defaultIngredientsQuantities[ingredientId] || parseFloat(ing.portions || 0) || 0;
-                const initialQty = parseFloat(ing.portions || 0) || 0;
-                // Calcular apenas a quantidade adicional além do padrão inicial
-                const additionalQty = Math.max(0, currentQty - initialQty);
+                                                  const initialQty = parseFloat(ing.portions || 0) || 0;
+                                  const currentQty = defaultIngredientsQuantities[ingredientId] !== undefined 
+                                      ? defaultIngredientsQuantities[ingredientId] 
+                                      : initialQty;
+                                  // Calcular apenas a quantidade adicional além do padrão inicial
+                                  const additionalQty = Math.max(0, currentQty - initialQty);
                 total += extra * additionalQty;
             });
             return total;
@@ -425,6 +582,25 @@ import api from '../services/api';
         const totalAdditionalPrice = useMemo(() => {
             return defaultIngredientsTotal + extrasTotal;
         }, [defaultIngredientsTotal, extrasTotal]);
+
+        // Calcular total temporário para o item sendo editado (sem taxas)
+        const temporaryItemTotal = useMemo(() => {
+            const unitPrice = parseFloat(productData?.price || 0);
+            const baseTotal = unitPrice * quantity;
+            return baseTotal + totalAdditionalPrice;
+        }, [productData?.price, quantity, totalAdditionalPrice]);
+
+        // Calcular total temporário da cesta (basketTotal - item antigo + novo item)
+        const temporaryBasketTotal = useMemo(() => {
+            if (!editItem?.id) return basketTotal;
+            
+            // Encontrar o item atual na cesta
+            const currentItem = basketItems.find(item => item.id === editItem.id);
+            if (!currentItem) return basketTotal;
+            
+            // Subtrair o total do item antigo e adicionar o novo total
+            return basketTotal - currentItem.total + temporaryItemTotal;
+        }, [basketTotal, basketItems, editItem, temporaryItemTotal]);
 
         const handleOpenExtrasModal = () => {
             // Inicializar estado temporário com valores salvos ou valores mínimos de cada ingrediente
@@ -540,11 +716,11 @@ import api from '../services/api';
                                defaultIngredients.map((ing, index) => {
                                    const displayName = ing.name || ing.nome || 'Ingrediente';
                                    const ingredientId = ing.id || ing.ingredient_id || index;
-                                   // Buscar preço do ingrediente usando cache ou dados do ingrediente
                                    const extra = findIngredientPrice(ing, ingredientId);
-                                   // Usa portions como quantidade inicial (padrão do produto)
-                                   const initialQty = parseFloat(ing.portions || 0) || 0;
-                                   // Quantidade mínima e máxima
+                                   // Usar a quantidade do estado (que já foi inicializada com valores editados se existirem)
+                                   const currentQty = defaultIngredientsQuantities[ingredientId] !== undefined 
+                                       ? defaultIngredientsQuantities[ingredientId] 
+                                       : parseFloat(ing.portions || 0) || 0;
                                    const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
                                    const maxQty = ing.max_quantity || ing.maxQuantity || null;
                                   return (
@@ -552,11 +728,10 @@ import api from '../services/api';
                                           key={ingredientId}
                                           nome={displayName}
                                           valorExtra={extra}
-                                          initialQuantity={initialQty}
+                                          initialQuantity={currentQty}
                                           minQuantity={minQty}
                                           maxQuantity={maxQty ? parseInt(maxQty, 10) : null}
                                           onQuantityChange={(newQuantity) => {
-                                              // Atualizar a quantidade do ingrediente no estado
                                               setDefaultIngredientsQuantities(prev => ({
                                                   ...prev,
                                                   [ingredientId]: newQuantity
@@ -593,82 +768,16 @@ import api from '../services/api';
                          style={{ marginTop: 10, marginBottom: 20 }}
                      />
 
-                     <QuantidadePrecoBar
-                         unitPrice={productData?.price || 0}
-                         initialQuantity={quantity}
-                         additionalTotal={totalAdditionalPrice}
-                         onQuantityChange={setQuantity}
-                         onAddPress={({ quantity, total }) => {
-                             // TODO: integrar ao carrinho quando disponível
-                         }}
-                         onAddToBasket={({ quantity, total, unitPrice }) => {
-                             // Se estiver editando, remover o item antigo primeiro
-                             if (editItem?.id) {
-                                 removeFromBasket(editItem.id);
-                             }
-                             
-                             // Gerar lista de modificações para exibição
-                             const modifications = [];
-                             
-                             // Ingredientes padrão modificados
-                             defaultIngredients.forEach((ing, index) => {
-                                 const ingredientId = ing.id || ing.ingredient_id || index;
-                                 const currentQty = defaultIngredientsQuantities[ingredientId] || parseFloat(ing.portions || 0) || 0;
-                                 const initialQty = parseFloat(ing.portions || 0) || 0;
-                                 
-                                 if (currentQty > initialQty) {
-                                     const extra = findIngredientPrice(ing, ingredientId);
-                                     const additionalQty = currentQty - initialQty;
-                                     if (additionalQty > 0 && extra > 0) {
-                                         modifications.push({
-                                             name: ing.name || ing.nome || 'Ingrediente',
-                                             quantity: additionalQty,
-                                             additionalPrice: extra * additionalQty
-                                         });
-                                     }
-                                 }
-                             });
-                             
-                             // Extras adicionados (quantidade adicional acima do mínimo)
-                             extraIngredients.forEach((ing, index) => {
-                                 const ingredientId = ing.id || ing.ingredient_id || `extra-${index}`;
-                                 const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
-                                 const currentQty = selectedExtras[ingredientId] !== undefined ? selectedExtras[ingredientId] : minQty;
-                                 
-                                 // Mostrar apenas se quantidade atual é maior que o mínimo
-                                 if (currentQty > minQty) {
-                                     const extra = findIngredientPrice(ing, ingredientId);
-                                     const additionalQty = currentQty - minQty;
-                                     if (additionalQty > 0 && extra > 0) {
-                                         modifications.push({
-                                             name: ing.name || ing.nome || 'Ingrediente',
-                                             quantity: additionalQty,
-                                             additionalPrice: extra * additionalQty
-                                         });
-                                     }
-                                 }
-                             });
-                             
-                             // Adiciona à cesta com todas as informações
-                             addToBasket({ 
-                                 quantity, 
-                                 total, 
-                                 unitPrice, 
-                                 productName: productData?.name || produto?.name || 'Produto',
-                                 description: productData?.description || produto?.description,
-                                 image: productData?.image_url ? 
-                                     `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}` : 
-                                     produto?.imageSource?.uri,
-                                 productId: productData?.id || produto?.id,
-                                 observacoes: observacoes,
-                                 selectedExtras: selectedExtras,
-                                 defaultIngredientsQuantities: defaultIngredientsQuantities,
-                                 modifications: modifications
-                             });
-                             navigation.navigate('Home');
-                         }}
-                         style={{ marginBottom: 24 }}
-                     />
+                                           {/* Botão Salvar */}
+                      <View style={styles.saveButtonContainer}>
+                          <TouchableOpacity 
+                              style={styles.saveButton}
+                              onPress={handleSaveAndExit}
+                              activeOpacity={0.8}
+                          >
+                              <Text style={styles.saveButtonText}>Salvar</Text>
+                          </TouchableOpacity>
+                      </View>
                      </ScrollView>
                      
                     {!loggedIn && !keyboardVisible && basketItems.length === 0 && (
@@ -680,7 +789,7 @@ import api from '../services/api';
                     {!loggedIn && !keyboardVisible && basketItems.length > 0 && (
                         <View style={styles.fixedButtonContainer}>
                             <BasketFooter 
-                                total={basketTotal}
+                                total={editItem?.id ? temporaryBasketTotal : basketTotal}
                                 itemCount={basketItemCount}
                                 onPress={handleBasketPress}
                             />
@@ -693,7 +802,7 @@ import api from '../services/api';
                              {basketItems.length > 0 && (
                                  <View style={styles.basketOverlay}>
                                      <BasketFooter 
-                                         total={basketTotal}
+                                         total={editItem?.id ? temporaryBasketTotal : basketTotal}
                                          itemCount={basketItemCount}
                                          onPress={handleBasketPress}
                                      />
@@ -794,6 +903,55 @@ import api from '../services/api';
                                          onPress={handleSaveExtras}
                                      >
                                          <Text style={styles.modalSaveButtonText}>Salvar</Text>
+                                     </TouchableOpacity>
+                                 </View>
+                             </View>
+                         </View>
+                     </Modal>
+
+                     {/* Modal de Confirmação de Alterações Não Salvas */}
+                     <Modal
+                         visible={showUnsavedModal}
+                         animationType="fade"
+                         transparent={true}
+                         onRequestClose={() => setShowUnsavedModal(false)}
+                     >
+                         <View style={styles.unsavedModalOverlay}>
+                             <View style={styles.unsavedModalContent}>
+                                 {/* Botão X no canto */}
+                                 <TouchableOpacity 
+                                     style={styles.unsavedModalCloseButton}
+                                     onPress={() => setShowUnsavedModal(false)}
+                                 >
+                                     <Text style={styles.unsavedModalCloseText}>✕</Text>
+                                 </TouchableOpacity>
+
+                                 {/* Título */}
+                                 <Text style={styles.unsavedModalTitle}>
+                                     Você tem alterações não salvas
+                                 </Text>
+
+                                 {/* Mensagem */}
+                                 <Text style={styles.unsavedModalMessage}>
+                                     Deseja salvar as alterações antes de sair?
+                                 </Text>
+
+                                 {/* Botões */}
+                                 <View style={styles.unsavedModalButtons}>
+                                     <TouchableOpacity 
+                                         style={styles.unsavedModalExitButton}
+                                         onPress={handleExitWithoutSaving}
+                                         activeOpacity={0.8}
+                                     >
+                                         <Text style={styles.unsavedModalExitText}>Sair</Text>
+                                     </TouchableOpacity>
+                                     
+                                     <TouchableOpacity 
+                                         style={styles.unsavedModalSaveButton}
+                                         onPress={handleSaveAndExit}
+                                         activeOpacity={0.8}
+                                     >
+                                         <Text style={styles.unsavedModalSaveText}>Salvar</Text>
                                      </TouchableOpacity>
                                  </View>
                              </View>
@@ -1089,6 +1247,104 @@ import api from '../services/api';
          modalSaveButtonText: {
              color: '#000000',
              fontSize: 16,
-             fontWeight: '600',
-         },
-     });
+                           fontWeight: '600',
+          },
+          saveButtonContainer: {
+              marginHorizontal: 20,
+              marginBottom: 24,
+              marginTop: 10,
+          },
+          saveButton: {
+              backgroundColor: '#FFC107',
+              borderRadius: 8,
+              paddingVertical: 16,
+              alignItems: 'center',
+              justifyContent: 'center',
+          },
+          saveButtonText: {
+              color: '#000000',
+              fontSize: 16,
+              fontWeight: '700',
+          },
+          // Modal de Alterações Não Salvas
+          unsavedModalOverlay: {
+              flex: 1,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              justifyContent: 'center',
+              alignItems: 'center',
+          },
+          unsavedModalContent: {
+              backgroundColor: '#FFFFFF',
+              borderRadius: 20,
+              width: '85%',
+              maxWidth: 400,
+              padding: 24,
+              shadowColor: '#000',
+              shadowOffset: {
+                  width: 0,
+                  height: 2,
+              },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+              elevation: 5,
+              position: 'relative',
+          },
+          unsavedModalCloseButton: {
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              width: 32,
+              height: 32,
+              alignItems: 'center',
+              justifyContent: 'center',
+          },
+          unsavedModalCloseText: {
+              fontSize: 24,
+              color: '#666666',
+              fontWeight: '300',
+          },
+          unsavedModalTitle: {
+              fontSize: 20,
+              fontWeight: 'bold',
+              color: '#000000',
+              marginBottom: 12,
+              marginTop: 8,
+          },
+          unsavedModalMessage: {
+              fontSize: 16,
+              color: '#666666',
+              marginBottom: 24,
+              textAlign: 'center',
+          },
+          unsavedModalButtons: {
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              gap: 12,
+          },
+          unsavedModalExitButton: {
+              flex: 1,
+              backgroundColor: '#E0E0E0',
+              borderRadius: 8,
+              paddingVertical: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+          },
+          unsavedModalExitText: {
+              color: '#000000',
+              fontSize: 16,
+              fontWeight: '600',
+          },
+          unsavedModalSaveButton: {
+              flex: 1,
+              backgroundColor: '#FFC107',
+              borderRadius: 8,
+              paddingVertical: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+          },
+          unsavedModalSaveText: {
+              color: '#000000',
+              fontSize: 16,
+              fontWeight: '700',
+          },
+      });

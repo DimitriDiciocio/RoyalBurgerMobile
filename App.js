@@ -15,6 +15,7 @@ import EsqueciSenha from "./screens/esqueciSenha";
 import VerificarCodigoSenha from "./screens/verificarCodigoSenha";
 import RedefinirSenha from "./screens/redefinirSenha";
 import Produto from "./screens/produto";
+import ProdutoEditar from "./screens/produtoEditar";
 import Perfil from "./screens/perfil";
 import ClubeRoyal from "./screens/clubeRoyal";
 import HistoricoPontos from "./screens/historicoPontos";
@@ -332,6 +333,10 @@ export default function App() {
                 <Stack.Screen 
                     name="Produto" 
                     component={Produto}
+                />
+                <Stack.Screen 
+                    name="ProdutoEditar" 
+                    component={ProdutoEditar}
                 />
                 <Stack.Screen 
                     name="Perfil" 

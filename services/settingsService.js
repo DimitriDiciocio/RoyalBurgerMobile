@@ -7,6 +7,16 @@ import api from "./api";
  * Gerencia configurações do sistema e usuário
  */
 
+export const getPublicSettings = async () => {
+  try {
+    console.log("Obtendo configurações públicas");
+    const response = await api.get("/settings/public");
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
 export const getSystemSettings = async () => {
   try {
     ("Obtendo configurações do sistema");

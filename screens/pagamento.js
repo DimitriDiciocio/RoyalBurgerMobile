@@ -6,7 +6,7 @@ import EnderecosBottomSheet from '../components/EnderecosBottomSheet';
 import EditarEnderecoBottomSheet from '../components/EditarEnderecoBottomSheet';
 import BottomSheet from '../components/BottomSheet';
 import Toggle from '../components/Toggle';
-import { isAuthenticated, getStoredUserData } from '../services';
+import { isAuthenticated, getStoredUserData, getPublicSettings } from '../services';
 import { getLoyaltyBalance, getCustomerAddresses, setDefaultAddress, addCustomerAddress, updateCustomerAddress, removeCustomerAddress } from '../services/customerService';
 import { useBasket } from '../contexts/BasketContext';
 
@@ -51,6 +51,7 @@ export default function Pagamento({ navigation }) {
     const [selectedPayment, setSelectedPayment] = useState(null);
     const [usePoints, setUsePoints] = useState(false);
     const [pointsAvailable, setPointsAvailable] = useState(0);
+    const [deliveryFee, setDeliveryFee] = useState(0);
     const [showEnderecosBottomSheet, setShowEnderecosBottomSheet] = useState(false);
     const [showEditarEndereco, setShowEditarEndereco] = useState(false);
     const [enderecoParaEditar, setEnderecoParaEditar] = useState(null);
@@ -63,6 +64,16 @@ export default function Pagamento({ navigation }) {
     useEffect(() => {
         const checkAuth = async () => {
             try {
+                // Buscar configurações públicas (taxa de entrega)
+                try {
+                    const publicSettings = await getPublicSettings();
+                    const fee = parseFloat(publicSettings?.delivery_fee || 0);
+                    setDeliveryFee(fee);
+                } catch (error) {
+                    console.log('Erro ao buscar taxa de entrega:', error);
+                    setDeliveryFee(0);
+                }
+
                 const ok = await isAuthenticated();
                 setLoggedIn(!!ok);
                 if (ok) {
@@ -125,7 +136,7 @@ export default function Pagamento({ navigation }) {
     }, []);
 
     const calculateTotal = () => {
-        return basketItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+        return basketItems.reduce((total, item) => total + (item.total || (item.price * item.quantity)), 0);
     };
 
     const calculateDiscountPoints = () => {
@@ -134,13 +145,8 @@ export default function Pagamento({ navigation }) {
         return Math.floor(pointsAvailable / 100);
     };
 
-    const calculateDeliveryFee = () => {
-        return 5.00; // Taxa fixa por enquanto
-    };
-
     const calculateFinalTotal = () => {
         const subtotal = calculateTotal();
-        const deliveryFee = calculateDeliveryFee();
         const discount = calculateDiscountPoints();
         return subtotal + deliveryFee - discount;
     };
@@ -558,7 +564,7 @@ export default function Pagamento({ navigation }) {
                     <View style={styles.resumoItem}>
                         <Text style={styles.resumoLabel}>Taxa de entrega</Text>
                         <Text style={styles.resumoValue}>
-                            R$ {calculateDeliveryFee().toFixed(2).replace('.', ',')}
+                            R$ {deliveryFee.toFixed(2).replace('.', ',')}
                         </Text>
                     </View>
 
@@ -605,24 +611,26 @@ export default function Pagamento({ navigation }) {
                         </Text> pontos Royal
                     </Text>
                 </View>
-            </ScrollView>
+                         </ScrollView>
 
-            {/* Footer fixo */}
-            <View style={styles.footer}>
+             {/* Footer fixo */}
+             {(basketItems && basketItems.length > 0) && (
+                 <View style={styles.footer}>
                 <View style={styles.footerLeft}>
                     <Text style={styles.footerTotalLabel}>Total</Text>
                     <Text style={styles.footerTotalValue}>
                         R$ {calculateFinalTotal().toFixed(2).replace('.', ',')}
                     </Text>
                 </View>
-                <TouchableOpacity 
-                    style={styles.revisarButton}
-                    onPress={handleReviewOrder}
-                    activeOpacity={0.8}
-                >
-                    <Text style={styles.revisarButtonText}>Revisar pedido</Text>
-                </TouchableOpacity>
-            </View>
+                                 <TouchableOpacity 
+                     style={styles.revisarButton}
+                     onPress={handleReviewOrder}
+                     activeOpacity={0.8}
+                 >
+                     <Text style={styles.revisarButtonText}>Revisar pedido</Text>
+                 </TouchableOpacity>
+                 </View>
+             )}
 
             {/* Bottom Sheet de Troco */}
             <BottomSheet 
@@ -1109,12 +1117,12 @@ const styles = StyleSheet.create({
         marginTop: 20,
         marginBottom: 16,
     },
-    confirmOrderButtonText: {
-        fontSize: 16,
-        color: '#000000',
-        fontWeight: 'bold',
-    },
-    changeOrderButton: {
+         confirmOrderButtonText: {
+         fontSize: 16,
+         color: '#000000',
+         fontWeight: 'bold',
+     },
+     changeOrderButton: {
         alignItems: 'center',
         paddingVertical: 12,
     },

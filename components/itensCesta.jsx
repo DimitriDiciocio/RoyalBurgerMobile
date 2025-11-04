@@ -80,14 +80,18 @@ export default function ItensCesta({
             <View style={styles.mainSection}>
             {/* Imagem do produto - lado esquerdo */}
             <View style={styles.imageContainer}>
-                <Image
-                    source={item.image ? { uri: item.image } : require('../assets/img/hamburguer.png')}
-                    style={styles.productImage}
-                    resizeMode="cover"
-                    onError={(error) => {
-                        console.log('Erro ao carregar imagem:', error.nativeEvent.error);
-                    }}
-                />
+                {item.image ? (
+                    <Image
+                        source={{ uri: item.image }}
+                        style={styles.productImage}
+                        resizeMode="cover"
+                        onError={(error) => {
+                            console.log('Erro ao carregar imagem:', error.nativeEvent.error);
+                        }}
+                    />
+                ) : (
+                    <View style={styles.placeholderImage} />
+                )}
             </View>
 
                 {/* Detalhes do produto - lado direito da imagem */}
@@ -105,11 +109,30 @@ export default function ItensCesta({
                 </View>
             </View>
 
+            {/* Seção de Modificações */}
+            {item.modifications && item.modifications.length > 0 && (
+                <View style={styles.modificationsSection}>
+                    <Text style={styles.modificationsTitle}>Modificações:</Text>
+                    {item.modifications.map((mod, index) => (
+                        <View key={index} style={styles.modificationItem}>
+                            <View style={styles.modificationIcon}>
+                                <Text style={styles.modificationIconText}>+</Text>
+                            </View>
+                            <Text style={styles.modificationQuantity}>{mod.quantity}</Text>
+                            <Text style={styles.modificationName}>{mod.name}</Text>
+                            <Text style={styles.modificationPrice}>
+                                +R$ {mod.additionalPrice.toFixed(2).replace('.', ',')}
+                            </Text>
+                        </View>
+                    ))}
+                </View>
+            )}
+
             {/* Seção inferior - preço à esquerda, controles à direita */}
             <View style={styles.bottomSection}>
-                {/* Preço */}
+                {/* Preço total (já inclui adicionais) */}
                 <Text style={styles.price}>
-                    {formatCurrency(item.price || 0)}
+                    {formatCurrency(item.total || item.price || 0)}
                 </Text>
 
                 {/* Controles de quantidade */}
@@ -181,6 +204,11 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
     },
+    placeholderImage: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#E0E0E0',
+    },
     detailsContainer: {
         flex: 1,
         justifyContent: 'flex-start',
@@ -206,6 +234,55 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 9999,
+    },
+    modificationsSection: {
+        marginTop: 12,
+        marginBottom: 12,
+    },
+    modificationsTitle: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#000000',
+        marginBottom: 8,
+    },
+    modificationItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    modificationIcon: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: '#4CAF50',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 8,
+    },
+    modificationIconText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        lineHeight: 14,
+    },
+    modificationQuantity: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#000000',
+        marginRight: 8,
+        minWidth: 20,
+    },
+    modificationName: {
+        flex: 1,
+        fontSize: 14,
+        color: '#000000',
+        marginRight: 8,
+    },
+    modificationPrice: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#4CAF50',
     },
     bottomSection: {
         flexDirection: 'row',

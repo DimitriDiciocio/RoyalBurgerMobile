@@ -14,7 +14,7 @@ export const BasketProvider = ({ children }) => {
     const [basketItems, setBasketItems] = useState([]);
     const [basketTotal, setBasketTotal] = useState(0);
 
-    const addToBasket = ({ quantity, total, unitPrice, productName = 'Produto', description, image, productId }) => {
+    const addToBasket = ({ quantity, total, unitPrice, productName = 'Produto', description, image, productId, observacoes = '', selectedExtras = {}, defaultIngredientsQuantities = {}, modifications = [] }) => {
         const newItem = {
             id: `${productId || 'temp'}_${Date.now()}_${Math.random()}`, // ID único sempre
             originalProductId: productId, // Mantém referência ao produto original
@@ -23,7 +23,11 @@ export const BasketProvider = ({ children }) => {
             image: image,
             price: unitPrice,
             quantity: quantity,
-            total: total
+            total: total,
+            observacoes: observacoes,
+            selectedExtras: selectedExtras,
+            defaultIngredientsQuantities: defaultIngredientsQuantities,
+            modifications: modifications // Lista de modificações para exibição
         };
         
         setBasketItems(prev => [...prev, newItem]);
@@ -51,15 +55,38 @@ export const BasketProvider = ({ children }) => {
             if (itemIndex !== -1) {
                 const updatedItems = [...prev];
                 const oldItem = updatedItems[itemIndex];
+                
+                // Calcular total: se total foi fornecido explicitamente, usar ele (prioridade)
+                // Caso contrário, recalcular baseado em quantidade/preço mantendo adicionais proporcionais
+                let newTotal = oldItem.total;
+                if (updatedItem.total !== undefined) {
+                    // Se total foi fornecido, usar diretamente (prioridade máxima)
+                    newTotal = updatedItem.total;
+                } else if (updatedItem.quantity !== undefined && updatedItem.quantity !== oldItem.quantity) {
+                    // Calcular adicionais (diferença entre total e preço base * quantidade antiga)
+                    const baseTotal = (oldItem.price || 0) * (oldItem.quantity || 1);
+                    const additionalTotal = (oldItem.total || 0) - baseTotal;
+                    // Novo total = novo preço base * nova quantidade + adicionais proporcionais
+                    const newBaseTotal = (updatedItem.price || oldItem.price || 0) * updatedItem.quantity;
+                    newTotal = newBaseTotal + additionalTotal;
+                } else if (updatedItem.price !== undefined) {
+                    // Se apenas o preço mudou, recalcular mantendo adicionais
+                    const baseTotal = (oldItem.price || 0) * (oldItem.quantity || 1);
+                    const additionalTotal = (oldItem.total || 0) - baseTotal;
+                    newTotal = (updatedItem.price || 0) * (oldItem.quantity || 1) + additionalTotal;
+                }
+                
                 updatedItems[itemIndex] = { 
                     ...oldItem, 
                     ...updatedItem,
-                    total: updatedItem.price * updatedItem.quantity // Recalcula o total do item
+                    total: newTotal,
+                    // Preservar modificações se não foram fornecidas
+                    modifications: updatedItem.modifications !== undefined ? updatedItem.modifications : oldItem.modifications
                 };
                 
                 // Recalcula o total geral
-                const newTotal = updatedItems.reduce((sum, item) => sum + item.total, 0);
-                setBasketTotal(newTotal);
+                const newBasketTotal = updatedItems.reduce((sum, item) => sum + (item.total || 0), 0);
+                setBasketTotal(newBasketTotal);
                 
                 return updatedItems;
             }

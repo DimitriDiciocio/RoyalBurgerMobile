@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, Animated } from 'react-native';
 
 export default function Observacoes({
@@ -8,10 +8,12 @@ export default function Observacoes({
     style = {},
 }) {
     const [isFocused, setIsFocused] = useState(false);
-    const labelAnimation = useState(new Animated.Value(value ? 1 : 0))[0];
     const hasValue = value && value.length > 0;
     const shouldLabelFloat = isFocused || hasValue;
     const remaining = `${(value?.length || 0)}/${maxLength}`;
+    
+    // Se já tem valor, inicializa no topo (1), senão no meio (0)
+    const labelAnimation = useState(new Animated.Value(hasValue ? 1 : 0))[0];
 
     const animateLabel = (toValue) => {
         Animated.timing(labelAnimation, {
@@ -30,6 +32,17 @@ export default function Observacoes({
         setIsFocused(false);
         if (!hasValue) animateLabel(0);
     };
+
+    // Atualizar animação quando o valor mudar de vazio para preenchido
+    useEffect(() => {
+        if (hasValue && labelAnimation._value !== 1) {
+            // Se tem valor, garantir que está no topo
+            labelAnimation.setValue(1);
+        } else if (!hasValue && !isFocused && labelAnimation._value !== 0) {
+            // Se não tem valor e não está focado, garantir que está no meio
+            labelAnimation.setValue(0);
+        }
+    }, [hasValue, isFocused]);
 
     const labelStyle = {
         position: 'absolute',
