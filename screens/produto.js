@@ -1,5 +1,5 @@
     import React, {useState, useRef, useEffect} from 'react';
-    import {StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Animated, ActivityIndicator, Keyboard} from 'react-native';
+import {StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Animated, ActivityIndicator, Keyboard, Modal} from 'react-native';
     import { SvgXml } from 'react-native-svg';
     import { useIsFocused } from '@react-navigation/native';
     import Header from "../components/Header";
@@ -13,6 +13,7 @@ import { isAuthenticated, getStoredUserData } from '../services/userService';
 import { getCustomerAddresses, getLoyaltyBalance } from '../services/customerService';
 import { getMenuProduct } from '../services/menuService';
 import { getProductIngredients, getProductById } from '../services/productService';
+import { getAllIngredients } from '../services/ingredientService';
 import { useBasket } from '../contexts/BasketContext';
 import BasketFooter from '../components/BasketFooter';
 import api from '../services/api';
@@ -43,6 +44,10 @@ import api from '../services/api';
         const [observacoes, setObservacoes] = useState('');
         const [quantity, setQuantity] = useState(1);
         const [keyboardVisible, setKeyboardVisible] = useState(false);
+        const [extrasModalVisible, setExtrasModalVisible] = useState(false);
+        const [selectedExtras, setSelectedExtras] = useState({}); // {ingredientId: quantity}
+        const [tempSelectedExtras, setTempSelectedExtras] = useState({}); // Estado temporário para a modal
+        const [ingredientsCache, setIngredientsCache] = useState(null); // Cache de ingredientes da API
         const { addToBasket, basketItems, basketTotal, basketItemCount } = useBasket();
 
         const fetchEnderecos = async (userId) => {
@@ -73,6 +78,81 @@ import api from '../services/api';
             } finally {
                 setLoadingPoints(false);
             }
+        };
+
+        // Carregar cache de ingredientes da API
+        const loadIngredientsCache = async () => {
+            if (ingredientsCache) {
+                return ingredientsCache;
+            }
+            try {
+                const response = await getAllIngredients({ page_size: 1000 });
+                // Validar resposta antes de processar
+                let ingredientsList = [];
+                if (Array.isArray(response)) {
+                    ingredientsList = response;
+                } else if (response && response.items && Array.isArray(response.items)) {
+                    ingredientsList = response.items;
+                }
+                
+                if (ingredientsList.length > 0) {
+                    // Criar mapa de ID -> dados do ingrediente (normalizar IDs como string)
+                    const cache = {};
+                    ingredientsList.forEach(ingredient => {
+                        if (ingredient && ingredient.id != null) {
+                            // Normalizar ID para string para garantir busca consistente
+                            const id = String(ingredient.id);
+                            cache[id] = {
+                                additional_price: parseFloat(ingredient.additional_price) || 0,
+                                price: parseFloat(ingredient.price) || 0,
+                                name: ingredient.name || ''
+                            };
+                        }
+                    });
+                    setIngredientsCache(cache);
+                    return cache;
+                }
+                return {};
+            } catch (error) {
+                console.error('Erro ao carregar cache de ingredientes:', error);
+                return {};
+            }
+        };
+
+        // Buscar preço de ingrediente a partir do cache ou dos dados do ingrediente
+        const findIngredientPrice = (ingredientData, ingredientId) => {
+            // Primeiro tentar cache se tiver ID
+            if (ingredientId && ingredientsCache) {
+                const id = String(ingredientId);
+                const cached = ingredientsCache[id];
+                if (cached && cached.additional_price > 0) {
+                    return cached.additional_price;
+                }
+            }
+
+            // Tentar nos dados do ingrediente
+            const priceCandidates = [
+                ingredientData?.additional_price,
+                ingredientData?.extra_price,
+                ingredientData?.preco_extra,
+                ingredientData?.valor_extra,
+                ingredientData?.price,
+                ingredientData?.ingredient_price,
+                ingredientData?.unit_price,
+                ingredientData?.preco,
+                ingredientData?.valor
+            ];
+
+            for (const candidate of priceCandidates) {
+                if (candidate !== undefined && candidate !== null) {
+                    const priceNum = parseFloat(candidate);
+                    if (!isNaN(priceNum) && priceNum >= 0) {
+                        return priceNum;
+                    }
+                }
+            }
+
+            return 0;
         };
 
         const handleEnderecoAtivoChange = (data) => {
@@ -144,6 +224,9 @@ import api from '../services/api';
             const fetchProduct = async () => {
                 try {
                     setLoadingProduct(true);
+                    // Carregar cache de ingredientes primeiro
+                    await loadIngredientsCache();
+                    
                     // Prioriza productId; se não houver, tenta usar produto.id ou mantém produto
                     const idToFetch = productId || produto?.id;
                     let data = null;
@@ -182,9 +265,17 @@ import api from '../services/api';
                         const pid = idToFetch || data?.id;
                         if (pid) {
                             try {
-                                const ingredients = await getProductIngredients(pid);
-                                if (!isCancelled) setProductIngredients(Array.isArray(ingredients) ? ingredients : []);
+                                const ingredientsResponse = await getProductIngredients(pid);
+                                // Tratar resposta que pode ser array direto ou objeto com items
+                                let ingredientsList = [];
+                                if (Array.isArray(ingredientsResponse)) {
+                                    ingredientsList = ingredientsResponse;
+                                } else if (ingredientsResponse && ingredientsResponse.items && Array.isArray(ingredientsResponse.items)) {
+                                    ingredientsList = ingredientsResponse.items;
+                                }
+                                if (!isCancelled) setProductIngredients(ingredientsList);
                             } catch (e) {
+                                console.error('Erro ao buscar ingredientes:', e);
                                 if (!isCancelled) setProductIngredients([]);
                             }
                         } else {
@@ -234,6 +325,60 @@ import api from '../services/api';
         const handleBasketPress = () => {
             // Por enquanto, não faz nada
             console.log('Ver cesta pressionado na tela de produto');
+        };
+
+        // Separar ingredientes em produto padrão e extras
+        const defaultIngredients = productIngredients.filter((ing) => {
+            const portions = parseFloat(ing.portions || 0) || 0;
+            return portions > 0;
+        });
+
+        const extraIngredients = productIngredients.filter((ing) => {
+            const portions = parseFloat(ing.portions || 0) || 0;
+            return portions === 0;
+        });
+
+        // Somar a quantidade total de extras selecionados
+        const selectedExtrasCount = extraIngredients.reduce((total, ing) => {
+            const ingredientId = ing.id || ing.ingredient_id || `extra-${extraIngredients.indexOf(ing)}`;
+            const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+            const currentQty = selectedExtras[ingredientId] !== undefined ? selectedExtras[ingredientId] : minQty;
+            // Soma a quantidade total do extra (incluindo o mínimo)
+            return total + currentQty;
+        }, 0);
+
+        const handleOpenExtrasModal = () => {
+            // Inicializar estado temporário com valores salvos ou valores mínimos de cada ingrediente
+            const initialTempExtras = {};
+            extraIngredients.forEach((ing, index) => {
+                const ingredientId = ing.id || ing.ingredient_id || `extra-${index}`;
+                const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+                // Usa o valor salvo se existir, senão usa o mínimo
+                initialTempExtras[ingredientId] = selectedExtras[ingredientId] !== undefined 
+                    ? selectedExtras[ingredientId] 
+                    : minQty;
+            });
+            setTempSelectedExtras(initialTempExtras);
+            setExtrasModalVisible(true);
+        };
+
+        const handleExtraQuantityChange = (ingredientId, quantity) => {
+            // Alterar apenas o estado temporário
+            setTempSelectedExtras(prev => ({
+                ...prev,
+                [ingredientId]: quantity
+            }));
+        };
+
+        const handleSaveExtras = () => {
+            // Salvar as alterações do estado temporário para o permanente
+            setSelectedExtras({ ...tempSelectedExtras });
+            setExtrasModalVisible(false);
+        };
+
+        const handleCancelExtras = () => {
+            // Fechar modal sem salvar (o estado temporário será descartado)
+            setExtrasModalVisible(false);
         };
 
         return (
@@ -310,25 +455,54 @@ import api from '../services/api';
                          />
                      </View>
                      
-                     <View style={styles.customizeContainer}>
-                         <Text style={styles.produtoTitle}>Monte do seu jeito!</Text>
-                         {productIngredients && productIngredients.length > 0 ? (
-                             productIngredients.map((ing) => {
-                                 const displayName = ing.name || ing.nome || 'Ingrediente';
-                                 const extra = parseFloat(ing.extra_price || ing.preco_extra || 0) || 0;
-                                 return (
-                                     <IngredienteMenu
-                                         key={ing.id || displayName}
-                                         nome={displayName}
-                                         valorExtra={extra}
-                                         imagem={require('../assets/img/hamburguerIcon.png')}
-                                     />
-                                 );
-                             })
-                         ) : (
-                             null
-                         )}
-                     </View>
+                                                                 <View style={styles.customizeContainer}>
+                          <Text style={styles.produtoTitle}>Monte do seu jeito!</Text>
+                                                     {defaultIngredients && defaultIngredients.length > 0 ? (
+                               defaultIngredients.map((ing, index) => {
+                                   const displayName = ing.name || ing.nome || 'Ingrediente';
+                                   const ingredientId = ing.id || ing.ingredient_id || index;
+                                   // Buscar preço do ingrediente usando cache ou dados do ingrediente
+                                   const extra = findIngredientPrice(ing, ingredientId);
+                                   // Usa portions como quantidade inicial (padrão do produto)
+                                   const initialQty = parseFloat(ing.portions || 0) || 0;
+                                   // Quantidade mínima e máxima
+                                   const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+                                   const maxQty = ing.max_quantity || ing.maxQuantity || null;
+                                  return (
+                                      <IngredienteMenu
+                                          key={ingredientId}
+                                          nome={displayName}
+                                          valorExtra={extra}
+                                          initialQuantity={initialQty}
+                                          minQuantity={minQty}
+                                          maxQuantity={maxQty ? parseInt(maxQty, 10) : null}
+                                          onQuantityChange={(quantity) => {
+                                              // Aqui você pode gerenciar as quantidades dos ingredientes padrão
+                                              console.log(`Quantidade de ${displayName}: ${quantity}`);
+                                          }}
+                                      />
+                                  );
+                              })
+                          ) : (
+                              null
+                          )}
+                          
+                                                     {/* Botão Adicionar Extras */}
+                           {extraIngredients && extraIngredients.length > 0 && (
+                               <TouchableOpacity 
+                                   style={styles.addExtrasButton}
+                                   onPress={handleOpenExtrasModal}
+                                   activeOpacity={0.8}
+                               >
+                                  {selectedExtrasCount > 0 && (
+                                      <View style={styles.extrasBadge}>
+                                          <Text style={styles.extrasBadgeText}>{selectedExtrasCount}</Text>
+                                      </View>
+                                  )}
+                                  <Text style={styles.addExtrasButtonText}>Adicionar extras</Text>
+                              </TouchableOpacity>
+                          )}
+                      </View>
 
                      <Observacoes
                          value={observacoes}
@@ -379,23 +553,119 @@ import api from '../services/api';
                         </View>
                     )}
                     
-                    {loggedIn && !keyboardVisible && (
-                        <View style={styles.menuNavigationContainer}>
-                            <MenuNavigation navigation={navigation} currentRoute="Home" />
-                            {basketItems.length > 0 && (
-                                <View style={styles.basketOverlay}>
-                                    <BasketFooter 
-                                        total={basketTotal}
-                                        itemCount={basketItemCount}
-                                        onPress={handleBasketPress}
-                                    />
-                                </View>
-                            )}
-                        </View>
-                    )}
-            </View>
-        );
-    }
+                                         {loggedIn && !keyboardVisible && (
+                         <View style={styles.menuNavigationContainer}>
+                             <MenuNavigation navigation={navigation} currentRoute="Home" />
+                             {basketItems.length > 0 && (
+                                 <View style={styles.basketOverlay}>
+                                     <BasketFooter 
+                                         total={basketTotal}
+                                         itemCount={basketItemCount}
+                                         onPress={handleBasketPress}
+                                     />
+                                 </View>
+                             )}
+                         </View>
+                     )}
+
+                     {/* Modal de Extras */}
+                     <Modal
+                         visible={extrasModalVisible}
+                         animationType="slide"
+                         transparent={true}
+                         onRequestClose={handleCancelExtras}
+                     >
+                         <View style={styles.modalOverlay}>
+                             <View style={styles.modalContent}>
+                                 {/* Header */}
+                                 <View style={styles.modalHeader}>
+                                     <View style={styles.modalHeaderText}>
+                                         <Text style={styles.modalTitle}>Adicionar Extras</Text>
+                                         <Text style={styles.modalSubtitle}>Personalize seu pedido com ingredientes extras</Text>
+                                     </View>
+                                     <TouchableOpacity 
+                                         style={styles.modalCloseButton}
+                                         onPress={handleCancelExtras}
+                                     >
+                                         <Text style={styles.modalCloseButtonText}>✕</Text>
+                                     </TouchableOpacity>
+                                 </View>
+
+                                 {/* Lista de Extras */}
+                                 <ScrollView 
+                                     style={styles.modalScrollView}
+                                     contentContainerStyle={styles.modalScrollContent}
+                                 >
+                                                                           {extraIngredients.map((ing, index) => {
+                                          const displayName = ing.name || ing.nome || 'Ingrediente';
+                                          const ingredientId = ing.id || ing.ingredient_id || `extra-${index}`;
+                                          // Buscar preço do ingrediente usando cache ou dados do ingrediente
+                                          const extra = findIngredientPrice(ing, ingredientId);
+                                          const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+                                          const maxQty = ing.max_quantity || ing.maxQuantity || null;
+                                          const initialExtraQty = minQty || 0;
+                                          const currentQuantity = tempSelectedExtras[ingredientId] !== undefined 
+                                              ? tempSelectedExtras[ingredientId] 
+                                              : initialExtraQty;
+
+                                         return (
+                                             <View key={ingredientId} style={styles.modalIngredientItem}>
+                                                 <View style={styles.modalIngredientInfo}>
+                                                     <Text style={styles.modalIngredientName}>{displayName}</Text>
+                                                     <Text style={styles.modalIngredientPrice}>
+                                                         + R$ {extra.toFixed(2).replace('.', ',')}
+                                                     </Text>
+                                                 </View>
+                                                 <View style={styles.modalQuantityContainer}>
+                                                     {currentQuantity > minQty && (
+                                                         <TouchableOpacity 
+                                                             style={styles.modalMinusButton}
+                                                             onPress={() => handleExtraQuantityChange(ingredientId, Math.max(minQty, currentQuantity - 1))}
+                                                         >
+                                                             <Text style={styles.modalMinusText}>-</Text>
+                                                         </TouchableOpacity>
+                                                     )}
+                                                     <View style={styles.modalQuantityBox}>
+                                                         <Text style={styles.modalQuantityText}>
+                                                             {String(currentQuantity).padStart(2, '0')}
+                                                         </Text>
+                                                     </View>
+                                                     <TouchableOpacity 
+                                                         style={styles.modalPlusButton}
+                                                         onPress={() => {
+                                                             const newQty = maxQty ? Math.min(currentQuantity + 1, parseInt(maxQty, 10)) : currentQuantity + 1;
+                                                             handleExtraQuantityChange(ingredientId, newQty);
+                                                         }}
+                                                     >
+                                                         <Text style={styles.modalPlusText}>+</Text>
+                                                     </TouchableOpacity>
+                                                 </View>
+                                             </View>
+                                         );
+                                     })}
+                                 </ScrollView>
+
+                                 {/* Footer com Botões */}
+                                 <View style={styles.modalFooter}>
+                                     <TouchableOpacity 
+                                         style={styles.modalCancelButton}
+                                         onPress={handleCancelExtras}
+                                     >
+                                         <Text style={styles.modalCancelButtonText}>Cancelar</Text>
+                                     </TouchableOpacity>
+                                     <TouchableOpacity 
+                                         style={styles.modalSaveButton}
+                                         onPress={handleSaveExtras}
+                                     >
+                                         <Text style={styles.modalSaveButtonText}>Salvar</Text>
+                                     </TouchableOpacity>
+                                 </View>
+                             </View>
+                         </View>
+                     </Modal>
+             </View>
+         );
+     }
 
     const styles = StyleSheet.create({
         container: {
@@ -480,12 +750,213 @@ import api from '../services/api';
             right: 0,
             zIndex: 1000,
         },
-        basketOverlay: {
-            position: 'absolute',
-            bottom: 100, // Posiciona acima do MenuNavigation
-            left: 16,
-            right: 16,
-            zIndex: 1001,
-            paddingBottom: 16, // Espaçamento entre BasketFooter e MenuNavigation
-        },
-    });
+                 basketOverlay: {
+             position: 'absolute',
+             bottom: 100, // Posiciona acima do MenuNavigation
+             left: 16,
+             right: 16,
+             zIndex: 1001,
+             paddingBottom: 16, // Espaçamento entre BasketFooter e MenuNavigation
+         },
+         // Botão Adicionar Extras
+         addExtrasButton: {
+             backgroundColor: '#000000',
+             borderRadius: 8,
+             paddingVertical: 14,
+             paddingHorizontal: 20,
+             marginTop: 16,
+             alignItems: 'center',
+             justifyContent: 'center',
+             position: 'relative',
+         },
+         addExtrasButtonText: {
+             color: '#FFFFFF',
+             fontSize: 16,
+             fontWeight: '500',
+         },
+         extrasBadge: {
+             position: 'absolute',
+             top: -8,
+             left: -8,
+             backgroundColor: '#FFD700',
+             width: 24,
+             height: 24,
+             borderRadius: 12,
+             alignItems: 'center',
+             justifyContent: 'center',
+             borderWidth: 2,
+             borderColor: '#FFFFFF',
+         },
+         extrasBadgeText: {
+             color: '#000000',
+             fontSize: 12,
+             fontWeight: '700',
+         },
+         // Modal de Extras
+         modalOverlay: {
+             flex: 1,
+             backgroundColor: 'rgba(0, 0, 0, 0.5)',
+             justifyContent: 'center',
+             alignItems: 'center',
+         },
+         modalContent: {
+             backgroundColor: '#FFFFFF',
+             borderRadius: 20,
+             width: '90%',
+             maxHeight: '80%',
+             minHeight: 400,
+             shadowColor: '#000',
+             shadowOffset: {
+                 width: 0,
+                 height: 2,
+             },
+             shadowOpacity: 0.25,
+             shadowRadius: 3.84,
+             elevation: 5,
+             overflow: 'hidden',
+         },
+         modalHeader: {
+             flexDirection: 'row',
+             justifyContent: 'space-between',
+             alignItems: 'flex-start',
+             padding: 20,
+             borderBottomWidth: 1,
+             borderBottomColor: '#E0E0E0',
+         },
+         modalHeaderText: {
+             flex: 1,
+             marginRight: 12,
+         },
+         modalTitle: {
+             fontSize: 20,
+             fontWeight: 'bold',
+             color: '#000000',
+             marginBottom: 4,
+         },
+         modalSubtitle: {
+             fontSize: 14,
+             color: '#666666',
+         },
+         modalCloseButton: {
+             width: 32,
+             height: 32,
+             alignItems: 'center',
+             justifyContent: 'center',
+         },
+         modalCloseButtonText: {
+             fontSize: 24,
+             color: '#000000',
+             fontWeight: '300',
+         },
+         modalScrollView: {
+             flex: 1,
+         },
+         modalScrollContent: {
+             padding: 20,
+         },
+         modalIngredientItem: {
+             backgroundColor: '#F5F5F5',
+             borderRadius: 8,
+             padding: 16,
+             marginBottom: 12,
+             flexDirection: 'row',
+             justifyContent: 'space-between',
+             alignItems: 'center',
+         },
+         modalIngredientInfo: {
+             flex: 1,
+             marginRight: 12,
+             flexDirection: 'column',
+             alignItems: 'flex-start',
+         },
+         modalIngredientName: {
+             fontSize: 16,
+             fontWeight: '600',
+             color: '#000000',
+             marginBottom: 4,
+         },
+         modalIngredientPrice: {
+             fontSize: 14,
+             color: '#666666',
+         },
+         modalQuantityContainer: {
+             flexDirection: 'row',
+             alignItems: 'center',
+         },
+         modalMinusButton: {
+             backgroundColor: '#E0E0E0',
+             width: 32,
+             height: 32,
+             borderRadius: 4,
+             alignItems: 'center',
+             justifyContent: 'center',
+             marginRight: 8,
+         },
+         modalMinusText: {
+             fontSize: 20,
+             fontWeight: '600',
+             color: '#FF4444',
+         },
+         modalQuantityBox: {
+             backgroundColor: '#E0E0E0',
+             paddingHorizontal: 12,
+             paddingVertical: 8,
+             borderRadius: 4,
+             minWidth: 40,
+             alignItems: 'center',
+             justifyContent: 'center',
+         },
+         modalQuantityText: {
+             fontSize: 14,
+             fontWeight: '400',
+             color: '#000000',
+         },
+         modalPlusButton: {
+             backgroundColor: '#E0E0E0',
+             width: 32,
+             height: 32,
+             borderRadius: 4,
+             alignItems: 'center',
+             justifyContent: 'center',
+             marginLeft: 8,
+         },
+         modalPlusText: {
+             fontSize: 20,
+             fontWeight: '600',
+             color: '#FF4444',
+         },
+         modalFooter: {
+             flexDirection: 'row',
+             justifyContent: 'space-between',
+             padding: 20,
+             borderTopWidth: 1,
+             borderTopColor: '#E0E0E0',
+             gap: 12,
+         },
+         modalCancelButton: {
+             flex: 1,
+             backgroundColor: '#E0E0E0',
+             borderRadius: 8,
+             paddingVertical: 14,
+             alignItems: 'center',
+             justifyContent: 'center',
+         },
+         modalCancelButtonText: {
+             color: '#000000',
+             fontSize: 16,
+             fontWeight: '500',
+         },
+         modalSaveButton: {
+             flex: 1,
+             backgroundColor: '#FFD700',
+             borderRadius: 8,
+             paddingVertical: 14,
+             alignItems: 'center',
+             justifyContent: 'center',
+         },
+         modalSaveButtonText: {
+             color: '#000000',
+             fontSize: 16,
+             fontWeight: '600',
+         },
+     });

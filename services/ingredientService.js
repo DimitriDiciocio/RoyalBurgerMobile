@@ -13,13 +13,17 @@ import api from "./api";
 
 /**
  * Obtém todos os ingredientes.
- * @param {string} status - Filtro por status (active, inactive)
- * @returns {Promise<Array>} - Lista de ingredientes
+ * @param {object} options - Opções de filtro (status, page_size, etc.)
+ * @returns {Promise<Array|Object>} - Lista de ingredientes ou objeto com items e paginação
  */
-export const getAllIngredients = async (status = null) => {
+export const getAllIngredients = async (options = {}) => {
   try {
     "Obtendo todos os ingredientes";
-    const params = status ? { status } : {};
+    const { status, page_size, ...otherParams } = options;
+    const params = {};
+    if (status) params.status = status;
+    if (page_size) params.page_size = page_size;
+    Object.assign(params, otherParams);
     const response = await api.get("/ingredients", { params });
     return response.data;
   } catch (error) {
