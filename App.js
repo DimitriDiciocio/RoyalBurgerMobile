@@ -11,6 +11,7 @@ import MenuNavigation from "./components/MenuNavigation";
 import BasketFooter from "./components/BasketFooter";
 import Login from "./screens/login";
 import Cadastro from "./screens/cadastro";
+import VerificacaoEmail from "./screens/verificacaoEmail";
 import EsqueciSenha from "./screens/esqueciSenha";
 import VerificarCodigoSenha from "./screens/verificarCodigoSenha";
 import RedefinirSenha from "./screens/redefinirSenha";
@@ -40,7 +41,7 @@ function HomeScreen({ navigation }) {
     const [loadingPoints, setLoadingPoints] = useState(false);
     const [enderecos, setEnderecos] = useState([]);
     const [enderecoAtivo, setEnderecoAtivo] = useState(null);
-    const { basketItems, basketTotal, basketItemCount, addToBasket } = useBasket();
+    const { basketItems, basketTotal, basketItemCount, addToBasket, loadCart } = useBasket();
     
     // Estados para as seções da home
     const [mostOrderedData, setMostOrderedData] = useState([]);
@@ -93,7 +94,9 @@ function HomeScreen({ navigation }) {
         const checkAuth = async () => {
             try {
                 const ok = await isAuthenticated();
+                const wasLoggedIn = loggedIn;
                 setLoggedIn(!!ok);
+                
                 if (ok) {
                     const user = await getStoredUserData();
                     let points = '0';
@@ -138,6 +141,12 @@ function HomeScreen({ navigation }) {
                         avatar: undefined,
                     } : null;
                     setUserInfo(normalized);
+                    
+                    // Se o usuário acabou de fazer login (estava deslogado antes), recarrega o carrinho
+                    if (!wasLoggedIn) {
+                        console.log('[HomeScreen] Usuário fez login, recarregando carrinho...');
+                        await loadCart();
+                    }
                 } else {
                     setUserInfo(null);
                     setEnderecos([]);
@@ -152,10 +161,17 @@ function HomeScreen({ navigation }) {
             }
         };
         checkAuth();
-    }, [isFocused]);
+    }, [isFocused, loadCart]);
 
     // Função helper para formatar produtos da API para o formato esperado pelo ViewCardItem
     const formatProductForCard = (product, promotion = null) => {
+        // Filtrar produtos sem ingredientes disponíveis na receita base
+        const availabilityStatus = product.availability_status || 'unknown';
+        if (availabilityStatus === 'unavailable') {
+            // Retorna null para ser filtrado depois
+            return null;
+        }
+        
         const basePrice = parseFloat(product.price || 0);
         const finalPrice = promotion ? (basePrice - parseFloat(promotion.discount_value || 0)) : basePrice;
         const priceFormatted = `R$ ${finalPrice.toFixed(2).replace('.', ',')}`;
@@ -202,7 +218,9 @@ function HomeScreen({ navigation }) {
                 try {
                     const mostOrderedResponse = await getMostOrderedProducts({ page_size: 10 });
                     const mostOrderedItems = mostOrderedResponse.items || mostOrderedResponse || [];
-                    const formattedMostOrdered = mostOrderedItems.map(product => formatProductForCard(product));
+                    const formattedMostOrdered = mostOrderedItems
+                        .map(product => formatProductForCard(product))
+                        .filter(product => product !== null); // Remove produtos indisponíveis
                     setMostOrderedData(formattedMostOrdered);
                 } catch (error) {
                     console.log('Erro ao carregar mais pedidos:', error);
@@ -213,10 +231,12 @@ function HomeScreen({ navigation }) {
                 try {
                     const promotionsResponse = await getAllPromotions();
                     const promotions = promotionsResponse.items || promotionsResponse || [];
-                    const formattedPromotions = promotions.map(promotion => {
-                        const product = promotion.product || promotion;
-                        return formatProductForCard(product, promotion);
-                    });
+                    const formattedPromotions = promotions
+                        .map(promotion => {
+                            const product = promotion.product || promotion;
+                            return formatProductForCard(product, promotion);
+                        })
+                        .filter(product => product !== null); // Remove produtos indisponíveis
                     setPromotionsData(formattedPromotions);
                 } catch (error) {
                     console.log('Erro ao carregar promoções:', error);
@@ -227,7 +247,9 @@ function HomeScreen({ navigation }) {
                 try {
                     const recentlyAddedResponse = await getRecentlyAddedProducts({ page_size: 10 });
                     const recentlyAddedItems = recentlyAddedResponse.items || recentlyAddedResponse || [];
-                    const formattedRecentlyAdded = recentlyAddedItems.map(product => formatProductForCard(product));
+                    const formattedRecentlyAdded = recentlyAddedItems
+                        .map(product => formatProductForCard(product))
+                        .filter(product => product !== null); // Remove produtos indisponíveis
                     setComboData(formattedRecentlyAdded);
                 } catch (error) {
                     console.log('Erro ao carregar novidades:', error);
@@ -404,6 +426,10 @@ export default function App() {
                 <Stack.Screen 
                     name="Cadastro" 
                     component={Cadastro}
+                />
+                <Stack.Screen 
+                    name="VerificacaoEmail" 
+                    component={VerificacaoEmail}
                 />
                 <Stack.Screen 
                     name="EsqueciSenha" 

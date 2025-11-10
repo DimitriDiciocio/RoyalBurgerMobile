@@ -80,7 +80,9 @@ export default function Pedidos({ navigation }) {
   const fetchOrders = async () => {
     try {
       setLoadingOrders(true);
+      console.log('[Pedidos] Buscando pedidos...');
       const response = await getMyOrders();
+      console.log('[Pedidos] Resposta da API:', response);
       
       // A API retorna um array diretamente ou um objeto com data
       let ordersList = [];
@@ -90,7 +92,11 @@ export default function Pedidos({ navigation }) {
         ordersList = response.data;
       } else if (response && Array.isArray(response.orders)) {
         ordersList = response.orders;
+      } else if (response && response.items && Array.isArray(response.items)) {
+        ordersList = response.items;
       }
+      
+      console.log('[Pedidos] Total de pedidos encontrados:', ordersList.length);
       
       // Buscar detalhes completos de cada pedido se não tiver items/total
       const ordersWithDetails = await Promise.all(ordersList.map(async (order) => {
@@ -159,6 +165,9 @@ export default function Pedidos({ navigation }) {
         const dateB = new Date(b.created_at || b.createdAt || 0);
         return dateB - dateA;
       });
+      
+      console.log('[Pedidos] Pedidos normalizados:', normalizedOrders.length);
+      console.log('[Pedidos] Primeiro pedido:', normalizedOrders[0]);
       
       setOrders(normalizedOrders);
     } catch (error) {

@@ -1,7 +1,8 @@
 import React from 'react';
-import {View, Text, StyleSheet, FlatList} from 'react-native';
+import {View, Text, StyleSheet, FlatList, Alert} from 'react-native';
 import CardItemVertical from "./CardItemVertical";
 import TimerPromotions from "./TimerPromotions";
+import { checkProductAvailability } from '../services/productService';
 
 export default function ViewCardItem({
                                          title = "Seção",
@@ -10,8 +11,34 @@ export default function ViewCardItem({
                                          promoTimer = null,
                                          navigation = null
                                      }) {
-    const handleCardPress = (item) => {
-        if (navigation) {
+    const handleCardPress = async (item) => {
+        if (!navigation) return;
+        
+        const productId = item.id || item.originalProductId;
+        
+        if (!productId) {
+            navigation.navigate('Produto', { produto: item });
+            return;
+        }
+        
+        try {
+            // Verificar disponibilidade antes de navegar
+            const availability = await checkProductAvailability(productId, 1);
+            
+            if (!availability.is_available) {
+                Alert.alert(
+                    'Produto Indisponível',
+                    availability.message || 'Este produto está temporariamente indisponível devido à falta de ingredientes em estoque.',
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
+            
+            // Se disponível, navega normalmente
+            navigation.navigate('Produto', { produto: item });
+        } catch (error) {
+            console.error('Erro ao verificar disponibilidade:', error);
+            // Em caso de erro na verificação, permite navegar (fail-safe)
             navigation.navigate('Produto', { produto: item });
         }
     };

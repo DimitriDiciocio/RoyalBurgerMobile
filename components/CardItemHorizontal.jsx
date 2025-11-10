@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import CachedImage from './CachedImage';
+import { checkProductAvailability } from '../services/productService';
 
 export default function CardItemHorizontal({
                                                title = "Nome produto",
@@ -14,11 +15,38 @@ export default function CardItemHorizontal({
                                                productId = null,
                                                navigation = null
                                            }) {
-    const handlePress = () => {
-        if (navigation && productId) {
-            navigation.navigate('Produto', { productId });
-        } else {
+    const [checking, setChecking] = React.useState(false);
+    
+    const handlePress = async () => {
+        // Se não tem productId ou navigation, só chama onPress
+        if (!navigation || !productId) {
             onPress();
+            return;
+        }
+        
+        try {
+            setChecking(true);
+            
+            // Verificar disponibilidade antes de navegar
+            const availability = await checkProductAvailability(productId, 1);
+            
+            if (!availability.is_available) {
+                Alert.alert(
+                    'Produto Indisponível',
+                    availability.message || 'Este produto está temporariamente indisponível devido à falta de ingredientes em estoque.',
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
+            
+            // Se disponível, navega normalmente
+            navigation.navigate('Produto', { productId });
+        } catch (error) {
+            console.error('Erro ao verificar disponibilidade:', error);
+            // Em caso de erro na verificação, permite navegar (fail-safe)
+            navigation.navigate('Produto', { productId });
+        } finally {
+            setChecking(false);
         }
     };
 
@@ -26,7 +54,7 @@ export default function CardItemHorizontal({
         <TouchableOpacity
             style={[styles.container, !isAvailable && styles.unavailable]}
             onPress={handlePress}
-            disabled={!isAvailable}
+            disabled={!isAvailable || checking}
         >
             <View style={styles.imageWrapper}>
                 {imageSource ? (
@@ -41,6 +69,11 @@ export default function CardItemHorizontal({
                 {!isAvailable && (
                     <View style={styles.unavailableOverlay}>
                         <Text style={styles.unavailableText}>Indisponível</Text>
+                    </View>
+                )}
+                {checking && (
+                    <View style={styles.checkingOverlay}>
+                        <ActivityIndicator size="small" color="#FFF" />
                     </View>
                 )}
             </View>
@@ -161,5 +194,15 @@ const styles = StyleSheet.create({
         color: '#999',
         fontSize: 12,
         fontWeight: 'bold',
+    },
+    checkingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import Header from '../components/Header';
 import EnderecosBottomSheet from '../components/EnderecosBottomSheet';
 import EditarEnderecoBottomSheet from '../components/EditarEnderecoBottomSheet';
 import BottomSheet from '../components/BottomSheet';
 import Toggle from '../components/Toggle';
-import { isAuthenticated, getStoredUserData, getPublicSettings } from '../services';
+import { isAuthenticated, getStoredUserData, getPublicSettings, validateCartForOrder } from '../services';
 import { getLoyaltyBalance, getCustomerAddresses, setDefaultAddress, addCustomerAddress, updateCustomerAddress, removeCustomerAddress } from '../services/customerService';
 import { createOrder } from '../services/orderService';
 import { useBasket } from '../contexts/BasketContext';
@@ -66,7 +66,7 @@ export default function Pagamento({ navigation }) {
     const [isCreatingOrder, setIsCreatingOrder] = useState(false);
     const [redemptionRate, setRedemptionRate] = useState(0.01); // Taxa padrão até carregar das settings
     const trocoValueRef = useRef('');
-    const { basketItems, clearBasket } = useBasket();
+    const { basketItems, clearBasket, loadCart } = useBasket();
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -313,7 +313,7 @@ export default function Pagamento({ navigation }) {
         setUsePoints(!usePoints);
     };
 
-    const handleReviewOrder = () => {
+    const handleReviewOrder = async () => {
         if (!enderecoSelecionado) {
             alert('Selecione um endereço antes de continuar');
             return;
@@ -326,6 +326,22 @@ export default function Pagamento({ navigation }) {
         if (selectedPayment === 'cash' && (!trocoValue.trim() || !isTrocoValueValid())) {
             // Abrir o bottom sheet de troco novamente
             setShowTrocoBottomSheet(true);
+            return;
+        }
+        // Validação do carrinho antes de revisar
+        try {
+            const validation = await validateCartForOrder();
+            const isValid = validation?.success && (validation.is_valid !== false) && (!(validation.alerts) || validation.alerts.length === 0);
+            if (!isValid) {
+                const alertsText = Array.isArray(validation?.alerts) && validation.alerts.length > 0
+                    ? validation.alerts.join('\\n')
+                    : 'Seu carrinho possui itens indisponíveis ou com estoque insuficiente.';
+                alert(alertsText);
+                return;
+            }
+        } catch (e) {
+            // Em falha de validação, não bloquear, mas informar o usuário
+            alert('Não foi possível validar o carrinho no momento. Tente novamente.');
             return;
         }
         // Abrir bottom sheet de revisão
@@ -520,6 +536,34 @@ export default function Pagamento({ navigation }) {
         }
         if (!basketItems || basketItems.length === 0) {
             alert('Seu carrinho está vazio');
+            return;
+        }
+
+        // Validação final do carrinho antes de criar o pedido
+        try {
+            const validation = await validateCartForOrder();
+            const isValid = validation?.success && (validation.is_valid !== false) && (!(validation.alerts) || validation.alerts.length === 0);
+            if (!isValid) {
+                const alertsText = Array.isArray(validation?.alerts) && validation.alerts.length > 0
+                    ? validation.alerts.join('\n')
+                    : 'Seu carrinho possui itens indisponíveis ou com estoque insuficiente.';
+                Alert.alert(
+                    'Carrinho Inválido',
+                    alertsText,
+                    [{ text: 'OK', onPress: () => {
+                        // Recarrega carrinho e volta para cesta
+                        loadCart();
+                        navigation.navigate('Cesta');
+                    }}]
+                );
+                return;
+            }
+        } catch (e) {
+            Alert.alert(
+                'Erro de Validação',
+                'Não foi possível validar o carrinho no momento. Tente novamente.',
+                [{ text: 'OK' }]
+            );
             return;
         }
 

@@ -33,6 +33,7 @@ export default function MenuCategory({
     const [firstCategoryPosition, setFirstCategoryPosition] = useState(0);
     const [isSticky, setIsSticky] = useState(false);
     const [firstCategoryLayout, setFirstCategoryLayout] = useState(null);
+    const [error, setError] = useState(null);
     const flatListRef = useRef(null);
     const categoryListRef = useRef(null);
     const debounceTimeoutRef = useRef(null);
@@ -55,6 +56,7 @@ export default function MenuCategory({
     const loadCategories = async () => {
         try {
             setLoading(true);
+            setError(null);
             const response = await getAllCategories();
             const categoriesList = response.items || response;
             setCategories(categoriesList);
@@ -65,8 +67,8 @@ export default function MenuCategory({
             }
         } catch (error) {
             console.log('Erro ao carregar categorias:', error);
-            // Fallback para dados mock se a API falhar
-            setCategories(mockData);
+            setCategories([]);
+            setError('Não foi possível carregar as categorias.');
         } finally {
             setLoading(false);
         }
@@ -138,125 +140,15 @@ export default function MenuCategory({
         };
     }, []);
 
-    // Dados mock
-    const mockData = categoriesData.length > 0 ? categoriesData : [
-        {
-            id: 1,
-            title: "Hambúrguers",
-            data: [
-                {
-                    id: 101,
-                    title: "Royal Burger",
-                    description: "Pão biroche, 180g de carne, queijo cheddar, alface, tomate",
-                    price: "R$ 32,90",
-                    deliveryTime: "25-35 min",
-                    deliveryPrice: "R$ 5,00",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 1,
-                    isAvailable: true
-                },
-                {
-                    id: 102,
-                    title: "Classic Cheese",
-                    description: "Hambúrguer clássico com queijo especial da casa",
-                    price: "R$ 28,90",
-                    deliveryTime: "20-30 min",
-                    deliveryPrice: "R$ 4,00",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 1,
-                    isAvailable: true
-                },
-                {
-                    id: 103,
-                    title: "Bacon Supreme",
-                    description: "Burger com bacon crocante e molho especial",
-                    price: "R$ 35,90",
-                    deliveryTime: "30-40 min",
-                    deliveryPrice: "R$ 5,00",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 1,
-                    isAvailable: true
-                }
-            ]
-        },
-        {
-            id: 2,
-            title: "Bebidas",
-            data: [
-                {
-                    id: 201,
-                    title: "Coca-Cola 350ml",
-                    description: "Refrigerante gelado",
-                    price: "R$ 6,50",
-                    deliveryTime: "10-15 min",
-                    deliveryPrice: "R$ 3,00",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 2,
-                    isAvailable: true
-                },
-                {
-                    id: 202,
-                    title: "Suco Natural",
-                    description: "Suco de laranja natural 500ml",
-                    price: "R$ 8,90",
-                    deliveryTime: "15-20 min",
-                    deliveryPrice: "R$ 3,00",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 2,
-                    isAvailable: true
-                }
-            ]
-        },
-        {
-            id: 3,
-            title: "Sobremesas",
-            data: [
-                {
-                    id: 301,
-                    title: "Brownie com Sorvete",
-                    description: "Brownie quente com bola de sorvete de baunilha",
-                    price: "R$ 15,90",
-                    deliveryTime: "15-20 min",
-                    deliveryPrice: "R$ 4,00",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 3,
-                    isAvailable: true
-                },
-                {
-                    id: 302,
-                    title: "Milkshake Chocolate",
-                    description: "Milkshake cremoso de chocolate com chantilly",
-                    price: "R$ 12,90",
-                    deliveryTime: "10-15 min",
-                    deliveryPrice: "R$ 3,50",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 3,
-                    isAvailable: true
-                },
-                {
-                    id: 303,
-                    title: "Sorvete de Ricota",
-                    description: "Um delicioso sorvete de Ricota com Chocolate",
-                    price: "R$ 10,90",
-                    deliveryTime: "10-15 min",
-                    deliveryPrice: "R$ 3,50",
-                    imageSource: { uri: 'https://via.placeholder.com/120x100' },
-                    categoryId: 3,
-                    isAvailable: true
-                }
-            ]
-        },
-    ];
-
     // Transformar dados em lista plana usando dados reais da API
     const flattenedData = [];
-    const dataToUse = categories.length > 0 ? categories : mockData;
+    const dataToUse = categories;
     const visibleCategories = [];
     let visibleCategoryIndex = 0;
     
     dataToUse.forEach((category, originalIndex) => {
         // Usar produtos da API se disponíveis, senão usar dados mock
-        const categoryProducts = products[category.id] || category.data || [];
+        const categoryProducts = products[category.id] || [];
         
         // Filtrar apenas itens ativos
         const activeProducts = categoryProducts.filter(item => 
@@ -280,12 +172,18 @@ export default function MenuCategory({
             });
 
             activeProducts.forEach((item) => {
+                // Filtrar produtos sem ingredientes disponíveis na receita base
+                // availability_status pode ser: 'available', 'low_stock', 'unavailable', 'unknown'
+                const availabilityStatus = item.availability_status || 'unknown';
+                if (availabilityStatus === 'unavailable') {
+                    // Produto não tem ingredientes disponíveis na receita base, não exibe
+                    return;
+                }
+                
                 const imageUrl = item?.id
                     ? `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}`
                     : null;
                 
-                // (logs de debug removidos)
-
                 // Transformar produto da API para o formato esperado pelo CardItemHorizontal
                 const formattedItem = {
                     id: item.id,
@@ -296,7 +194,7 @@ export default function MenuCategory({
                     deliveryPrice: 'R$ 5,00', // Valor fixo por enquanto
                     imageSource: imageUrl ? { uri: imageUrl } : null,
                     categoryId: item.category_id,
-                    isAvailable: item.is_active !== false
+                    isAvailable: item.is_active !== false && availabilityStatus !== 'unavailable'
                 };
 
                 flattenedData.push({
@@ -521,6 +419,21 @@ export default function MenuCategory({
             <View style={[styles.container, styles.loadingContainer]}>
                 <ActivityIndicator size="large" color="#333" />
                 <Text style={styles.loadingText}>Carregando categorias...</Text>
+            </View>
+        );
+    }
+
+    if (error) {
+        return (
+            <View style={[styles.container, styles.loadingContainer]}>
+                <Text style={styles.loadingText}>{error}</Text>
+                <TouchableOpacity
+                    style={[styles.addExtrasButton, { marginTop: 12 }]}
+                    onPress={loadCategories}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.addExtrasButtonText}>Tentar novamente</Text>
+                </TouchableOpacity>
             </View>
         );
     }

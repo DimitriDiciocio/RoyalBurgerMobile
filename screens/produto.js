@@ -1,5 +1,5 @@
     import React, {useState, useRef, useEffect, useMemo} from 'react';
-import {StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Animated, ActivityIndicator, Keyboard, Modal} from 'react-native';
+import {StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Animated, ActivityIndicator, Keyboard, Modal, Alert} from 'react-native';
     import { SvgXml } from 'react-native-svg';
     import { useIsFocused } from '@react-navigation/native';
     import Header from "../components/Header";
@@ -12,7 +12,7 @@ import {StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, 
 import { isAuthenticated, getStoredUserData } from '../services/userService';
 import { getCustomerAddresses, getLoyaltyBalance } from '../services/customerService';
 import { getMenuProduct } from '../services/menuService';
-import { getProductIngredients, getProductById } from '../services/productService';
+import { getProductIngredients, getProductById, checkProductAvailability } from '../services/productService';
 import { getAllIngredients } from '../services/ingredientService';
 import { useBasket } from '../contexts/BasketContext';
 import BasketFooter from '../components/BasketFooter';
@@ -276,6 +276,14 @@ import api from '../services/api';
                                     ingredientsList = ingredientsResponse.items;
                                 }
                                 if (!isCancelled) setProductIngredients(ingredientsList);
+                                // Log de diagnóstico: produto sem ingredientes disponíveis
+                                if (!isCancelled && (!ingredientsList || ingredientsList.length === 0)) {
+                                    console.warn('[DIAGNOSTICO] Produto sem ingredientes disponíveis:', {
+                                        productId: pid,
+                                        productName: (data?.name || produto?.name || produto?.title || 'Produto'),
+                                        message: 'Nenhum ingrediente retornado pela API'
+                                    });
+                                }
                             } catch (e) {
                                 console.error('Erro ao buscar ingredientes:', e);
                                 if (!isCancelled) setProductIngredients([]);
@@ -345,7 +353,25 @@ import api from '../services/api';
 
         const extraIngredients = productIngredients.filter((ing) => {
             const portions = parseFloat(ing.portions || 0) || 0;
-            return portions === 0;
+            // Só inclui extras (portions === 0)
+            if (portions !== 0) return false;
+            
+            // Filtrar extras que não têm estoque disponível
+            // Verifica se o ingrediente está disponível e tem estoque
+            const isAvailable = ing.is_available !== false;
+            const availabilityInfo = ing.availability_info;
+            
+            // Se tem availability_info, verifica max_available
+            if (availabilityInfo) {
+                const maxAvailable = availabilityInfo.max_available || 0;
+                // Se max_available é 0, não tem estoque suficiente
+                if (maxAvailable <= 0) return false;
+            }
+            
+            // Se não tem availability_info mas está marcado como indisponível, filtra
+            if (!isAvailable) return false;
+            
+            return true;
         });
 
         // Somar a quantidade total de extras selecionados
@@ -601,10 +627,10 @@ import api from '../services/api';
                          onAddPress={({ quantity, total }) => {
                              // TODO: integrar ao carrinho quando disponível
                          }}
-                         onAddToBasket={({ quantity, total, unitPrice }) => {
+                         onAddToBasket={async ({ quantity, total, unitPrice }) => {
                              // Se estiver editando, remover o item antigo primeiro
-                             if (editItem?.id) {
-                                 removeFromBasket(editItem.id);
+                             if (editItem?.id || editItem?.cartItemId) {
+                                 await removeFromBasket(editItem.cartItemId || editItem.id);
                              }
                              
                              // Gerar lista de modificações para exibição
@@ -649,23 +675,137 @@ import api from '../services/api';
                                  }
                              });
                              
-                             // Adiciona à cesta com todas as informações
-                             addToBasket({ 
-                                 quantity, 
-                                 total, 
-                                 unitPrice, 
-                                 productName: productData?.name || produto?.name || 'Produto',
-                                 description: productData?.description || produto?.description,
-                                 image: productData?.image_url ? 
-                                     `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}` : 
-                                     produto?.imageSource?.uri,
-                                 productId: productData?.id || produto?.id,
-                                 observacoes: observacoes,
-                                 selectedExtras: selectedExtras,
-                                 defaultIngredientsQuantities: defaultIngredientsQuantities,
-                                 modifications: modifications
+                             // Converter defaultIngredientsQuantities para baseModifications
+                             // baseModifications representa mudanças em relação à receita padrão
+                             const baseModifications = [];
+                             Object.entries(defaultIngredientsQuantities).forEach(([ingredientId, currentQty]) => {
+                                 const ing = defaultIngredients.find(ing => 
+                                     String(ing.id || ing.ingredient_id) === String(ingredientId)
+                                 );
+                                 if (ing) {
+                                     const minQty = parseFloat(ing.portions || 0) || 0;
+                                     const delta = currentQty - minQty; // Diferença em relação ao padrão
+                                     if (delta !== 0) {
+                                         baseModifications.push({
+                                             ingredient_id: Number(ingredientId),
+                                             delta: delta
+                                         });
+                                     }
+                                 }
                              });
-                             navigation.navigate('Home');
+                             
+                             // Função auxiliar para adicionar ao carrinho
+                             const addItemToCart = async () => {
+                                 const result = await addToBasket({
+                                     productId: productData?.id || produto?.id,
+                                     quantity: quantity,
+                                     observacoes: observacoes,
+                                     selectedExtras: selectedExtras,
+                                     baseModifications: baseModifications
+                                 });
+                                 
+                                 if (result.success) {
+                                     // Navegar para home após sucesso
+                                     navigation.navigate('Home');
+                                 } else {
+                                     // Mostrar erro se falhou
+                                     Alert.alert(
+                                         'Erro',
+                                         result.error || 'Não foi possível adicionar o item à cesta',
+                                         [{ text: 'OK' }]
+                                     );
+                                 }
+                             };
+                             
+                             // VALIDAÇÃO PREVENTIVA: Verificar disponibilidade antes de adicionar
+                             const productId = productData?.id || produto?.id;
+                             if (productId) {
+                                 try {
+                                     const availability = await checkProductAvailability(productId, quantity);
+                                     
+                                    if (availability.status === 'unavailable') {
+                                        // Log de diagnóstico: detalha quais ingredientes estão bloqueando
+                                        try {
+                                            const ingredients = Array.isArray(availability.ingredients) ? availability.ingredients : [];
+                                            const unavailable = ingredients.filter((ing) => {
+                                                if (!ing) return false;
+                                                // Alguns backends retornam Decimals como strings; normaliza para número quando possível
+                                                const current = typeof ing.current_stock === 'string' ? parseFloat(ing.current_stock) : ing.current_stock;
+                                                const required = typeof ing.required === 'string' ? parseFloat(ing.required) : ing.required;
+                                                return ing.is_available === false || (typeof current === 'number' && typeof required === 'number' && current < required);
+                                            }).map((ing) => {
+                                                const current = typeof ing.current_stock === 'string' ? parseFloat(ing.current_stock) : ing.current_stock;
+                                                const required = typeof ing.required === 'string' ? parseFloat(ing.required) : ing.required;
+                                                return {
+                                                    ingredient_id: ing.ingredient_id,
+                                                    name: ing.name,
+                                                    is_available: !!ing.is_available,
+                                                    current_stock: current,
+                                                    required: required,
+                                                    stock_unit: ing.stock_unit,
+                                                    reason: ing.reason || (typeof current === 'number' && typeof required === 'number' && current < required ? 'estoque insuficiente' : undefined)
+                                                };
+                                            });
+
+                                            const diag = {
+                                                productId,
+                                                productName: (productData?.name || produto?.name || produto?.title || 'Produto'),
+                                                quantity,
+                                                unavailable_count: unavailable.length,
+                                                unavailable_ingredients: unavailable
+                                            };
+                                            console.warn('[DIAGNOSTICO] Produto indisponível (estoque/ingredientes): ' + JSON.stringify(diag, null, 2));
+                                        } catch (logErr) {
+                                            // Fallback em caso de erro ao montar log
+                                            console.warn('[DIAGNOSTICO] Produto indisponível (falha ao detalhar ingredientes):', {
+                                                productId,
+                                                productName: (productData?.name || produto?.name || produto?.title || 'Produto'),
+                                                quantity
+                                            });
+                                        }
+                                         Alert.alert(
+                                             'Produto Indisponível',
+                                             availability.message || 'Este produto não está disponível no momento devido a falta de estoque.',
+                                             [{ text: 'OK' }]
+                                         );
+                                         return; // Não adiciona ao carrinho
+                                     }
+                                     
+                                     // Se status é 'unknown', permite continuar mas mostra aviso
+                                     if (availability.status === 'unknown') {
+                                         Alert.alert(
+                                             'Atenção',
+                                             'Não foi possível verificar a disponibilidade completa. O item será adicionado, mas pode não estar disponível no momento da finalização do pedido.',
+                                             [
+                                                 { text: 'Cancelar', style: 'cancel' },
+                                                 { 
+                                                     text: 'Continuar', 
+                                                     onPress: addItemToCart
+                                                 }
+                                             ]
+                                         );
+                                         return;
+                                     }
+                                 } catch (availabilityError) {
+                                     // Se falhar a verificação, permite continuar mas mostra aviso
+                                     console.error('Erro ao verificar disponibilidade:', availabilityError);
+                                     Alert.alert(
+                                         'Atenção',
+                                         'Não foi possível verificar a disponibilidade. O item será adicionado, mas pode não estar disponível no momento da finalização do pedido.',
+                                         [
+                                             { text: 'Cancelar', style: 'cancel' },
+                                             { 
+                                                 text: 'Continuar', 
+                                                 onPress: addItemToCart
+                                             }
+                                         ]
+                                     );
+                                     return;
+                                 }
+                             }
+                             
+                             // Adiciona à cesta via API (só chega aqui se disponibilidade estiver OK)
+                             await addItemToCart();
                          }}
                          style={{ marginBottom: 24 }}
                      />
@@ -736,7 +876,25 @@ import api from '../services/api';
                                           // Buscar preço do ingrediente usando cache ou dados do ingrediente
                                           const extra = findIngredientPrice(ing, ingredientId);
                                           const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
-                                          const maxQty = ing.max_quantity || ing.maxQuantity || null;
+                                          
+                                          // Limitar quantidade máxima baseada no estoque real
+                                          // Usa o menor valor entre: max_quantity da regra e max_available do estoque
+                                          const ruleMaxQty = ing.max_quantity || ing.maxQuantity || null;
+                                          const availabilityInfo = ing.availability_info;
+                                          const stockMaxAvailable = availabilityInfo?.max_available || null;
+                                          
+                                          // Determina o máximo real: menor entre regra e estoque
+                                          let maxQty = null;
+                                          if (stockMaxAvailable !== null && stockMaxAvailable !== undefined) {
+                                              if (ruleMaxQty !== null) {
+                                                  maxQty = Math.min(parseInt(ruleMaxQty, 10), stockMaxAvailable);
+                                              } else {
+                                                  maxQty = stockMaxAvailable;
+                                              }
+                                          } else if (ruleMaxQty !== null) {
+                                              maxQty = parseInt(ruleMaxQty, 10);
+                                          }
+                                          
                                           const initialExtraQty = minQty || 0;
                                           const currentQuantity = tempSelectedExtras[ingredientId] !== undefined 
                                               ? tempSelectedExtras[ingredientId] 
@@ -745,10 +903,10 @@ import api from '../services/api';
                                          return (
                                              <View key={ingredientId} style={styles.modalIngredientItem}>
                                                  <View style={styles.modalIngredientInfo}>
-                                                     <Text style={styles.modalIngredientName}>{displayName}</Text>
-                                                     <Text style={styles.modalIngredientPrice}>
-                                                         + R$ {extra.toFixed(2).replace('.', ',')}
-                                                     </Text>
+                                                    <Text style={styles.modalIngredientName}>{displayName}</Text>
+                                                    <Text style={styles.modalIngredientPrice}>
+                                                        + R$ {(parseFloat(extra) || 0).toFixed(2).replace('.', ',')}
+                                                    </Text>
                                                  </View>
                                                  <View style={styles.modalQuantityContainer}>
                                                      {currentQuantity > minQty && (

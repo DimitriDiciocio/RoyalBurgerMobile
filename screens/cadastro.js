@@ -261,6 +261,7 @@ export default function Cadastro({navigation}) {
             const response = await registerCustomer({nomeCompleto, email, dataNascimento, telefone, senha, confirmarSenha});
             const apiSuccessMsg = response?.data?.message || response?.message;
             setSubmitSuccess(apiSuccessMsg || 'Cadastro realizado com sucesso.');
+            
             // Redireciona para verificação de email após breve confirmação
             setTimeout(() => {
                 navigation.navigate('VerificacaoEmail', {

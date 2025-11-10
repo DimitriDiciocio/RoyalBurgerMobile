@@ -4,6 +4,7 @@ import Header from "../components/Header";
 import Input from "../components/Input";
 import {login, registerCustomer} from "../services";
 import { requestEmailVerification } from "../services/customerService";
+import { useBasket } from "../contexts/BasketContext";
 
 export default function Login({navigation}) {
     const [email, setEmail] = useState('');
@@ -12,6 +13,7 @@ export default function Login({navigation}) {
     const [passwordError, setPasswordError] = useState('');
     const [submitError, setSubmitError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const { claimGuestCartAfterLogin } = useBasket();
 
     // Função para validar email
     const validateEmail = (email) => {
@@ -59,14 +61,25 @@ export default function Login({navigation}) {
         try {
             const result = await login({ email, password });
             if (result.ok) {
+                // Reivindicar carrinho de convidado após login bem-sucedido
+                try {
+                    await claimGuestCartAfterLogin();
+                } catch (cartError) {
+                    // Erro silencioso - não bloqueia o login
+                    console.log('Erro ao reivindicar carrinho:', cartError);
+                }
                 navigation.navigate('Home');
             } else {
                 const message = result.error || '';
-                const isUnverified =
-                    result.status === 403 ||
+                
+                // Verifica APENAS se o backend retornou especificamente que o email não está verificado
+                // Status 403 E mensagem específica de verificação
+                const isUnverified = 
+                    result.status === 403 && 
                     /nao verificado|não verificado|email.*verificar|verify.*email|EMAIL_NOT_VERIFIED|UNVERIFIED/i.test(message);
 
                 if (isUnverified) {
+                    // Só envia email de verificação se realmente não estiver verificado
                     try {
                         await requestEmailVerification(email);
                     } catch (e) {
@@ -76,6 +89,7 @@ export default function Login({navigation}) {
                     return;
                 }
 
+                // Para qualquer outro erro (credenciais inválidas, etc), mostra a mensagem
                 setSubmitError(message || 'Não foi possível fazer login.');
             }
         } catch (e) {

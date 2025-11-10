@@ -45,6 +45,29 @@ export const getProductById = async (productId) => {
 };
 
 /**
+ * Verifica a disponibilidade de um produto (estoque de ingredientes).
+ * @param {number} productId - ID do produto
+ * @param {number} quantity - Quantidade desejada
+ * @returns {Promise<object>} - Status de disponibilidade
+ */
+export const checkProductAvailability = async (productId, quantity = 1) => {
+  try {
+    const response = await api.get(`/products/${productId}/availability`, {
+      params: { quantity }
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Erro ao verificar disponibilidade:", error);
+    // Retorna status unknown em caso de erro
+    return {
+      status: 'unknown',
+      message: error.response?.data?.error || 'Erro ao verificar disponibilidade',
+      available: false
+    };
+  }
+};
+
+/**
  * Cria um novo produto (apenas para admin/manager).
  * @param {object} productData - Dados do produto
  * @returns {Promise<object>} - Produto criado

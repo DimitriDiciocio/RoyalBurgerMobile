@@ -79,11 +79,22 @@ api.interceptors.request.use(
         isCustomerRegistration;
 
       // Se não for uma rota pública, adiciona o token
+      // IMPORTANTE: Para rotas de carrinho (/cart/*), o token é opcional
+      // A API usa verify_jwt_in_request(optional=True) para permitir convidados
       if (!isPublicRoute) {
         const token = await AsyncStorage.getItem("user_token");
+        const isCartRoute = config.url?.startsWith('/cart/');
 
+        // Para rotas de carrinho, a API aceita requisições sem token (convidados)
+        // Mas se houver token, envia (mesmo que inválido, a API trata opcionalmente)
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+          
+          if (isCartRoute && __DEV__) {
+            console.log('[API] Token enviado para rota de carrinho (opcional na API)');
+          }
+        } else if (isCartRoute && __DEV__) {
+          console.log('[API] Requisição de carrinho sem token (convidado)');
         }
       }
     } catch (error) {

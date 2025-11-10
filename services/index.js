@@ -88,6 +88,7 @@ export {
   deleteSection,
   getMostOrderedProducts,
   getRecentlyAddedProducts,
+  checkProductAvailability,
 } from "./productService";
 
 // Categorias
@@ -282,3 +283,18 @@ export {
   getPromotionById,
   getPromotionByProductId,
 } from "./promotionService";
+
+// Carrinho
+export {
+  getCart,
+  addItemToCart,
+  updateCartItem,
+  removeCartItem,
+  clearCart,
+  claimGuestCart,
+  validateCartForOrder,
+  getGuestCartId,
+  saveGuestCartId,
+  removeGuestCartId,
+  createGuestCart,
+} from "./cartService";

@@ -15,9 +15,12 @@ export default function BasketFooter({
 }) {
     const formatCurrency = (value) => {
         try {
-            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-        } catch {
-            return `R$ ${value.toFixed(2).replace('.', ',')}`;
+            const numValue = parseFloat(value) || 0;
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValue);
+        } catch (error) {
+            console.error('[BasketFooter] Erro ao formatar moeda:', { value, error });
+            const numValue = parseFloat(value) || 0;
+            return `R$ ${numValue.toFixed(2).replace('.', ',')}`;
         }
     };
 

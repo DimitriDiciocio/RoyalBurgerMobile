@@ -7,7 +7,7 @@ import { getLoyaltyBalance, getCustomerAddresses } from '../services/customerSer
 import { useBasket } from '../contexts/BasketContext';
 import ItensCesta from '../components/itensCesta';
 import CardItemVerticalAdd from '../components/CardItemVerticalAdd';
-import { getPublicSettings } from '../services';
+import { getPublicSettings, validateCartForOrder } from '../services';
 
 const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M5.29385 9.29365C4.90322 9.68428 4.90322 10.3187 5.29385 10.7093L11.2938 16.7093C11.6845 17.0999 12.3188 17.0999 12.7095 16.7093C13.1001 16.3187 13.1001 15.6843 12.7095 15.2937L7.41572 9.9999L12.7063 4.70615C13.097 4.31553 13.097 3.68115 12.7063 3.29053C12.3157 2.8999 11.6813 2.8999 11.2907 3.29053L5.29072 9.29053L5.29385 9.29365Z" fill="black"/>
@@ -24,36 +24,51 @@ export default function Cesta({ navigation }) {
     const [loyaltyRates, setLoyaltyRates] = useState({
         gain_rate: 0.1, // valor padrão: 1 ponto vale 0.1 reais (10 centavos)
     });
-    const { basketItems, removeFromBasket, updateBasketItem, clearBasket, addToBasket, basketTotal } = useBasket();
+    const { basketItems, removeFromBasket, updateBasketItem, clearBasket, addToBasket, basketTotal, loadCart } = useBasket();
     
     // Calcular total real dos itens da cesta (já inclui adicionais pois usa item.total)
     const calculateTotal = () => {
-        return basketItems.reduce((total, item) => total + (item.total || (item.price * item.quantity)), 0);
+        try {
+            const total = basketItems.reduce((total, item) => {
+                const itemTotal = item.total || (parseFloat(item.price || 0) * parseFloat(item.quantity || 0));
+                return total + (parseFloat(itemTotal) || 0);
+            }, 0);
+            console.log('[Cesta] calculateTotal:', { total, basketItemsCount: basketItems.length });
+            return total;
+        } catch (error) {
+            console.error('[Cesta] Erro em calculateTotal:', error);
+            return 0;
+        }
     };
 
     // Calcular descontos de promoções
     // TODO: Implementar lógica de promoções quando estiver disponível
     // Por enquanto retorna 0
     const calculatePromotionDiscounts = () => {
-        let totalDiscount = 0;
-        
-        // TODO: Quando o sistema de promoções estiver pronto, implementar:
-        // 1. Verificar cada item do carrinho se está em promoção
-        // 2. Calcular desconto baseado na promoção (percentual ou valor fixo)
-        // 3. Somar todos os descontos aplicados
-        
-        // Exemplo de como pode ser implementado no futuro:
-        // basketItems.forEach(item => {
-        //     if (item.promotion) {
-        //         if (item.promotion.type === 'percentage') {
-        //             totalDiscount += (item.total * item.promotion.value / 100);
-        //         } else if (item.promotion.type === 'fixed') {
-        //             totalDiscount += item.promotion.value;
-        //         }
-        //     }
-        // });
-        
-        return totalDiscount;
+        try {
+            let totalDiscount = 0;
+            
+            // TODO: Quando o sistema de promoções estiver pronto, implementar:
+            // 1. Verificar cada item do carrinho se está em promoção
+            // 2. Calcular desconto baseado na promoção (percentual ou valor fixo)
+            // 3. Somar todos os descontos aplicados
+            
+            // Exemplo de como pode ser implementado no futuro:
+            // basketItems.forEach(item => {
+            //     if (item.promotion) {
+            //         if (item.promotion.type === 'percentage') {
+            //             totalDiscount += (item.total * item.promotion.value / 100);
+            //         } else if (item.promotion.type === 'fixed') {
+            //             totalDiscount += item.promotion.value;
+            //         }
+            //     }
+            // });
+            
+            return parseFloat(totalDiscount) || 0;
+        } catch (error) {
+            console.error('[Cesta] Erro em calculatePromotionDiscounts:', error);
+            return 0;
+        }
     };
 
     // Calcular pontos ganhos na compra
@@ -115,7 +130,12 @@ export default function Cesta({ navigation }) {
                 // Buscar configurações públicas (taxa de entrega e taxas de conversão)
                 try {
                     const publicSettings = await getPublicSettings();
+                    console.log('[Cesta] Public settings recebidas:', publicSettings);
                     const fee = parseFloat(publicSettings?.delivery_fee || 0);
+                    console.log('[Cesta] Delivery fee calculado:', { 
+                        raw: publicSettings?.delivery_fee, 
+                        parsed: fee 
+                    });
                     setDeliveryFee(fee);
                     
                     if (publicSettings?.loyalty_rates) {
@@ -183,11 +203,31 @@ export default function Cesta({ navigation }) {
         checkAuth();
     }, []);
 
+    // Log para monitorar mudanças no carrinho
+    useEffect(() => {
+        console.log('[Cesta] Estado do carrinho atualizado:', {
+            basketItemsCount: basketItems?.length || 0,
+            basketTotal: basketTotal,
+            basketTotalType: typeof basketTotal,
+            basketTotalIsNaN: isNaN(basketTotal),
+            basketItems: basketItems?.map(item => ({
+                id: item.id,
+                cartItemId: item.cartItemId,
+                price: item.price,
+                priceType: typeof item.price,
+                quantity: item.quantity,
+                quantityType: typeof item.quantity,
+                total: item.total,
+                totalType: typeof item.total
+            }))
+        });
+    }, [basketItems, basketTotal]);
+
     const handleBack = () => {
         navigation.goBack();
     };
 
-    const handleLimpar = () => {
+    const handleLimpar = async () => {
         if (basketItems.length === 0) {
             Alert.alert(
                 'Cesta vazia',
@@ -208,9 +248,16 @@ export default function Cesta({ navigation }) {
                 {
                     text: 'Limpar',
                     style: 'destructive',
-                        onPress: () => {
-                            clearBasket();
-                        },
+                    onPress: async () => {
+                        const result = await clearBasket();
+                        if (!result.success) {
+                            Alert.alert(
+                                'Erro',
+                                result.error || 'Não foi possível limpar a cesta',
+                                [{ text: 'OK' }]
+                            );
+                        }
+                    },
                 },
             ]
         );
@@ -222,94 +269,86 @@ export default function Cesta({ navigation }) {
             productId: item.originalProductId || item.productId,
             editItem: {
                 id: item.id,
+                cartItemId: item.cartItemId || item.id, // ID do item no carrinho
                 quantity: item.quantity,
                 observacoes: item.observacoes || '',
                 selectedExtras: item.selectedExtras || {},
-                defaultIngredientsQuantities: item.defaultIngredientsQuantities || {}
+                defaultIngredientsQuantities: item.defaultIngredientsQuantities || {},
+                modifications: item.modifications || []
             }
         });
     };
 
-    const handleRemoveItem = (item) => {
-        // Remove todos os itens similares (mesmo produto, modificações e observações)
-        if (item.similarItemIds) {
-            // Se tem similarItemIds, remove todos eles
-            item.similarItemIds.forEach(id => removeFromBasket(id));
-        } else {
-            // Fallback: encontra e remove itens similares
-            const similarItems = basketItems.filter(basketItem => 
-                (basketItem.originalProductId || basketItem.productId) === (item.originalProductId || item.productId) &&
-                JSON.stringify(basketItem.selectedExtras) === JSON.stringify(item.selectedExtras) &&
-                JSON.stringify(basketItem.defaultIngredientsQuantities) === JSON.stringify(item.defaultIngredientsQuantities) &&
-                basketItem.observacoes === item.observacoes
-            );
-            similarItems.forEach(similarItem => removeFromBasket(similarItem.id));
+    const handleRemoveItem = async (item) => {
+        // Remove item usando cartItemId (ID do item no carrinho da API)
+        const cartItemId = item.cartItemId || item.id;
+        if (cartItemId) {
+            const result = await removeFromBasket(cartItemId);
+            if (!result.success) {
+                Alert.alert(
+                    'Erro',
+                    result.error || 'Não foi possível remover o item',
+                    [{ text: 'OK' }]
+                );
+            }
         }
     };
 
-    const handleUpdateQuantity = (item, newQuantity) => {
+    const handleUpdateQuantity = async (item, newQuantity) => {
         if (newQuantity <= 0) {
-            // Remove todos os itens similares
-            if (item.similarItemIds) {
-                item.similarItemIds.forEach(id => removeFromBasket(id));
-            } else {
-                // Fallback: encontra e remove itens similares
-                const similarItems = basketItems.filter(basketItem => 
-                    (basketItem.originalProductId || basketItem.productId) === (item.originalProductId || item.productId) &&
-                    JSON.stringify(basketItem.selectedExtras) === JSON.stringify(item.selectedExtras) &&
-                    JSON.stringify(basketItem.defaultIngredientsQuantities) === JSON.stringify(item.defaultIngredientsQuantities) &&
-                    basketItem.observacoes === item.observacoes
-                );
-                similarItems.forEach(similarItem => removeFromBasket(similarItem.id));
-            }
+            // Remove o item
+            await handleRemoveItem(item);
             return;
         }
         
-        // Encontra todos os itens similares (mesmo produto, modificações e observações)
-        const similarItems = basketItems.filter(basketItem => 
-            (basketItem.originalProductId || basketItem.productId) === (item.originalProductId || item.productId) &&
-            JSON.stringify(basketItem.selectedExtras) === JSON.stringify(item.selectedExtras) &&
-            JSON.stringify(basketItem.defaultIngredientsQuantities) === JSON.stringify(item.defaultIngredientsQuantities) &&
-            basketItem.observacoes === item.observacoes
-        );
-        
-        const currentQuantity = similarItems.length;
-        const quantityDifference = newQuantity - currentQuantity;
-        
-        if (quantityDifference > 0) {
-            // Aumentar quantidade = duplicar o item completo
-            // Calcula o total unitário baseado no primeiro item similar (para manter preço correto)
-            const firstSimilarItem = similarItems[0];
-            // O total unitário é o total do primeiro item (que já inclui preço base + adicionais)
-            const unitTotal = firstSimilarItem.total || item.total / currentQuantity;
+        // Atualizar quantidade via API usando cartItemId
+        const cartItemId = item.cartItemId || item.id;
+        if (cartItemId) {
+            // Converter selectedExtras para formato da API
+            const extras = Object.entries(item.selectedExtras || {})
+                .filter(([_, qty]) => qty > 0)
+                .map(([ingredientId, qty]) => ({
+                    ingredient_id: Number(ingredientId),
+                    quantity: Number(qty)
+                }));
             
-            // Duplica o item com todas as suas modificações e observações
-            for (let i = 0; i < quantityDifference; i++) {
-                addToBasket({
-                    quantity: 1,
-                    total: unitTotal, // Total unitário (preço base + adicionais por unidade)
-                    unitPrice: firstSimilarItem.price || item.price,
-                    productName: firstSimilarItem.name || item.name,
-                    description: firstSimilarItem.description || item.description,
-                    image: firstSimilarItem.image || item.image,
-                    productId: firstSimilarItem.originalProductId || firstSimilarItem.productId || item.originalProductId || item.productId,
-                    observacoes: firstSimilarItem.observacoes || item.observacoes || '',
-                    selectedExtras: firstSimilarItem.selectedExtras ? { ...firstSimilarItem.selectedExtras } : (item.selectedExtras ? { ...item.selectedExtras } : {}),
-                    defaultIngredientsQuantities: firstSimilarItem.defaultIngredientsQuantities ? { ...firstSimilarItem.defaultIngredientsQuantities } : (item.defaultIngredientsQuantities ? { ...item.defaultIngredientsQuantities } : {}),
-                    modifications: firstSimilarItem.modifications ? [...firstSimilarItem.modifications] : (item.modifications ? [...item.modifications] : [])
-                });
-            }
-        } else if (quantityDifference < 0) {
-            // Diminuir quantidade = remover itens duplicados
-            const itemsToRemove = Math.abs(quantityDifference);
-            
-            // Remove itens similares (excluindo o primeiro para manter pelo menos um)
-            const itemsToRemoveArray = similarItems.slice(0, itemsToRemove);
-            itemsToRemoveArray.forEach(similarItem => {
-                removeFromBasket(similarItem.id);
+            const result = await updateBasketItem(cartItemId, {
+                quantity: newQuantity,
+                extras: extras,
+                observacoes: item.observacoes || '',
+                baseModifications: item.modifications || []
             });
+            
+            if (!result.success) {
+                Alert.alert(
+                    'Erro',
+                    result.error || 'Não foi possível atualizar a quantidade',
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
+
+            // Validação preventiva do carrinho após atualizar quantidade
+            try {
+                const validation = await validateCartForOrder();
+                const isValid = validation?.success && (validation.is_valid !== false) && (!(validation.alerts) || validation.alerts.length === 0);
+                if (!isValid) {
+                    const alertsText = Array.isArray(validation?.alerts) && validation.alerts.length > 0
+                        ? validation.alerts.join('\\n')
+                        : 'Alguns itens estão indisponíveis ou com estoque insuficiente.';
+                    Alert.alert(
+                        'Carrinho inválido',
+                        alertsText,
+                        [{ text: 'OK' }]
+                    );
+                    // Recarrega carrinho para refletir estado consistente
+                    await loadCart();
+                }
+            } catch (e) {
+                // Silencia erro de validação para não bloquear fluxo, apenas recarrega
+                await loadCart();
+            }
         }
-        // Se quantityDifference === 0, não faz nada
     };
 
     const handleAddMoreItems = () => {
@@ -391,15 +430,8 @@ export default function Cesta({ navigation }) {
     ];
 
     const handleAddSuggestedProduct = (product) => {
-        addToBasket({
-            quantity: 1,
-            total: product.price,
-            unitPrice: product.price,
-            productName: product.name,
-            description: product.description,
-            image: product.image,
-            productId: product.id
-        });
+        // IDs de sugestão são fictícios; direciona o usuário para a Home para escolher um produto real
+        navigation.navigate('Home');
     };
 
     if (isLoading) {
@@ -455,50 +487,15 @@ export default function Cesta({ navigation }) {
                 <Text style={styles.sectionTitle}>Itens adicionados</Text>
                 
                 {basketItems.length > 0 ? (
-                    (() => {
-                        // Agrupa itens similares e mostra quantidade total
-                        const groupedItems = [];
-                        const processedIds = new Set();
-                        
-                        basketItems.forEach(item => {
-                            if (processedIds.has(item.id)) return;
-                            
-                            // Encontra todos os itens similares (mesmo produto, modificações e observações)
-                            const similarItems = basketItems.filter(basketItem => 
-                                (basketItem.originalProductId || basketItem.productId) === (item.originalProductId || item.productId) &&
-                                JSON.stringify(basketItem.selectedExtras) === JSON.stringify(item.selectedExtras) &&
-                                JSON.stringify(basketItem.defaultIngredientsQuantities) === JSON.stringify(item.defaultIngredientsQuantities) &&
-                                basketItem.observacoes === item.observacoes
-                            );
-                            
-                            // Marca todos como processados
-                            similarItems.forEach(similarItem => processedIds.add(similarItem.id));
-                            
-                            // Calcula total dos itens similares
-                            const totalQuantity = similarItems.length;
-                            const totalPrice = similarItems.reduce((sum, similarItem) => sum + (similarItem.total || 0), 0);
-                            
-                            // Cria um item agrupado com quantidade total
-                            const groupedItem = {
-                                ...item,
-                                quantity: totalQuantity,
-                                total: totalPrice,
-                                similarItemIds: similarItems.map(si => si.id) // Guarda IDs para remoção
-                            };
-                            
-                            groupedItems.push(groupedItem);
-                        });
-                        
-                        return groupedItems.map((item, index) => (
-                            <ItensCesta
-                                key={item.id || index}
-                                item={item}
-                                onEdit={handleEditItem}
-                                onRemove={handleRemoveItem}
-                                onUpdateQuantity={handleUpdateQuantity}
-                            />
-                        ));
-                    })()
+                    basketItems.map((item, index) => (
+                        <ItensCesta
+                            key={item.cartItemId || item.id || index}
+                            item={item}
+                            onEdit={handleEditItem}
+                            onRemove={handleRemoveItem}
+                            onUpdateQuantity={handleUpdateQuantity}
+                        />
+                    ))
                 ) : (
                     <Text style={styles.emptyText}>Nenhum item na cesta</Text>
                 )}
@@ -520,16 +517,20 @@ export default function Cesta({ navigation }) {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.suggestedScrollContent}
                     >
-                        {suggestedProducts.map((product) => (
-                            <CardItemVerticalAdd
-                                key={product.id}
-                                title={product.name}
-                                description={product.description}
-                                price={`R$ ${product.price.toFixed(2).replace('.', ',')}`}
-                                imageSource={product.image}
-                                onAdd={() => handleAddSuggestedProduct(product)}
-                            />
-                        ))}
+                        {suggestedProducts.map((product) => {
+                            const safePrice = parseFloat(product.price) || 0;
+                            console.log('[Cesta] Suggested product price:', { productId: product.id, price: product.price, safePrice });
+                            return (
+                                <CardItemVerticalAdd
+                                    key={product.id}
+                                    title={product.name}
+                                    description={product.description}
+                                    price={`R$ ${safePrice.toFixed(2).replace('.', ',')}`}
+                                    imageSource={product.image}
+                                    onAdd={() => handleAddSuggestedProduct(product)}
+                                />
+                            );
+                        })}
                     </ScrollView>
                 </View>
 
@@ -540,21 +541,35 @@ export default function Cesta({ navigation }) {
                     <View style={styles.resumoItem}>
                         <Text style={styles.resumoLabel}>Taxa de entrega</Text>
                         <Text style={styles.resumoValor}>
-                            R$ {deliveryFee.toFixed(2).replace('.', ',')}
+                            R$ {(parseFloat(deliveryFee) || 0).toFixed(2).replace('.', ',')}
                         </Text>
                     </View>
 
                     <View style={styles.resumoItem}>
                         <Text style={styles.resumoLabel}>Descontos</Text>
                         <Text style={styles.resumoValor}>
-                            R$ {calculatePromotionDiscounts().toFixed(2).replace('.', ',')}
+                            R$ {(parseFloat(calculatePromotionDiscounts()) || 0).toFixed(2).replace('.', ',')}
                         </Text>
                     </View>
 
                     <View style={styles.resumoItem}>
                         <Text style={styles.resumoTotalLabel}>Total</Text>
                         <Text style={styles.resumoTotalValor}>
-                            R$ {(basketTotal + deliveryFee - calculatePromotionDiscounts()).toFixed(2).replace('.', ',')}
+                            {(() => {
+                                const safeBasketTotal = parseFloat(basketTotal) || 0;
+                                const safeDeliveryFee = parseFloat(deliveryFee) || 0;
+                                const safeDiscounts = parseFloat(calculatePromotionDiscounts()) || 0;
+                                const total = safeBasketTotal + safeDeliveryFee - safeDiscounts;
+                                console.log('[Cesta] Resumo Total:', { 
+                                    basketTotal, 
+                                    safeBasketTotal, 
+                                    deliveryFee, 
+                                    safeDeliveryFee, 
+                                    discounts: safeDiscounts, 
+                                    total 
+                                });
+                                return `R$ ${total.toFixed(2).replace('.', ',')}`;
+                            })()}
                         </Text>
                     </View>
 
@@ -570,7 +585,21 @@ export default function Cesta({ navigation }) {
                      <View style={styles.footerLeft}>
                          <Text style={styles.footerTotalLabel}>Total</Text>
                          <Text style={styles.footerTotalValue}>
-                             R$ {(basketTotal + deliveryFee - calculatePromotionDiscounts()).toFixed(2).replace('.', ',')}
+                             {(() => {
+                                 const safeBasketTotal = parseFloat(basketTotal) || 0;
+                                 const safeDeliveryFee = parseFloat(deliveryFee) || 0;
+                                 const safeDiscounts = parseFloat(calculatePromotionDiscounts()) || 0;
+                                 const total = safeBasketTotal + safeDeliveryFee - safeDiscounts;
+                                 console.log('[Cesta] Footer Total:', { 
+                                     basketTotal, 
+                                     safeBasketTotal, 
+                                     deliveryFee, 
+                                     safeDeliveryFee, 
+                                     discounts: safeDiscounts, 
+                                     total 
+                                 });
+                                 return `R$ ${total.toFixed(2).replace('.', ',')}`;
+                             })()}
                          </Text>
                      </View>
                      <TouchableOpacity 
