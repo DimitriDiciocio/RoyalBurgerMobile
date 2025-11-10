@@ -112,22 +112,53 @@ export default function ItensCesta({
                 </View>
             </View>
 
-            {/* Seção de Modificações */}
-            {item.modifications && item.modifications.length > 0 && (
+            {/* Seção de Extras e Modificações */}
+            {((item.selectedExtras && item.selectedExtras.length > 0) || 
+              (item.modifications && item.modifications.length > 0)) && (
                 <View style={styles.modificationsSection}>
                     <Text style={styles.modificationsTitle}>Modificações:</Text>
-                    {item.modifications.map((mod, index) => (
-                        <View key={index} style={styles.modificationItem}>
-                            <View style={styles.modificationIcon}>
-                                <Text style={styles.modificationIconText}>+</Text>
+                    
+                    {/* Exibir extras (ingredientes adicionais) */}
+                    {item.selectedExtras && item.selectedExtras.length > 0 && item.selectedExtras.map((extra, index) => {
+                        // Calcular preço total do extra (quantity * price)
+                        const extraTotalPrice = (parseFloat(extra.quantity) || 0) * (parseFloat(extra.price) || 0);
+                        return (
+                            <View key={`extra-${index}`} style={styles.modificationItem}>
+                                <View style={styles.modificationIcon}>
+                                    <Text style={styles.modificationIconText}>+</Text>
+                                </View>
+                                <Text style={styles.modificationQuantity}>{extra.quantity || 1}</Text>
+                                <Text style={styles.modificationName}>{extra.name || 'Extra'}</Text>
+                                <Text style={styles.modificationPrice}>
+                                    +R$ {extraTotalPrice.toFixed(2).replace('.', ',')}
+                                </Text>
                             </View>
-                            <Text style={styles.modificationQuantity}>{mod.quantity}</Text>
-                            <Text style={styles.modificationName}>{mod.name}</Text>
-                            <Text style={styles.modificationPrice}>
-                                +R$ {(parseFloat(mod.additionalPrice) || 0).toFixed(2).replace('.', ',')}
-                            </Text>
-                        </View>
-                    ))}
+                        );
+                    })}
+                    
+                    {/* Exibir modificações de base (alterações na receita padrão) */}
+                    {item.modifications && item.modifications.length > 0 && item.modifications.map((mod, index) => {
+                        // Para base_modifications, o delta pode ser positivo ou negativo
+                        const delta = parseFloat(mod.delta) || 0;
+                        const modPrice = parseFloat(mod.additionalPrice) || parseFloat(mod.price) || 0;
+                        const modTotalPrice = Math.abs(delta) * modPrice;
+                        const isPositive = delta > 0;
+                        
+                        return (
+                            <View key={`mod-${index}`} style={styles.modificationItem}>
+                                <View style={[styles.modificationIcon, !isPositive && styles.modificationIconNegative]}>
+                                    <Text style={styles.modificationIconText}>{isPositive ? '+' : '-'}</Text>
+                                </View>
+                                <Text style={styles.modificationQuantity}>{Math.abs(delta)}</Text>
+                                <Text style={styles.modificationName}>{mod.name || mod.ingredient_name || 'Ingrediente'}</Text>
+                                {modTotalPrice > 0 && (
+                                    <Text style={[styles.modificationPrice, !isPositive && styles.modificationPriceNegative]}>
+                                        {isPositive ? '+' : '-'}R$ {modTotalPrice.toFixed(2).replace('.', ',')}
+                                    </Text>
+                                )}
+                            </View>
+                        );
+                    })}
                 </View>
             )}
 
@@ -286,6 +317,12 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: '#4CAF50',
+    },
+    modificationIconNegative: {
+        backgroundColor: '#FF4444',
+    },
+    modificationPriceNegative: {
+        color: '#FF4444',
     },
     bottomSection: {
         flexDirection: 'row',

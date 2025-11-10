@@ -242,8 +242,9 @@ import api from '../services/api';
                             }
                         } catch (errMenu) {
                             // Fallback: tentar serviço de produtos por ID
+                            // IMPORTANTE: Passa quantity para calcular max_available corretamente
                             try {
-                                const p = await getProductById(idToFetch);
+                                const p = await getProductById(idToFetch, quantity);
                                 data = p && p.product ? p.product : p;
                             } catch (errProd) {
                                 // Se falhar, ainda tentamos obter ingredientes isolados (opcional)
@@ -351,36 +352,75 @@ import api from '../services/api';
             return true;
         });
 
+        // Função para buscar produto atualizado quando quantity mudar
+        // A API já calcula max_quantity considerando a quantity, então não precisamos recalcular
+        const refreshProductData = async () => {
+            const idToFetch = productId || produto?.id || productData?.id;
+            if (idToFetch) {
+                try {
+                    const updatedData = await getProductById(idToFetch, quantity);
+                    const finalData = updatedData && updatedData.product ? updatedData.product : updatedData;
+                    if (finalData && finalData.ingredients) {
+                        setProductIngredients(finalData.ingredients);
+                    }
+                } catch (error) {
+                    console.error('Erro ao atualizar dados do produto:', error);
+                }
+            }
+        };
+
         const extraIngredients = productIngredients.filter((ing) => {
             const portions = parseFloat(ing.portions || 0) || 0;
             // Só inclui extras (portions === 0)
             if (portions !== 0) return false;
             
-            // Filtrar extras que não têm estoque disponível
-            // Verifica se o ingrediente está disponível e tem estoque
+            // Verifica se o ingrediente está disponível
             const isAvailable = ing.is_available !== false;
-            const availabilityInfo = ing.availability_info;
-            
-            // Se tem availability_info, verifica max_available
-            if (availabilityInfo) {
-                const maxAvailable = availabilityInfo.max_available || 0;
-                // Se max_available é 0, não tem estoque suficiente
-                if (maxAvailable <= 0) return false;
-            }
-            
-            // Se não tem availability_info mas está marcado como indisponível, filtra
             if (!isAvailable) return false;
             
-            return true;
+            // max_quantity já vem calculado pela API considerando estoque e quantidade do produto
+            // IMPORTANTE: Só mostra extras que têm estoque disponível (max_quantity > 0) ou sem limite de regra
+            const maxAvailable = ing.max_quantity;
+            const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+            
+            // Se max_quantity é null/undefined, não há limite de regra (pode ter estoque infinito)
+            // Se max_quantity é 0, não há estoque disponível - NÃO MOSTRAR
+            // Se max_quantity > 0, há estoque disponível - MOSTRAR
+            // Se max_quantity é null mas min_quantity > 0, pode mostrar (será validado depois)
+            
+            // Só mostra se:
+            // 1. max_quantity é null (sem limite de regra) - pode ter estoque
+            // 2. max_quantity > 0 (tem estoque disponível)
+            // 3. max_quantity >= min_quantity (pelo menos pode adicionar o mínimo)
+            if (maxAvailable === null || maxAvailable === undefined) {
+                // Sem limite de regra, verifica se tem estoque através de availability_info
+                const availabilityInfo = ing.availability_info;
+                if (availabilityInfo && availabilityInfo.max_available !== undefined) {
+                    // Se max_available da availability_info é 0, não tem estoque
+                    return availabilityInfo.max_available > 0 || minQty > 0;
+                }
+                // Se não tem availability_info, assume que pode ter estoque (será validado depois)
+                return true;
+            }
+            
+            // Se max_quantity é 0, não tem estoque suficiente
+            if (maxAvailable === 0) return false;
+            
+            // Se max_quantity > 0, tem estoque disponível
+            // Mas só mostra se max_quantity >= min_quantity (pode adicionar pelo menos o mínimo)
+            return maxAvailable >= minQty;
         });
 
-        // Somar a quantidade total de extras selecionados
+        // Contar apenas extras com quantidade maior que o mínimo
         const selectedExtrasCount = extraIngredients.reduce((total, ing) => {
-            const ingredientId = ing.id || ing.ingredient_id || `extra-${extraIngredients.indexOf(ing)}`;
+            const ingredientId = String(ing.id || ing.ingredient_id || `extra-${extraIngredients.indexOf(ing)}`);
             const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
             const currentQty = selectedExtras[ingredientId] !== undefined ? selectedExtras[ingredientId] : minQty;
-            // Soma a quantidade total do extra (incluindo o mínimo)
-            return total + currentQty;
+            // Contar apenas se quantidade atual é maior que o mínimo
+            if (currentQty > minQty) {
+                return total + 1; // Conta quantos extras têm quantidade adicional
+            }
+            return total;
         }, 0);
 
         // Inicializar quantidades dos ingredientes padrão quando forem carregados
@@ -416,6 +456,42 @@ import api from '../services/api';
                 }
             }
         }, [editItem]);
+
+        // Atualizar ingredientes quando a quantidade do produto mudar
+        // A API recalcula max_quantity automaticamente, então precisamos buscar novamente
+        useEffect(() => {
+            // Só atualiza se já tiver carregado o produto inicialmente
+            if ((productId || produto?.id || productData?.id) && productIngredients.length > 0) {
+                refreshProductData();
+            }
+        }, [quantity]);
+        
+        // Validar e ajustar extras quando os ingredientes forem atualizados
+        useEffect(() => {
+            if (productIngredients.length > 0 && Object.keys(selectedExtras).length > 0) {
+                const updatedExtras = { ...selectedExtras };
+                let hasChanges = false;
+                
+                extraIngredients.forEach((ing) => {
+                    const ingredientId = String(ing.id || ing.ingredient_id);
+                    if (updatedExtras[ingredientId] !== undefined) {
+                        const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+                        const maxQty = ing.max_quantity; // Já vem calculado da API
+                        const currentQty = updatedExtras[ingredientId];
+                        
+                        // Ajustar se exceder o máximo disponível
+                        if (maxQty !== null && maxQty !== undefined && currentQty > maxQty) {
+                            updatedExtras[ingredientId] = Math.max(minQty, maxQty);
+                            hasChanges = true;
+                        }
+                    }
+                });
+                
+                if (hasChanges) {
+                    setSelectedExtras(updatedExtras);
+                }
+            }
+        }, [productIngredients]);
 
         // Calcular total de adicionais dos ingredientes padrão
         const defaultIngredientsTotal = useMemo(() => {
@@ -454,14 +530,25 @@ import api from '../services/api';
 
         const handleOpenExtrasModal = () => {
             // Inicializar estado temporário com valores salvos ou valores mínimos de cada ingrediente
+            // max_quantity já vem calculado da API considerando a quantity atual
             const initialTempExtras = {};
             extraIngredients.forEach((ing, index) => {
-                const ingredientId = ing.id || ing.ingredient_id || `extra-${index}`;
+                // IMPORTANTE: Usar String() para garantir consistência nas chaves
+                const ingredientId = String(ing.id || ing.ingredient_id || `extra-${index}`);
                 const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
-                // Usa o valor salvo se existir, senão usa o mínimo
-                initialTempExtras[ingredientId] = selectedExtras[ingredientId] !== undefined 
+                const maxQty = ing.max_quantity; // Já vem calculado da API
+                
+                // Usa o valor salvo se existir e estiver dentro do limite, senão usa o mínimo
+                let initialQty = selectedExtras[ingredientId] !== undefined 
                     ? selectedExtras[ingredientId] 
                     : minQty;
+                
+                // Garantir que não excede o máximo disponível
+                if (maxQty !== null && maxQty !== undefined && initialQty > maxQty) {
+                    initialQty = Math.max(minQty, maxQty);
+                }
+                
+                initialTempExtras[ingredientId] = initialQty;
             });
             setTempSelectedExtras(initialTempExtras);
             setExtrasModalVisible(true);
@@ -469,15 +556,26 @@ import api from '../services/api';
 
         const handleExtraQuantityChange = (ingredientId, quantity) => {
             // Alterar apenas o estado temporário
+            // IMPORTANTE: Garantir que ingredientId seja string para consistência
             setTempSelectedExtras(prev => ({
                 ...prev,
-                [ingredientId]: quantity
+                [String(ingredientId)]: Number(quantity)
             }));
         };
 
         const handleSaveExtras = () => {
             // Salvar as alterações do estado temporário para o permanente
-            setSelectedExtras({ ...tempSelectedExtras });
+            // IMPORTANTE: Filtrar apenas extras com quantidade > 0 e garantir IDs são strings
+            const savedExtras = {};
+            Object.entries(tempSelectedExtras).forEach(([ingredientId, qty]) => {
+                const id = String(ingredientId);
+                const quantity = Number(qty);
+                // Só salvar se quantity > 0
+                if (!isNaN(quantity) && quantity > 0) {
+                    savedExtras[id] = quantity;
+                }
+            });
+            setSelectedExtras(savedExtras);
             setExtrasModalVisible(false);
         };
 
@@ -655,21 +753,24 @@ import api from '../services/api';
                                  }
                              });
                              
-                             // Extras adicionados (quantidade adicional acima do mínimo)
+                             // Extras adicionados (quantidade total, não apenas adicional)
+                             // IMPORTANTE: No web, os extras são enviados com a quantidade total, não apenas a adicional
                              extraIngredients.forEach((ing, index) => {
-                                 const ingredientId = ing.id || ing.ingredient_id || `extra-${index}`;
+                                 // IMPORTANTE: Usar String() para garantir consistência nas chaves
+                                 const ingredientId = String(ing.id || ing.ingredient_id || `extra-${index}`);
                                  const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
-                                 const currentQty = selectedExtras[ingredientId] !== undefined ? selectedExtras[ingredientId] : minQty;
+                                 const currentQty = selectedExtras[ingredientId] !== undefined ? Number(selectedExtras[ingredientId]) : minQty;
                                  
-                                 // Mostrar apenas se quantidade atual é maior que o mínimo
+                                 // Enviar apenas se quantidade atual é maior que o mínimo
                                  if (currentQty > minQty) {
                                      const extra = findIngredientPrice(ing, ingredientId);
-                                     const additionalQty = currentQty - minQty;
-                                     if (additionalQty > 0 && extra > 0) {
+                                     // IMPORTANTE: Enviar quantidade total, não apenas a adicional
+                                     // A API espera a quantidade total de porções
+                                     if (extra > 0) {
                                          modifications.push({
                                              name: ing.name || ing.nome || 'Ingrediente',
-                                             quantity: additionalQty,
-                                             additionalPrice: extra * additionalQty
+                                             quantity: currentQty, // Quantidade total
+                                             additionalPrice: extra * (currentQty - minQty) // Preço apenas da parte adicional
                                          });
                                      }
                                  }
@@ -694,28 +795,95 @@ import api from '../services/api';
                                  }
                              });
                              
-                             // Função auxiliar para adicionar ao carrinho
-                             const addItemToCart = async () => {
-                                 const result = await addToBasket({
-                                     productId: productData?.id || produto?.id,
-                                     quantity: quantity,
-                                     observacoes: observacoes,
-                                     selectedExtras: selectedExtras,
-                                     baseModifications: baseModifications
-                                 });
-                                 
-                                 if (result.success) {
-                                     // Navegar para home após sucesso
-                                     navigation.navigate('Home');
-                                 } else {
-                                     // Mostrar erro se falhou
-                                     Alert.alert(
-                                         'Erro',
-                                         result.error || 'Não foi possível adicionar o item à cesta',
-                                         [{ text: 'OK' }]
-                                     );
-                                 }
-                             };
+                            // Função auxiliar para adicionar ao carrinho
+                            const addItemToCart = async () => {
+                                // IMPORTANTE: Converter selectedExtras para formato da API
+                                // A API espera apenas extras com quantity > min_quantity
+                                // Validar cada extra antes de enviar
+                                const extrasArray = [];
+                                
+                                Object.entries(selectedExtras || {}).forEach(([ingredientId, qty]) => {
+                                    const id = Number(ingredientId);
+                                    let quantity = Number(qty);
+                                    
+                                    // Validar ID e quantidade
+                                    if (isNaN(id) || id <= 0 || isNaN(quantity) || quantity <= 0) {
+                                        return; // Pula extras inválidos
+                                    }
+                                    
+                                    // Encontrar o ingrediente para validar min/max
+                                    const ing = extraIngredients.find(ing => 
+                                        String(ing.id || ing.ingredient_id) === String(ingredientId)
+                                    );
+                                    
+                                    if (!ing) {
+                                        console.warn(`[Produto] Ingrediente extra não encontrado: ${ingredientId}`);
+                                        return; // Pula se não encontrado
+                                    }
+                                    
+                                    const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+                                    const maxQty = ing.max_quantity; // Já calculado pela API considerando estoque
+                                    
+                                    // Validar quantidade mínima
+                                    if (quantity < minQty) {
+                                        console.warn(`[Produto] Quantidade de extra abaixo do mínimo: ${ingredientId}, qty: ${quantity}, min: ${minQty}`);
+                                        return; // Pula se abaixo do mínimo
+                                    }
+                                    
+                                    // Validar quantidade máxima (se houver limite)
+                                    if (maxQty !== null && maxQty !== undefined && maxQty > 0 && quantity > maxQty) {
+                                        console.warn(`[Produto] Quantidade de extra excede o máximo: ${ingredientId}, qty: ${quantity}, max: ${maxQty}`);
+                                        // Ajusta para o máximo disponível
+                                        quantity = maxQty;
+                                    }
+                                    
+                                    // IMPORTANTE: Adiciona se quantidade >= min_quantity
+                                    // A quantidade enviada é a quantidade TOTAL (incluindo min_quantity)
+                                    // Se minQty = 1 e quantity = 1, ainda deve ser salvo (é o mínimo permitido)
+                                    if (quantity >= minQty) {
+                                        extrasArray.push({
+                                            ingredient_id: id,
+                                            quantity: quantity // Quantidade total (incluindo min_quantity)
+                                        });
+                                    } else {
+                                        console.warn(`[Produto] Quantidade de extra abaixo do mínimo: ${ingredientId}, qty: ${quantity}, min: ${minQty}`);
+                                    }
+                                });
+                                
+                                console.log('[Produto] Adicionando ao carrinho:', {
+                                    productId: productData?.id || produto?.id,
+                                    quantity: quantity,
+                                    extrasCount: extrasArray.length,
+                                    extras: extrasArray,
+                                    baseModificationsCount: baseModifications.length,
+                                    selectedExtras: selectedExtras // Para debug
+                                });
+                                
+                                // IMPORTANTE: O BasketContext espera selectedExtras no formato { ingredientId: quantity }
+                                // Mas também aceita extras já convertidos no formato da API
+                                // Vamos enviar ambos para garantir compatibilidade
+                                const result = await addToBasket({
+                                    productId: productData?.id || produto?.id,
+                                    quantity: quantity,
+                                    observacoes: observacoes,
+                                    selectedExtras: selectedExtras, // Mantém formato original para compatibilidade
+                                    baseModifications: baseModifications,
+                                    // Envia também extras já validados no formato da API
+                                    extras: extrasArray
+                                });
+                                
+                                if (result.success) {
+                                    // Navegar para home após sucesso
+                                    navigation.navigate('Home');
+                                } else {
+                                    // Mostrar erro se falhou
+                                    Alert.alert(
+                                        'Erro',
+                                        result.error || 'Não foi possível adicionar o item à cesta',
+                                        [{ text: 'OK' }]
+                                    );
+                                }
+                            };
                              
                              // VALIDAÇÃO PREVENTIVA: Verificar disponibilidade antes de adicionar
                              const productId = productData?.id || produto?.id;
@@ -872,32 +1040,18 @@ import api from '../services/api';
                                  >
                                                                            {extraIngredients.map((ing, index) => {
                                           const displayName = ing.name || ing.nome || 'Ingrediente';
-                                          const ingredientId = ing.id || ing.ingredient_id || `extra-${index}`;
+                                          // IMPORTANTE: Usar String() para garantir consistência nas chaves
+                                          const ingredientId = String(ing.id || ing.ingredient_id || `extra-${index}`);
                                           // Buscar preço do ingrediente usando cache ou dados do ingrediente
                                           const extra = findIngredientPrice(ing, ingredientId);
                                           const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
                                           
-                                          // Limitar quantidade máxima baseada no estoque real
-                                          // Usa o menor valor entre: max_quantity da regra e max_available do estoque
-                                          const ruleMaxQty = ing.max_quantity || ing.maxQuantity || null;
-                                          const availabilityInfo = ing.availability_info;
-                                          const stockMaxAvailable = availabilityInfo?.max_available || null;
-                                          
-                                          // Determina o máximo real: menor entre regra e estoque
-                                          let maxQty = null;
-                                          if (stockMaxAvailable !== null && stockMaxAvailable !== undefined) {
-                                              if (ruleMaxQty !== null) {
-                                                  maxQty = Math.min(parseInt(ruleMaxQty, 10), stockMaxAvailable);
-                                              } else {
-                                                  maxQty = stockMaxAvailable;
-                                              }
-                                          } else if (ruleMaxQty !== null) {
-                                              maxQty = parseInt(ruleMaxQty, 10);
-                                          }
+                                          // max_quantity já vem calculado da API considerando a quantity atual
+                                          const maxQty = ing.max_quantity;
                                           
                                           const initialExtraQty = minQty || 0;
                                           const currentQuantity = tempSelectedExtras[ingredientId] !== undefined 
-                                              ? tempSelectedExtras[ingredientId] 
+                                              ? Number(tempSelectedExtras[ingredientId])
                                               : initialExtraQty;
 
                                          return (
@@ -922,17 +1076,50 @@ import api from '../services/api';
                                                              {String(currentQuantity).padStart(2, '0')}
                                                          </Text>
                                                      </View>
-                                                     {(!maxQty || currentQuantity < parseInt(maxQty, 10)) && (
-                                                         <TouchableOpacity 
-                                                             style={styles.modalPlusButton}
-                                                             onPress={() => {
-                                                                 const newQty = maxQty ? Math.min(currentQuantity + 1, parseInt(maxQty, 10)) : currentQuantity + 1;
-                                                                 handleExtraQuantityChange(ingredientId, newQty);
-                                                             }}
-                                                         >
-                                                             <Text style={styles.modalPlusText}>+</Text>
-                                                         </TouchableOpacity>
-                                                     )}
+                                                     {(() => {
+                                                        // IMPORTANTE: maxQty já vem calculado pela API considerando estoque e quantity do produto
+                                                        // maxQty representa a quantidade MÁXIMA TOTAL permitida (incluindo min_quantity)
+                                                        // Se maxQty é null/undefined, não há limite de regra (pode ter estoque infinito)
+                                                        // Se maxQty é 0, não há estoque disponível - não deve aparecer o botão +
+                                                        // Se maxQty > 0, há estoque disponível até maxQty
+                                                        
+                                                        // Calcular quantidade máxima efetiva
+                                                        let effectiveMaxQty;
+                                                        if (maxQty === null || maxQty === undefined) {
+                                                            // Sem limite de regra, verifica availability_info
+                                                            const availabilityInfo = ing.availability_info;
+                                                            if (availabilityInfo && availabilityInfo.max_available !== undefined) {
+                                                                // max_available é a quantidade máxima de extras (sem incluir min_quantity)
+                                                                // Então a quantidade total máxima é: minQty + max_available
+                                                                effectiveMaxQty = minQty + availabilityInfo.max_available;
+                                                            } else {
+                                                                // Sem informação de estoque, permite aumentar (será validado depois)
+                                                                effectiveMaxQty = Infinity;
+                                                            }
+                                                        } else if (maxQty === 0) {
+                                                            // Sem estoque disponível
+                                                            effectiveMaxQty = minQty; // Só permite o mínimo
+                                                        } else {
+                                                            // maxQty é a quantidade máxima total permitida
+                                                            effectiveMaxQty = maxQty;
+                                                        }
+                                                        
+                                                        // Só mostra botão + se pode aumentar além da quantidade atual
+                                                        const canIncrease = effectiveMaxQty === Infinity || currentQuantity < effectiveMaxQty;
+                                                        
+                                                        return canIncrease && (
+                                                            <TouchableOpacity 
+                                                                style={styles.modalPlusButton}
+                                                                onPress={() => {
+                                                                    // Limita ao máximo disponível
+                                                                    const newQty = Math.min(currentQuantity + 1, effectiveMaxQty);
+                                                                    handleExtraQuantityChange(ingredientId, newQty);
+                                                                }}
+                                                            >
+                                                                <Text style={styles.modalPlusText}>+</Text>
+                                                            </TouchableOpacity>
+                                                        );
+                                                    })()}
                                                  </View>
                                              </View>
                                          );

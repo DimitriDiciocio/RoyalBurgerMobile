@@ -82,25 +82,59 @@ export const BasketProvider = ({ children }) => {
                 };
                 
                 // Converter itens da API para formato local
-                const formattedItems = items.map(item => ({
-                    id: item.id, // ID do item no carrinho
-                    cartItemId: item.id, // Mesmo ID para compatibilidade
-                    originalProductId: item.product?.id || item.product_id,
-                    name: item.product?.name || 'Produto',
-                    description: item.product?.description || '',
-                    image: getProductImageUrl(item.product),
-                    price: parseFloat(item.product?.price || 0),
-                    quantity: item.quantity || 1,
-                    total: parseFloat(item.item_subtotal || 0),
-                    observacoes: item.notes || '',
-                    selectedExtras: (item.extras || []).map(extra => ({
-                        ingredient_id: extra.ingredient_id,
-                        quantity: extra.quantity,
-                        name: extra.ingredient_name,
-                        price: parseFloat(extra.ingredient_price || 0)
-                    })),
-                    modifications: item.base_modifications || []
-                }));
+                const formattedItems = items.map(item => {
+                    // Log para debug
+                    console.log('[BasketContext] Item da API:', {
+                        id: item.id,
+                        extras_count: item.extras?.length || 0,
+                        extras: item.extras,
+                        base_modifications_count: item.base_modifications?.length || 0,
+                        base_modifications: item.base_modifications,
+                        item_subtotal: item.item_subtotal
+                    });
+                    
+                    return {
+                        id: item.id, // ID do item no carrinho
+                        cartItemId: item.id, // Mesmo ID para compatibilidade
+                        originalProductId: item.product?.id || item.product_id,
+                        name: item.product?.name || 'Produto',
+                        description: item.product?.description || '',
+                        image: getProductImageUrl(item.product),
+                        price: parseFloat(item.product?.price || 0),
+                        quantity: item.quantity || 1,
+                        total: parseFloat(item.item_subtotal || 0),
+                        observacoes: item.notes || '',
+                        // Converter extras de array para objeto {ingredientId: quantity}
+                        selectedExtras: (item.extras || []).reduce((acc, extra) => {
+                            const ingredientId = String(extra.ingredient_id || extra.id);
+                            if (ingredientId && extra.quantity > 0) {
+                                acc[ingredientId] = extra.quantity;
+                            }
+                            return acc;
+                        }, {}),
+                        // Manter base_modifications como array para compatibilidade
+                        modifications: (item.base_modifications || []).map(mod => ({
+                            ingredient_id: mod.ingredient_id,
+                            delta: mod.delta,
+                            name: mod.ingredient_name || mod.name,
+                            // Calcular preço adicional se disponível
+                            additionalPrice: mod.additionalPrice || mod.price || 0
+                        })),
+                        // Converter base_modifications para objeto {ingredientId: {min, max, current}}
+                        defaultIngredientsQuantities: (item.base_modifications || []).reduce((acc, mod) => {
+                            const ingredientId = String(mod.ingredient_id || mod.id);
+                            if (ingredientId && mod.delta !== undefined) {
+                                // Para base_modifications, precisamos calcular o current baseado no delta
+                                // Como não temos o valor base, vamos usar o delta diretamente
+                                acc[ingredientId] = {
+                                    delta: mod.delta,
+                                    current: mod.delta // Ajustar depois se necessário
+                                };
+                            }
+                            return acc;
+                        }, {})
+                    };
+                });
                 
                 setBasketItems(formattedItems);
                 
@@ -152,18 +186,30 @@ export const BasketProvider = ({ children }) => {
         quantity = 1, 
         observacoes = '', 
         selectedExtras = {}, 
-        baseModifications = [] 
+        baseModifications = [],
+        extras = null // Permite passar extras já validados no formato da API
     }) => {
         try {
             setLoading(true);
             
-            // Converter selectedExtras para formato da API
-            const extras = Object.entries(selectedExtras)
-                .filter(([_, qty]) => qty > 0)
-                .map(([ingredientId, qty]) => ({
-                    ingredient_id: Number(ingredientId),
-                    quantity: Number(qty)
-                }));
+            // Se extras já foram validados e fornecidos, usa eles
+            // Caso contrário, converte selectedExtras para formato da API
+            let finalExtras = extras;
+            if (!finalExtras || !Array.isArray(finalExtras)) {
+                // Converter selectedExtras para formato da API
+                // IMPORTANTE: Filtrar apenas extras com quantity > 0 e garantir que IDs são números válidos
+                finalExtras = Object.entries(selectedExtras || {})
+                    .filter(([ingredientId, qty]) => {
+                        const id = Number(ingredientId);
+                        const quantity = Number(qty);
+                        // Filtrar apenas se ID é válido e quantity > 0
+                        return !isNaN(id) && id > 0 && !isNaN(quantity) && quantity > 0;
+                    })
+                    .map(([ingredientId, qty]) => ({
+                        ingredient_id: Number(ingredientId),
+                        quantity: Number(qty)
+                    }));
+            }
             
             // Converter baseModifications para formato da API
             const modifications = baseModifications.map(mod => ({
@@ -174,14 +220,15 @@ export const BasketProvider = ({ children }) => {
             console.log('[BasketContext] Adicionando item ao carrinho:', {
                 productId,
                 quantity,
-                extrasCount: extras.length,
-                modificationsCount: modifications.length
+                extrasCount: finalExtras.length,
+                modificationsCount: modifications.length,
+                extrasProvided: !!extras
             });
             
             const result = await addItemToCartAPI({
                 productId,
                 quantity,
-                extras,
+                extras: finalExtras,
                 notes: observacoes,
                 baseModifications: modifications
             });
@@ -244,13 +291,27 @@ export const BasketProvider = ({ children }) => {
                         quantity: item.quantity || 1,
                         total: parseFloat(item.item_subtotal || 0),
                         observacoes: item.notes || '',
-                        selectedExtras: (item.extras || []).map(extra => ({
-                            ingredient_id: extra.ingredient_id,
-                            quantity: extra.quantity,
-                            name: extra.ingredient_name,
-                            price: parseFloat(extra.ingredient_price || 0)
-                        })),
-                        modifications: item.base_modifications || []
+                        // Converter extras de array para objeto {ingredientId: quantity}
+                        selectedExtras: (item.extras || []).reduce((acc, extra) => {
+                            const ingredientId = String(extra.ingredient_id || extra.id);
+                            if (ingredientId && extra.quantity > 0) {
+                                acc[ingredientId] = extra.quantity;
+                            }
+                            return acc;
+                        }, {}),
+                        // Manter base_modifications como array para compatibilidade
+                        modifications: item.base_modifications || [],
+                        // Converter base_modifications para objeto {ingredientId: {delta}}
+                        defaultIngredientsQuantities: (item.base_modifications || []).reduce((acc, mod) => {
+                            const ingredientId = String(mod.ingredient_id || mod.id);
+                            if (ingredientId && mod.delta !== undefined) {
+                                acc[ingredientId] = {
+                                    delta: mod.delta,
+                                    current: mod.delta // Ajustar depois se necessário
+                                };
+                            }
+                            return acc;
+                        }, {})
                     }));
                     
                     setBasketItems(formattedItems);

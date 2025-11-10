@@ -588,34 +588,92 @@ export default function Pagamento({ navigation }) {
                 }
                 
                 // Converte extras (selectedExtras)
-                // selectedExtras é um objeto {ingredientId: quantity}
-                if (item.selectedExtras && typeof item.selectedExtras === 'object') {
-                    Object.keys(item.selectedExtras).forEach(ingredientId => {
-                        const quantity = item.selectedExtras[ingredientId];
-                        if (quantity > 0) {
-                            apiItem.extras.push({
-                                ingredient_id: parseInt(ingredientId),
-                                quantity: quantity
-                            });
-                        }
-                    });
+                // selectedExtras pode ser um objeto {ingredientId: quantity} ou um array de objetos
+                if (item.selectedExtras) {
+                    if (Array.isArray(item.selectedExtras)) {
+                        // Se é array, converter para formato da API
+                        item.selectedExtras.forEach(extra => {
+                            const ingredientId = extra.ingredient_id || extra.id;
+                            const quantity = extra.quantity || 0;
+                            if (ingredientId && quantity > 0) {
+                                apiItem.extras.push({
+                                    ingredient_id: parseInt(ingredientId),
+                                    quantity: parseInt(quantity)
+                                });
+                            }
+                        });
+                    } else if (typeof item.selectedExtras === 'object') {
+                        // Se é objeto {ingredientId: quantity}
+                        Object.keys(item.selectedExtras).forEach(ingredientId => {
+                            const quantity = item.selectedExtras[ingredientId];
+                            // Se quantity é um número, usar diretamente
+                            // Se é um objeto com quantity, extrair
+                            const qty = typeof quantity === 'number' ? quantity : (quantity?.quantity || 0);
+                            if (qty > 0) {
+                                apiItem.extras.push({
+                                    ingredient_id: parseInt(ingredientId),
+                                    quantity: parseInt(qty)
+                                });
+                            }
+                        });
+                    }
                 }
                 
                 // Converte modificações da base (defaultIngredientsQuantities)
-                // defaultIngredientsQuantities é um objeto {ingredientId: {min, max, current}}
-                // onde current é a quantidade modificada (delta)
+                // defaultIngredientsQuantities pode ser um objeto {ingredientId: {delta, current}} ou array
                 if (item.defaultIngredientsQuantities && typeof item.defaultIngredientsQuantities === 'object') {
-                    Object.keys(item.defaultIngredientsQuantities).forEach(ingredientId => {
-                        const mod = item.defaultIngredientsQuantities[ingredientId];
-                        // Se é um objeto com current, usa o delta
-                        if (mod && typeof mod === 'object' && mod.current !== undefined) {
-                            const delta = mod.current - (mod.default || 0);
+                    if (Array.isArray(item.defaultIngredientsQuantities)) {
+                        // Se é array, converter para formato da API
+                        item.defaultIngredientsQuantities.forEach(mod => {
+                            const ingredientId = mod.ingredient_id || mod.id;
+                            const delta = mod.delta || 0;
+                            if (ingredientId && delta !== 0) {
+                                apiItem.base_modifications.push({
+                                    ingredient_id: parseInt(ingredientId),
+                                    delta: parseInt(delta)
+                                });
+                            }
+                        });
+                    } else {
+                        // Se é objeto {ingredientId: {delta, current}} ou {ingredientId: delta}
+                        Object.keys(item.defaultIngredientsQuantities).forEach(ingredientId => {
+                            const mod = item.defaultIngredientsQuantities[ingredientId];
+                            let delta = 0;
+                            
+                            if (typeof mod === 'number') {
+                                // Se é um número direto, usar como delta
+                                delta = mod;
+                            } else if (mod && typeof mod === 'object') {
+                                // Se é um objeto, tentar extrair delta ou calcular
+                                if (mod.delta !== undefined) {
+                                    delta = mod.delta;
+                                } else if (mod.current !== undefined && mod.default !== undefined) {
+                                    delta = mod.current - mod.default;
+                                } else if (mod.current !== undefined) {
+                                    delta = mod.current;
+                                }
+                            }
+                            
                             if (delta !== 0) {
                                 apiItem.base_modifications.push({
                                     ingredient_id: parseInt(ingredientId),
-                                    delta: delta
+                                    delta: parseInt(delta)
                                 });
                             }
+                        });
+                    }
+                }
+                
+                // Também verificar se há modifications (array) como fallback
+                if (item.modifications && Array.isArray(item.modifications) && apiItem.base_modifications.length === 0) {
+                    item.modifications.forEach(mod => {
+                        const ingredientId = mod.ingredient_id || mod.id;
+                        const delta = mod.delta || 0;
+                        if (ingredientId && delta !== 0) {
+                            apiItem.base_modifications.push({
+                                ingredient_id: parseInt(ingredientId),
+                                delta: parseInt(delta)
+                            });
                         }
                     });
                 }

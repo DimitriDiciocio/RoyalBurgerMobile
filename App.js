@@ -27,7 +27,7 @@ import Pagamento from "./screens/pagamento";
 import React, { useEffect, useState } from 'react';
 import { isAuthenticated, getStoredUserData, logout, getCurrentUserProfile } from "./services";
 import { getLoyaltyBalance, getCustomerAddresses } from "./services/customerService";
-import { getMostOrderedProducts, getRecentlyAddedProducts } from "./services/productService";
+import { getAllProducts, getMostOrderedProducts, getRecentlyAddedProducts } from "./services/productService";
 import { getAllPromotions } from "./services/promotionService";
 import { BasketProvider, useBasket } from "./contexts/BasketContext";
 import api from "./services/api";
@@ -195,10 +195,16 @@ function HomeScreen({ navigation }) {
             }
         }
         
+        // Limitar tamanho do nome e descrição como no web
+        const MAX_NAME_LENGTH = 200;
+        const MAX_DESCRIPTION_LENGTH = 500;
+        const safeName = (product.name || 'Produto').substring(0, MAX_NAME_LENGTH);
+        const safeDescription = (product.description || 'Descrição rápida...').substring(0, MAX_DESCRIPTION_LENGTH);
+        
         return {
             id: product.id,
-            title: product.name || 'Produto',
-            description: product.description || 'Descrição não disponível',
+            title: safeName,
+            description: safeDescription,
             price: priceFormatted,
             deliveryTime: `${product.preparation_time_minutes || 30} - ${(product.preparation_time_minutes || 30) + 10} min`,
             deliveryPrice: "R$ 5,00", // Valor fixo por enquanto, pode vir das settings depois
@@ -208,51 +214,77 @@ function HomeScreen({ navigation }) {
         };
     };
 
-    // Carrega dados das seções da home
+    // Carrega dados das seções da home (seguindo o padrão do web)
     useEffect(() => {
         const loadHomeSections = async () => {
             try {
                 setLoadingSections(true);
                 
-                // Carrega mais pedidos
+                // No web, todas as seções horizontais recebem os mesmos produtos (primeiros 6)
+                // Carregar todos os produtos ativos
                 try {
-                    const mostOrderedResponse = await getMostOrderedProducts({ page_size: 10 });
-                    const mostOrderedItems = mostOrderedResponse.items || mostOrderedResponse || [];
-                    const formattedMostOrdered = mostOrderedItems
+                    console.log('[App.js] Carregando produtos...');
+                    const allProductsResponse = await getAllProducts({ 
+                        page_size: 1000,
+                        include_inactive: false 
+                    });
+                    console.log('[App.js] Resposta recebida:', {
+                        hasResponse: !!allProductsResponse,
+                        hasItems: !!allProductsResponse?.items,
+                        itemsType: Array.isArray(allProductsResponse?.items) ? 'array' : typeof allProductsResponse?.items,
+                        itemsLength: allProductsResponse?.items?.length || 0,
+                        responseType: Array.isArray(allProductsResponse) ? 'array' : typeof allProductsResponse,
+                        responseKeys: allProductsResponse ? Object.keys(allProductsResponse) : []
+                    });
+                    const allProducts = allProductsResponse?.items || (Array.isArray(allProductsResponse) ? allProductsResponse : []);
+                    console.log('[App.js] Produtos processados:', allProducts.length);
+                    
+                    // Filtrar apenas produtos ativos (dupla verificação)
+                    const activeProducts = allProducts.filter((product) => {
+                        const isActive = 
+                            product.is_active !== false &&
+                            product.is_active !== 0 &&
+                            product.is_active !== "false";
+                        return isActive;
+                    });
+                    
+                    // Pegar os primeiros 6 produtos para todas as seções horizontais (como no web)
+                    const firstProducts = activeProducts.slice(0, 6);
+                    
+                    // Formatar produtos para as seções
+                    const formattedProducts = firstProducts
                         .map(product => formatProductForCard(product))
                         .filter(product => product !== null); // Remove produtos indisponíveis
-                    setMostOrderedData(formattedMostOrdered);
+                    
+                    // Todas as seções horizontais recebem os mesmos produtos (como no web)
+                    setMostOrderedData(formattedProducts);
+                    setComboData(formattedProducts);
+                    
+                    // Para promoções, tentar carregar promoções reais, mas usar os mesmos produtos como fallback
+                    try {
+                        const promotionsResponse = await getAllPromotions();
+                        const promotions = promotionsResponse.items || promotionsResponse || [];
+                        if (promotions.length > 0) {
+                            const formattedPromotions = promotions
+                                .map(promotion => {
+                                    const product = promotion.product || promotion;
+                                    return formatProductForCard(product, promotion);
+                                })
+                                .filter(product => product !== null);
+                            setPromotionsData(formattedPromotions);
+                        } else {
+                            // Se não houver promoções, usar os mesmos produtos
+                            setPromotionsData(formattedProducts);
+                        }
+                    } catch (error) {
+                        console.log('Erro ao carregar promoções, usando produtos padrão:', error);
+                        // Em caso de erro, usar os mesmos produtos
+                        setPromotionsData(formattedProducts);
+                    }
                 } catch (error) {
-                    console.log('Erro ao carregar mais pedidos:', error);
+                    console.log('Erro ao carregar produtos:', error);
                     setMostOrderedData([]);
-                }
-
-                // Carrega promoções
-                try {
-                    const promotionsResponse = await getAllPromotions();
-                    const promotions = promotionsResponse.items || promotionsResponse || [];
-                    const formattedPromotions = promotions
-                        .map(promotion => {
-                            const product = promotion.product || promotion;
-                            return formatProductForCard(product, promotion);
-                        })
-                        .filter(product => product !== null); // Remove produtos indisponíveis
-                    setPromotionsData(formattedPromotions);
-                } catch (error) {
-                    console.log('Erro ao carregar promoções:', error);
                     setPromotionsData([]);
-                }
-
-                // Carrega novidades (combos)
-                try {
-                    const recentlyAddedResponse = await getRecentlyAddedProducts({ page_size: 10 });
-                    const recentlyAddedItems = recentlyAddedResponse.items || recentlyAddedResponse || [];
-                    const formattedRecentlyAdded = recentlyAddedItems
-                        .map(product => formatProductForCard(product))
-                        .filter(product => product !== null); // Remove produtos indisponíveis
-                    setComboData(formattedRecentlyAdded);
-                } catch (error) {
-                    console.log('Erro ao carregar novidades:', error);
                     setComboData([]);
                 }
             } catch (error) {
@@ -326,7 +358,7 @@ function HomeScreen({ navigation }) {
 
             {promotionsData.length > 0 && (
                 <ViewCardItem
-                    title="Em promoção"
+                    title="Promoções especiais"
                     data={promotionsData}
                     promoTimer={{
                         endTime: getPromoEndTime(),
@@ -338,7 +370,7 @@ function HomeScreen({ navigation }) {
 
             {comboData.length > 0 && (
                 <ViewCardItem
-                    title="Combos"
+                    title="Novidades"
                     data={comboData}
                     navigation={navigation}
                 />

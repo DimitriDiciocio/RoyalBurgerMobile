@@ -147,13 +147,28 @@ export const addItemToCart = async ({
     const guestCartId = authenticated ? null : await getGuestCartId();
     console.log('[CartService] Guest Cart ID:', guestCartId || 'não existe (será criado)');
     
+    // Normalizar extras para garantir formato correto
+    const normalizedExtras = Array.isArray(extras) 
+      ? extras
+          .map(extra => {
+            const id = Number(extra?.ingredient_id || extra?.id);
+            const qty = Number(extra?.quantity || 0);
+            // Retornar null se ID ou quantity inválidos
+            if (isNaN(id) || id <= 0 || isNaN(qty) || qty <= 0) {
+              return null;
+            }
+            return {
+              ingredient_id: id,
+              quantity: qty
+            };
+          })
+          .filter(extra => extra !== null) // Remover extras inválidos
+      : [];
+    
     const payload = {
       product_id: Number(productId),
       quantity: Number(quantity),
-      extras: extras.map(extra => ({
-        ingredient_id: Number(extra.ingredient_id || extra.id),
-        quantity: Number(extra.quantity || 1)
-      })),
+      extras: normalizedExtras,
       notes: String(notes || '').slice(0, 500)
     };
     
@@ -179,7 +194,9 @@ export const addItemToCart = async ({
         product_id: payload.product_id,
         quantity: payload.quantity,
         extras_count: payload.extras.length,
+        extras: payload.extras, // Log completo dos extras
         base_modifications_count: payload.base_modifications?.length || 0,
+        base_modifications: payload.base_modifications, // Log completo das modificações
         guest_cart_id: payload.guest_cart_id || 'não enviado (será criado pela API)'
       }
     });

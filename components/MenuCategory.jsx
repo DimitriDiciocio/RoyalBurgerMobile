@@ -78,9 +78,37 @@ export default function MenuCategory({
         try {
             setLoadingProducts(true);
             const response = await getProductsByCategory(categoryId, { page_size: 50 });
+            console.log(`[MenuCategory] Resposta da API para categoria ${categoryId}:`, {
+                hasResponse: !!response,
+                responseKeys: response ? Object.keys(response) : [],
+                hasItems: !!response?.items,
+                itemsType: Array.isArray(response?.items) ? 'array' : typeof response?.items,
+                itemsLength: response?.items?.length || 0,
+                fullResponse: JSON.stringify(response).substring(0, 500) // Primeiros 500 chars para debug
+            });
+            
+            // A resposta da API retorna { category: {...}, items: [...], pagination: {...} }
+            // Mas pode vir em diferentes formatos, então verificamos múltiplas possibilidades
+            let products = [];
+            if (response) {
+                if (Array.isArray(response.items)) {
+                    products = response.items;
+                } else if (Array.isArray(response)) {
+                    // Se a resposta for diretamente um array
+                    products = response;
+                } else if (response.data && Array.isArray(response.data.items)) {
+                    // Se estiver aninhado em data
+                    products = response.data.items;
+                } else if (response.data && Array.isArray(response.data)) {
+                    // Se data for diretamente um array
+                    products = response.data;
+                }
+            }
+            console.log(`[MenuCategory] Produtos extraídos para categoria ${categoryId}:`, products.length, 'produtos');
+            
             setProducts(prev => ({
                 ...prev,
-                [categoryId]: response.items || []
+                [categoryId]: products
             }));
         } catch (error) {
             console.log('Erro ao carregar produtos da categoria:', error);
@@ -102,9 +130,37 @@ export default function MenuCategory({
             const productPromises = categories.map(async (category) => {
                 try {
                     const response = await getProductsByCategory(category.id, { page_size: 50 });
+                    console.log(`[MenuCategory] Resposta da API para categoria ${category.id}:`, {
+                        hasResponse: !!response,
+                        responseKeys: response ? Object.keys(response) : [],
+                        hasItems: !!response?.items,
+                        itemsType: Array.isArray(response?.items) ? 'array' : typeof response?.items,
+                        itemsLength: response?.items?.length || 0,
+                        fullResponse: JSON.stringify(response).substring(0, 500) // Primeiros 500 chars para debug
+                    });
+                    
+                    // A resposta da API retorna { category: {...}, items: [...], pagination: {...} }
+                    // Mas pode vir em diferentes formatos, então verificamos múltiplas possibilidades
+                    let products = [];
+                    if (response) {
+                        if (Array.isArray(response.items)) {
+                            products = response.items;
+                        } else if (Array.isArray(response)) {
+                            // Se a resposta for diretamente um array
+                            products = response;
+                        } else if (response.data && Array.isArray(response.data.items)) {
+                            // Se estiver aninhado em data
+                            products = response.data.items;
+                        } else if (response.data && Array.isArray(response.data)) {
+                            // Se data for diretamente um array
+                            products = response.data;
+                        }
+                    }
+                    console.log(`[MenuCategory] Produtos extraídos para categoria ${category.id}:`, products.length, 'produtos');
+                    
                     return {
                         categoryId: category.id,
-                        products: response.items || []
+                        products: products
                     };
                 } catch (error) {
                     console.log(`Erro ao carregar produtos da categoria ${category.id}:`, error);
@@ -121,8 +177,10 @@ export default function MenuCategory({
             const allProducts = {};
             results.forEach(({ categoryId, products }) => {
                 allProducts[categoryId] = products;
+                console.log(`[MenuCategory] Produtos salvos para categoria ${categoryId}:`, products.length);
             });
             
+            console.log('[MenuCategory] Total de produtos carregados por categoria:', allProducts);
             setProducts(allProducts);
         } catch (error) {
             console.log('Erro ao carregar todos os produtos:', error);
@@ -146,14 +204,18 @@ export default function MenuCategory({
     const visibleCategories = [];
     let visibleCategoryIndex = 0;
     
+    console.log('[MenuCategory] Processando dados achatados. Categorias:', categories.length, 'Produtos carregados:', Object.keys(products).length);
+    
     dataToUse.forEach((category, originalIndex) => {
         // Usar produtos da API se disponíveis, senão usar dados mock
         const categoryProducts = products[category.id] || [];
+        console.log(`[MenuCategory] Categoria ${category.id} (${category.name}): ${categoryProducts.length} produtos carregados`);
         
         // Filtrar apenas itens ativos
         const activeProducts = categoryProducts.filter(item => 
             item?.is_active !== false && item?.isAvailable !== false
         );
+        console.log(`[MenuCategory] Categoria ${category.id}: ${activeProducts.length} produtos ativos após filtro`);
         
         // Só adiciona o header se houver produtos ativos
         if (activeProducts.length > 0) {
@@ -172,13 +234,9 @@ export default function MenuCategory({
             });
 
             activeProducts.forEach((item) => {
-                // Filtrar produtos sem ingredientes disponíveis na receita base
                 // availability_status pode ser: 'available', 'low_stock', 'unavailable', 'unknown'
+                // Não filtramos produtos indisponíveis - eles serão exibidos com marcação visual
                 const availabilityStatus = item.availability_status || 'unknown';
-                if (availabilityStatus === 'unavailable') {
-                    // Produto não tem ingredientes disponíveis na receita base, não exibe
-                    return;
-                }
                 
                 const imageUrl = item?.id
                     ? `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}`
@@ -194,8 +252,14 @@ export default function MenuCategory({
                     deliveryPrice: 'R$ 5,00', // Valor fixo por enquanto
                     imageSource: imageUrl ? { uri: imageUrl } : null,
                     categoryId: item.category_id,
-                    isAvailable: item.is_active !== false && availabilityStatus !== 'unavailable'
+                    // Produto está disponível se estiver ativo E não estiver marcado como unavailable
+                    isAvailable: item.is_active !== false && availabilityStatus !== 'unavailable',
+                    availabilityStatus: availabilityStatus // Passa o status para uso futuro se necessário
                 };
+                
+                if (availabilityStatus === 'unavailable') {
+                    console.log(`[MenuCategory] Produto ${item.id} (${item.name}) está indisponível, mas será exibido com marcação visual`);
+                }
 
                 flattenedData.push({
                     type: 'item',
@@ -205,9 +269,15 @@ export default function MenuCategory({
                 });
             });
             
+            const itemsAdded = flattenedData.filter(item => item.type === 'item' && item.categoryIndex === visibleCategoryIndex).length;
+            console.log(`[MenuCategory] Categoria ${category.id}: ${itemsAdded} produtos adicionados ao flattenedData (de ${activeProducts.length} produtos ativos)`);
             visibleCategoryIndex++;
+        } else {
+            console.log(`[MenuCategory] Categoria ${category.id}: Nenhum produto ativo, categoria não será exibida`);
         }
     });
+    
+    console.log('[MenuCategory] Total de itens no flattenedData:', flattenedData.length, '(headers:', flattenedData.filter(i => i.type === 'categoryHeader').length, ', produtos:', flattenedData.filter(i => i.type === 'item').length, ')');
 
 
     const scrollToCategory = async (categoryIndex) => {

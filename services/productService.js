@@ -19,11 +19,36 @@ import api from "./api";
  */
 export const getAllProducts = async (filters = {}) => {
   try {
-    "Obtendo todos os produtos com filtros:", filters;
-    const response = await api.get("/products", { params: filters });
+    console.log("Obtendo todos os produtos com filtros:", filters);
+    
+    // Converter parâmetros booleanos para strings para garantir compatibilidade com Flask
+    const params = { ...filters };
+    if (params.include_inactive !== undefined) {
+      params.include_inactive = params.include_inactive ? 'true' : 'false';
+    }
+    
+    console.log("Parâmetros enviados para API:", params);
+    const response = await api.get("/products", { params });
+    
+    console.log("Resposta da API de produtos:", {
+      status: response.status,
+      hasData: !!response.data,
+      hasItems: !!response.data?.items,
+      itemsCount: response.data?.items?.length || 0,
+      pagination: response.data?.pagination,
+      fullResponse: response.data
+    });
+    
     return response.data;
   } catch (error) {
-    "Erro ao obter produtos:", error;
+    console.error("Erro ao obter produtos:", error);
+    console.error("Detalhes do erro:", {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: error.config?.url,
+      params: error.config?.params
+    });
     throw error;
   }
 };
@@ -31,12 +56,15 @@ export const getAllProducts = async (filters = {}) => {
 /**
  * Obtém um produto específico por ID.
  * @param {number} productId - ID do produto
+ * @param {number} quantity - Quantidade do produto (opcional, padrão: 1) - usado para calcular max_available dos extras
  * @returns {Promise<object>} - Dados do produto
  */
-export const getProductById = async (productId) => {
+export const getProductById = async (productId, quantity = 1) => {
   try {
-    "Obtendo produto por ID:", productId;
-    const response = await api.get(`/products/${productId}`);
+    "Obtendo produto por ID:", productId, "com quantidade:", quantity;
+    const response = await api.get(`/products/${productId}`, {
+      params: { quantity }
+    });
     return response.data;
   } catch (error) {
     "Erro ao obter produto:", error;
