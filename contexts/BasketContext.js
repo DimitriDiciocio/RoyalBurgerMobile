@@ -93,6 +93,33 @@ export const BasketProvider = ({ children }) => {
                         item_subtotal: item.item_subtotal
                     });
                     
+                    // Calcular total do item: preço do produto + extras + modificações base
+                    const productPrice = parseFloat(item.product?.price || 0);
+                    const itemQuantity = item.quantity || 1;
+                    const basePrice = productPrice * itemQuantity;
+
+                    // Calcular preço dos extras
+                    const extrasPrice = (item.extras || []).reduce((sum, extra) => {
+                        const extraPrice = parseFloat(extra.unit_price || extra.ingredient_price || extra.price || 0);
+                        const extraQuantity = parseInt(extra.quantity || 0, 10);
+                        return sum + (extraPrice * extraQuantity);
+                    }, 0);
+
+                    // Calcular preço das modificações base
+                    const baseModsPrice = (item.base_modifications || []).reduce((sum, mod) => {
+                        const modPrice = parseFloat(mod.unit_price || mod.ingredient_price || mod.price || mod.additionalPrice || 0);
+                        const modDelta = Math.abs(parseInt(mod.delta || 0, 10));
+                        return sum + (modPrice * modDelta);
+                    }, 0);
+
+                    // Total do item = preço base + extras + modificações
+                    const itemTotal = basePrice + extrasPrice + baseModsPrice;
+
+                    // Usa item_subtotal da API se disponível e maior que 0, senão usa cálculo
+                    const finalTotal = parseFloat(item.item_subtotal || 0) > 0 
+                        ? parseFloat(item.item_subtotal) 
+                        : itemTotal;
+
                     return {
                         id: item.id, // ID do item no carrinho
                         cartItemId: item.id, // Mesmo ID para compatibilidade
@@ -100,9 +127,9 @@ export const BasketProvider = ({ children }) => {
                         name: item.product?.name || 'Produto',
                         description: item.product?.description || '',
                         image: getProductImageUrl(item.product),
-                        price: parseFloat(item.product?.price || 0),
-                        quantity: item.quantity || 1,
-                        total: parseFloat(item.item_subtotal || 0),
+                        price: productPrice,
+                        quantity: itemQuantity,
+                        total: finalTotal,
                         observacoes: item.notes || '',
                         // Converter extras de array para objeto {ingredientId: quantity}
                         selectedExtras: (item.extras || []).reduce((acc, extra) => {
@@ -139,8 +166,31 @@ export const BasketProvider = ({ children }) => {
                 setBasketItems(formattedItems);
                 
                 // Calcular total do carrinho
-                const total = result.data.summary?.total || formattedItems.reduce((sum, item) => sum + item.total, 0);
+                // Prioriza summary.total da API, mas se for 0 ou inválido, calcula manualmente
+                const apiTotal = parseFloat(result.data.summary?.total || 0);
+                const calculatedTotal = formattedItems.reduce((sum, item) => {
+                    // Garante que item.total seja calculado corretamente
+                    const itemTotal = item.total || (parseFloat(item.price || 0) * parseFloat(item.quantity || 0));
+                    return sum + (parseFloat(itemTotal) || 0);
+                }, 0);
+
+                // Usa o maior valor entre API e cálculo manual (evita 0 quando API retorna 0 incorretamente)
+                const total = apiTotal > 0 ? apiTotal : calculatedTotal;
                 setBasketTotal(total);
+
+                console.log('[BasketContext] Total calculado:', {
+                    apiTotal,
+                    calculatedTotal,
+                    finalTotal: total,
+                    itemsCount: formattedItems.length,
+                    items: formattedItems.map(item => ({
+                        name: item.name,
+                        price: item.price,
+                        quantity: item.quantity,
+                        itemTotal: item.total,
+                        calculatedItemTotal: item.total || (parseFloat(item.price || 0) * parseFloat(item.quantity || 0))
+                    }))
+                });
                 
                 setCartId(result.cartId);
                 setIsAuthenticatedUser(result.isAuthenticated || false);
@@ -280,44 +330,87 @@ export const BasketProvider = ({ children }) => {
                         return `${baseUrl}/api/products/image/${productId}`;
                     };
                     
-                    const formattedItems = items.map(item => ({
-                        id: item.id,
-                        cartItemId: item.id,
-                        originalProductId: item.product?.id || item.product_id,
-                        name: item.product?.name || 'Produto',
-                        description: item.product?.description || '',
-                        image: getProductImageUrl(item.product),
-                        price: parseFloat(item.product?.price || 0),
-                        quantity: item.quantity || 1,
-                        total: parseFloat(item.item_subtotal || 0),
-                        observacoes: item.notes || '',
-                        // Converter extras de array para objeto {ingredientId: quantity}
-                        selectedExtras: (item.extras || []).reduce((acc, extra) => {
-                            const ingredientId = String(extra.ingredient_id || extra.id);
-                            if (ingredientId && extra.quantity > 0) {
-                                acc[ingredientId] = extra.quantity;
-                            }
-                            return acc;
-                        }, {}),
-                        // Manter base_modifications como array para compatibilidade
-                        modifications: item.base_modifications || [],
-                        // Converter base_modifications para objeto {ingredientId: {delta}}
-                        defaultIngredientsQuantities: (item.base_modifications || []).reduce((acc, mod) => {
-                            const ingredientId = String(mod.ingredient_id || mod.id);
-                            if (ingredientId && mod.delta !== undefined) {
-                                acc[ingredientId] = {
-                                    delta: mod.delta,
-                                    current: mod.delta // Ajustar depois se necessário
-                                };
-                            }
-                            return acc;
-                        }, {})
-                    }));
+                    const formattedItems = items.map(item => {
+                        // Calcular total do item: preço do produto + extras + modificações base
+                        const productPrice = parseFloat(item.product?.price || 0);
+                        const itemQuantity = item.quantity || 1;
+                        const basePrice = productPrice * itemQuantity;
+
+                        // Calcular preço dos extras
+                        const extrasPrice = (item.extras || []).reduce((sum, extra) => {
+                            const extraPrice = parseFloat(extra.unit_price || extra.ingredient_price || extra.price || 0);
+                            const extraQuantity = parseInt(extra.quantity || 0, 10);
+                            return sum + (extraPrice * extraQuantity);
+                        }, 0);
+
+                        // Calcular preço das modificações base
+                        const baseModsPrice = (item.base_modifications || []).reduce((sum, mod) => {
+                            const modPrice = parseFloat(mod.unit_price || mod.ingredient_price || mod.price || mod.additionalPrice || 0);
+                            const modDelta = Math.abs(parseInt(mod.delta || 0, 10));
+                            return sum + (modPrice * modDelta);
+                        }, 0);
+
+                        // Total do item = preço base + extras + modificações
+                        const itemTotal = basePrice + extrasPrice + baseModsPrice;
+
+                        // Usa item_subtotal da API se disponível e maior que 0, senão usa cálculo
+                        const finalTotal = parseFloat(item.item_subtotal || 0) > 0 
+                            ? parseFloat(item.item_subtotal) 
+                            : itemTotal;
+
+                        return {
+                            id: item.id,
+                            cartItemId: item.id,
+                            originalProductId: item.product?.id || item.product_id,
+                            name: item.product?.name || 'Produto',
+                            description: item.product?.description || '',
+                            image: getProductImageUrl(item.product),
+                            price: productPrice,
+                            quantity: itemQuantity,
+                            total: finalTotal,
+                            observacoes: item.notes || '',
+                            // Converter extras de array para objeto {ingredientId: quantity}
+                            selectedExtras: (item.extras || []).reduce((acc, extra) => {
+                                const ingredientId = String(extra.ingredient_id || extra.id);
+                                if (ingredientId && extra.quantity > 0) {
+                                    acc[ingredientId] = extra.quantity;
+                                }
+                                return acc;
+                            }, {}),
+                            // Manter base_modifications como array para compatibilidade
+                            modifications: item.base_modifications || [],
+                            // Converter base_modifications para objeto {ingredientId: {delta}}
+                            defaultIngredientsQuantities: (item.base_modifications || []).reduce((acc, mod) => {
+                                const ingredientId = String(mod.ingredient_id || mod.id);
+                                if (ingredientId && mod.delta !== undefined) {
+                                    acc[ingredientId] = {
+                                        delta: mod.delta,
+                                        current: mod.delta // Ajustar depois se necessário
+                                    };
+                                }
+                                return acc;
+                            }, {})
+                        };
+                    });
                     
                     setBasketItems(formattedItems);
                     
-                    const total = summary.total || formattedItems.reduce((sum, item) => sum + item.total, 0);
+                    // Calcular total do carrinho após adicionar item
+                    const apiTotal = parseFloat(summary?.total || 0);
+                    const calculatedTotal = formattedItems.reduce((sum, item) => {
+                        const itemTotal = item.total || (parseFloat(item.price || 0) * parseFloat(item.quantity || 0));
+                        return sum + (parseFloat(itemTotal) || 0);
+                    }, 0);
+
+                    const total = apiTotal > 0 ? apiTotal : calculatedTotal;
                     setBasketTotal(total);
+
+                    console.log('[BasketContext] Total após adicionar item:', {
+                        apiTotal,
+                        calculatedTotal,
+                        finalTotal: total,
+                        itemsCount: formattedItems.length
+                    });
                     
                     if (result.data.is_authenticated !== undefined) {
                         setIsAuthenticatedUser(result.data.is_authenticated);

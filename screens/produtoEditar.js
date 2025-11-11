@@ -845,6 +845,11 @@ import api from '../services/api';
                                           // Buscar preço do ingrediente usando cache ou dados do ingrediente
                                           const extra = findIngredientPrice(ing, ingredientId);
                                           const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+                                          
+                                          // IMPORTANTE: max_quantity já vem calculado pela API como o menor entre:
+                                          // 1. Quantidade máxima da regra (max_quantity_rule)
+                                          // 2. Quantidade disponível no estoque (com conversão de unidades)
+                                          // Então max_quantity já é o valor correto a ser usado
                                           const maxQty = ing.max_quantity || ing.maxQuantity || null;
                                           const initialExtraQty = minQty || 0;
                                           const currentQuantity = tempSelectedExtras[ingredientId] !== undefined 
@@ -873,17 +878,48 @@ import api from '../services/api';
                                                              {String(currentQuantity).padStart(2, '0')}
                                                          </Text>
                                                      </View>
-                                                     {(!maxQty || currentQuantity < parseInt(maxQty, 10)) && (
-                                                         <TouchableOpacity 
-                                                             style={styles.modalPlusButton}
-                                                             onPress={() => {
-                                                                 const newQty = maxQty ? Math.min(currentQuantity + 1, parseInt(maxQty, 10)) : currentQuantity + 1;
-                                                                 handleExtraQuantityChange(ingredientId, newQty);
-                                                             }}
-                                                         >
-                                                             <Text style={styles.modalPlusText}>+</Text>
-                                                         </TouchableOpacity>
-                                                     )}
+                                                     {(() => {
+                                                        // IMPORTANTE: max_quantity já vem calculado pela API como o menor entre:
+                                                        // 1. Quantidade máxima da regra
+                                                        // 2. Quantidade disponível no estoque (com conversão de unidades)
+                                                        // Então maxQty já é o valor correto a ser usado
+                                                        
+                                                        let effectiveMaxQty;
+                                                        if (maxQty === null || maxQty === undefined) {
+                                                            // Sem limite, verifica availability_info como fallback
+                                                            const availabilityInfo = ing.availability_info;
+                                                            if (availabilityInfo && availabilityInfo.max_available !== undefined) {
+                                                                // max_available é a quantidade máxima de extras (sem incluir min_quantity)
+                                                                // Então a quantidade total máxima é: minQty + max_available
+                                                                effectiveMaxQty = minQty + availabilityInfo.max_available;
+                                                            } else {
+                                                                // Sem informação de estoque, permite aumentar (será validado depois)
+                                                                effectiveMaxQty = Infinity;
+                                                            }
+                                                        } else if (maxQty === 0) {
+                                                            // Sem estoque disponível
+                                                            effectiveMaxQty = minQty; // Só permite o mínimo
+                                                        } else {
+                                                            // maxQty já é o menor entre regra e estoque, calculado pela API
+                                                            effectiveMaxQty = parseInt(maxQty, 10);
+                                                        }
+                                                        
+                                                        // Só mostra botão + se pode aumentar além da quantidade atual
+                                                        const canIncrease = effectiveMaxQty === Infinity || currentQuantity < effectiveMaxQty;
+                                                        
+                                                        return canIncrease && (
+                                                            <TouchableOpacity 
+                                                                style={styles.modalPlusButton}
+                                                                onPress={() => {
+                                                                    // Limita ao máximo disponível (já calculado pela API)
+                                                                    const newQty = Math.min(currentQuantity + 1, effectiveMaxQty);
+                                                                    handleExtraQuantityChange(ingredientId, newQty);
+                                                                }}
+                                                            >
+                                                                <Text style={styles.modalPlusText}>+</Text>
+                                                            </TouchableOpacity>
+                                                        );
+                                                    })()}
                                                  </View>
                                              </View>
                                          );

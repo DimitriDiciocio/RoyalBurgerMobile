@@ -18,6 +18,29 @@ import { useBasket } from '../contexts/BasketContext';
 import BasketFooter from '../components/BasketFooter';
 import api from '../services/api';
 
+// Função wrapper para garantir que checkProductAvailability funcione mesmo se houver problema de importação
+const safeCheckProductAvailability = async (productId, quantity = 1) => {
+    try {
+        // Tenta usar a função importada primeiro
+        if (typeof checkProductAvailability === 'function') {
+            return await checkProductAvailability(productId, quantity);
+        }
+        // Se não estiver disponível, faz a chamada diretamente à API
+        console.warn('checkProductAvailability não disponível, usando chamada direta à API');
+        const response = await api.get(`/products/${productId}/availability`, {
+            params: { quantity }
+        });
+        return response.data;
+    } catch (error) {
+        console.error("Erro ao verificar disponibilidade:", error);
+        return {
+            status: 'unknown',
+            message: error.response?.data?.error || 'Erro ao verificar disponibilidade',
+            available: false
+        };
+    }
+};
+
     const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M5.29385 9.29365C4.90322 9.68428 4.90322 10.3187 5.29385 10.7093L11.2938 16.7093C11.6845 17.0999 12.3188 17.0999 12.7095 16.7093C13.1001 16.3187 13.1001 15.6843 12.7095 15.2937L7.41572 9.9999L12.7063 4.70615C13.097 4.31553 13.097 3.68115 12.7063 3.29053C12.3157 2.8999 11.6813 2.8999 11.2907 3.29053L5.29072 9.29053L5.29385 9.29365Z" fill="black"/>
 </svg>`;
@@ -257,37 +280,58 @@ import api from '../services/api';
                             }
                         }
                     } else if (produto) {
-                        data = produto;
+                        // IMPORTANTE: Se o produto veio de uma listagem, pode ter max_quantity incorreto (valor da regra, não calculado)
+                        // Sempre busca da API para garantir que max_quantity está correto (calculado com estoque)
+                        if (produto.id) {
+                            try {
+                                const p = await getProductById(produto.id, quantity);
+                                data = p && p.product ? p.product : p;
+                            } catch (errProd) {
+                                // Se falhar, usa o produto passado como fallback
+                                data = produto;
+                            }
+                        } else {
+                            data = produto;
+                        }
                     }
 
                     if (!isCancelled) {
                         // Log para depuração do retorno
                         console.log('[DEBUG] Produto - dados recebidos da API:', data);
                         setProductData(data || produto || null);
-                        // Buscar ingredientes somente com ID válido
+                        
+                        // IMPORTANTE: Se data veio de getProductById, já tem ingredientes com max_quantity calculado
+                        // Se não, busca ingredientes separadamente (mas pode ter max_quantity incorreto)
                         const pid = idToFetch || data?.id;
                         if (pid) {
-                            try {
-                                const ingredientsResponse = await getProductIngredients(pid);
-                                // Tratar resposta que pode ser array direto ou objeto com items
-                                let ingredientsList = [];
-                                if (Array.isArray(ingredientsResponse)) {
-                                    ingredientsList = ingredientsResponse;
-                                } else if (ingredientsResponse && ingredientsResponse.items && Array.isArray(ingredientsResponse.items)) {
-                                    ingredientsList = ingredientsResponse.items;
+                            // Se data já tem ingredientes (vindo de getProductById), usa eles
+                            if (data && data.ingredients && Array.isArray(data.ingredients) && data.ingredients.length > 0) {
+                                console.log('[DEBUG] Usando ingredientes de getProductById (max_quantity calculado)');
+                                if (!isCancelled) setProductIngredients(data.ingredients);
+                            } else {
+                                // Fallback: busca ingredientes separadamente (pode ter max_quantity incorreto)
+                                try {
+                                    const ingredientsResponse = await getProductIngredients(pid);
+                                    // Tratar resposta que pode ser array direto ou objeto com items
+                                    let ingredientsList = [];
+                                    if (Array.isArray(ingredientsResponse)) {
+                                        ingredientsList = ingredientsResponse;
+                                    } else if (ingredientsResponse && ingredientsResponse.items && Array.isArray(ingredientsResponse.items)) {
+                                        ingredientsList = ingredientsResponse.items;
+                                    }
+                                    if (!isCancelled) setProductIngredients(ingredientsList);
+                                    // Log de diagnóstico: produto sem ingredientes disponíveis
+                                    if (!isCancelled && (!ingredientsList || ingredientsList.length === 0)) {
+                                        console.warn('[DIAGNOSTICO] Produto sem ingredientes disponíveis:', {
+                                            productId: pid,
+                                            productName: (data?.name || produto?.name || produto?.title || 'Produto'),
+                                            message: 'Nenhum ingrediente retornado pela API'
+                                        });
+                                    }
+                                } catch (e) {
+                                    console.error('Erro ao buscar ingredientes:', e);
+                                    if (!isCancelled) setProductIngredients([]);
                                 }
-                                if (!isCancelled) setProductIngredients(ingredientsList);
-                                // Log de diagnóstico: produto sem ingredientes disponíveis
-                                if (!isCancelled && (!ingredientsList || ingredientsList.length === 0)) {
-                                    console.warn('[DIAGNOSTICO] Produto sem ingredientes disponíveis:', {
-                                        productId: pid,
-                                        productName: (data?.name || produto?.name || produto?.title || 'Produto'),
-                                        message: 'Nenhum ingrediente retornado pela API'
-                                    });
-                                }
-                            } catch (e) {
-                                console.error('Erro ao buscar ingredientes:', e);
-                                if (!isCancelled) setProductIngredients([]);
                             }
                         } else {
                             setProductIngredients([]);
@@ -670,7 +714,20 @@ import api from '../services/api';
                                    const initialQty = parseFloat(ing.portions || 0) || 0;
                                    // Quantidade mínima e máxima
                                    const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
-                                   const maxQty = ing.max_quantity || ing.maxQuantity || null;
+                                   // IMPORTANTE: Usar apenas max_quantity (minúsculo) da API, não maxQuantity (maiúsculo) que pode vir de cache antigo
+                                   const maxQty = ing.max_quantity !== undefined && ing.max_quantity !== null ? ing.max_quantity : null;
+                                   
+                                   // Debug: log para verificar valores
+                                   if (ingredientId === '28' || displayName.includes('Bovino')) {
+                                       console.log(`[DEBUG] Ingrediente ${displayName} (${ingredientId}):`, {
+                                           max_quantity: ing.max_quantity,
+                                           maxQuantity: ing.maxQuantity,
+                                           max_quantity_rule: ing.max_quantity_rule,
+                                           maxQty_usado: maxQty,
+                                           minQty: minQty
+                                       });
+                                   }
+                                   
                                   return (
                                       <IngredienteMenu
                                           key={ingredientId}
@@ -678,7 +735,7 @@ import api from '../services/api';
                                           valorExtra={extra}
                                           initialQuantity={initialQty}
                                           minQuantity={minQty}
-                                          maxQuantity={maxQty ? parseInt(maxQty, 10) : null}
+                                          maxQuantity={maxQty !== null ? parseInt(maxQty, 10) : null}
                                           onQuantityChange={(newQuantity) => {
                                               // Atualizar a quantidade do ingrediente no estado
                                               setDefaultIngredientsQuantities(prev => ({
@@ -889,7 +946,7 @@ import api from '../services/api';
                              const productId = productData?.id || produto?.id;
                              if (productId) {
                                  try {
-                                     const availability = await checkProductAvailability(productId, quantity);
+                                     const availability = await safeCheckProductAvailability(productId, quantity);
                                      
                                     if (availability.status === 'unavailable') {
                                         // Log de diagnóstico: detalha quais ingredientes estão bloqueando
@@ -1046,8 +1103,24 @@ import api from '../services/api';
                                           const extra = findIngredientPrice(ing, ingredientId);
                                           const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
                                           
-                                          // max_quantity já vem calculado da API considerando a quantity atual
-                                          const maxQty = ing.max_quantity;
+                                          // IMPORTANTE: max_quantity já vem calculado pela API como o menor entre:
+                                          // 1. Quantidade máxima da regra (max_quantity_rule)
+                                          // 2. Quantidade disponível no estoque (com conversão de unidades)
+                                          // Então max_quantity já é o valor correto a ser usado
+                                          // NÃO usar maxQuantity (maiúsculo) que pode vir de cache antigo
+                                          const maxQty = ing.max_quantity !== undefined && ing.max_quantity !== null ? ing.max_quantity : null;
+                                          
+                                          // Debug: log para verificar valores
+                                          if (ingredientId === '28' || displayName.includes('Bovino')) {
+                                              console.log(`[DEBUG] Extra ${displayName} (${ingredientId}):`, {
+                                                  max_quantity: ing.max_quantity,
+                                                  maxQuantity: ing.maxQuantity,
+                                                  max_quantity_rule: ing.max_quantity_rule,
+                                                  maxQty_usado: maxQty,
+                                                  minQty: minQty,
+                                                  availability_info: ing.availability_info
+                                              });
+                                          }
                                           
                                           const initialExtraQty = minQty || 0;
                                           const currentQuantity = tempSelectedExtras[ingredientId] !== undefined 
@@ -1077,16 +1150,14 @@ import api from '../services/api';
                                                          </Text>
                                                      </View>
                                                      {(() => {
-                                                        // IMPORTANTE: maxQty já vem calculado pela API considerando estoque e quantity do produto
-                                                        // maxQty representa a quantidade MÁXIMA TOTAL permitida (incluindo min_quantity)
-                                                        // Se maxQty é null/undefined, não há limite de regra (pode ter estoque infinito)
-                                                        // Se maxQty é 0, não há estoque disponível - não deve aparecer o botão +
-                                                        // Se maxQty > 0, há estoque disponível até maxQty
+                                                        // IMPORTANTE: max_quantity já vem calculado pela API como o menor entre:
+                                                        // 1. Quantidade máxima da regra
+                                                        // 2. Quantidade disponível no estoque (com conversão de unidades)
+                                                        // Então maxQty já é o valor correto a ser usado
                                                         
-                                                        // Calcular quantidade máxima efetiva
                                                         let effectiveMaxQty;
                                                         if (maxQty === null || maxQty === undefined) {
-                                                            // Sem limite de regra, verifica availability_info
+                                                            // Sem limite, verifica availability_info como fallback
                                                             const availabilityInfo = ing.availability_info;
                                                             if (availabilityInfo && availabilityInfo.max_available !== undefined) {
                                                                 // max_available é a quantidade máxima de extras (sem incluir min_quantity)
@@ -1100,7 +1171,7 @@ import api from '../services/api';
                                                             // Sem estoque disponível
                                                             effectiveMaxQty = minQty; // Só permite o mínimo
                                                         } else {
-                                                            // maxQty é a quantidade máxima total permitida
+                                                            // maxQty já é o menor entre regra e estoque, calculado pela API
                                                             effectiveMaxQty = maxQty;
                                                         }
                                                         
@@ -1111,7 +1182,7 @@ import api from '../services/api';
                                                             <TouchableOpacity 
                                                                 style={styles.modalPlusButton}
                                                                 onPress={() => {
-                                                                    // Limita ao máximo disponível
+                                                                    // Limita ao máximo disponível (já calculado pela API)
                                                                     const newQty = Math.min(currentQuantity + 1, effectiveMaxQty);
                                                                     handleExtraQuantityChange(ingredientId, newQty);
                                                                 }}

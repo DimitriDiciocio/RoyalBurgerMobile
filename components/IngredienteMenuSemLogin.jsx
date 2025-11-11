@@ -31,6 +31,18 @@ export default function IngredienteMenu({
             return prevQuantity;
         });
     }, [initialQuantity, minQuantity]);
+    
+    // IMPORTANTE: Limita a quantidade atual se exceder o máximo quando maxQuantity mudar
+    useEffect(() => {
+        const maxQtyNum = maxQuantity !== null && maxQuantity !== undefined ? Number(maxQuantity) : null;
+        if (maxQtyNum !== null && !isNaN(maxQtyNum) && maxQtyNum > 0 && quantity > maxQtyNum) {
+            const limitedQty = Math.max(minQuantity || 0, maxQtyNum);
+            setQuantity(limitedQty);
+            if (onQuantityChange) {
+                onQuantityChange(limitedQty);
+            }
+        }
+    }, [maxQuantity, minQuantity]);
 
     const formatarValor = (valor) => {
         if (valor === 0) {
@@ -40,10 +52,23 @@ export default function IngredienteMenu({
     };
 
     const handleIncrement = () => {
-        const newQuantity = maxQuantity ? Math.min(quantity + 1, maxQuantity) : quantity + 1;
-        setQuantity(newQuantity);
-        if (onQuantityChange) {
-            onQuantityChange(newQuantity);
+        // Garante que maxQuantity é um número válido
+        const maxQtyNum = maxQuantity !== null && maxQuantity !== undefined ? Number(maxQuantity) : null;
+        
+        if (maxQtyNum !== null && !isNaN(maxQtyNum) && maxQtyNum > 0) {
+            // Limita ao máximo disponível
+            const newQuantity = Math.min(quantity + 1, maxQtyNum);
+            setQuantity(newQuantity);
+            if (onQuantityChange) {
+                onQuantityChange(newQuantity);
+            }
+        } else {
+            // Sem limite, permite aumentar
+            const newQuantity = quantity + 1;
+            setQuantity(newQuantity);
+            if (onQuantityChange) {
+                onQuantityChange(newQuantity);
+            }
         }
     };
 
@@ -58,8 +83,11 @@ export default function IngredienteMenu({
 
     // Mostrar botão de diminuir se quantidade > minQuantity (ou > 0 se não tiver min)
     const showDecrement = quantity > (minQuantity || 0);
+    
     // Ocultar botão de aumentar se atingiu o máximo
-    const showIncrement = maxQuantity === null || quantity < maxQuantity;
+    // Garante que maxQuantity é um número válido antes de comparar
+    const maxQtyNum = maxQuantity !== null && maxQuantity !== undefined ? Number(maxQuantity) : null;
+    const showIncrement = maxQtyNum === null || isNaN(maxQtyNum) || maxQtyNum <= 0 || quantity < maxQtyNum;
 
     return (
         <View style={styles.container}>
