@@ -265,6 +265,23 @@ export default function Cesta({ navigation }) {
 
     const handleEditItem = (item) => {
         // Navegar para edição do item com todas as informações
+        // Usar selectedExtrasObject se disponível (formato objeto), senão converter de array
+        let selectedExtrasForEdit = item.selectedExtrasObject || {};
+        if (!selectedExtrasForEdit || Object.keys(selectedExtrasForEdit).length === 0) {
+            // Se não tiver objeto, converter de array para objeto
+            if (Array.isArray(item.selectedExtras)) {
+                selectedExtrasForEdit = item.selectedExtras.reduce((acc, extra) => {
+                    const ingredientId = String(extra.ingredient_id || extra.id);
+                    if (ingredientId && extra.quantity > 0) {
+                        acc[ingredientId] = extra.quantity;
+                    }
+                    return acc;
+                }, {});
+            } else if (item.selectedExtras && typeof item.selectedExtras === 'object') {
+                selectedExtrasForEdit = item.selectedExtras;
+            }
+        }
+        
         navigation.navigate('ProdutoEditar', {
             productId: item.originalProductId || item.productId,
             editItem: {
@@ -272,7 +289,7 @@ export default function Cesta({ navigation }) {
                 cartItemId: item.cartItemId || item.id, // ID do item no carrinho
                 quantity: item.quantity,
                 observacoes: item.observacoes || '',
-                selectedExtras: item.selectedExtras || {},
+                selectedExtras: selectedExtrasForEdit,
                 defaultIngredientsQuantities: item.defaultIngredientsQuantities || {},
                 modifications: item.modifications || []
             }
@@ -305,12 +322,30 @@ export default function Cesta({ navigation }) {
         const cartItemId = item.cartItemId || item.id;
         if (cartItemId) {
             // Converter selectedExtras para formato da API
-            const extras = Object.entries(item.selectedExtras || {})
-                .filter(([_, qty]) => qty > 0)
-                .map(([ingredientId, qty]) => ({
-                    ingredient_id: Number(ingredientId),
-                    quantity: Number(qty)
-                }));
+            // Pode ser array ou objeto, então tratar ambos os casos
+            let extras = [];
+            if (Array.isArray(item.selectedExtras)) {
+                extras = item.selectedExtras
+                    .filter(extra => extra.quantity > 0)
+                    .map(extra => ({
+                        ingredient_id: Number(extra.ingredient_id || extra.id),
+                        quantity: Number(extra.quantity)
+                    }));
+            } else if (item.selectedExtrasObject) {
+                extras = Object.entries(item.selectedExtrasObject)
+                    .filter(([_, qty]) => qty > 0)
+                    .map(([ingredientId, qty]) => ({
+                        ingredient_id: Number(ingredientId),
+                        quantity: Number(qty)
+                    }));
+            } else if (item.selectedExtras && typeof item.selectedExtras === 'object') {
+                extras = Object.entries(item.selectedExtras)
+                    .filter(([_, qty]) => qty > 0)
+                    .map(([ingredientId, qty]) => ({
+                        ingredient_id: Number(ingredientId),
+                        quantity: Number(qty)
+                    }));
+            }
             
             const result = await updateBasketItem(cartItemId, {
                 quantity: newQuantity,

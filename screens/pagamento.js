@@ -161,17 +161,23 @@ export default function Pagamento({ navigation }) {
 
     // Versão síncrona para cálculos na UI (usa estado já carregado)
     const calculateDiscountPoints = () => {
-        if (!usePoints) return 0;
         // Calcula desconto baseado nos pontos disponíveis e taxa de resgate
         // redemptionRate = valor de 1 ponto em reais (ex: 0.01 = R$ 0,01 por ponto)
         // Se tem 100 pontos e taxa é 0.01, desconto = 100 * 0.01 = R$ 1,00
         // Usa redemptionRate que é mais atualizado
+        // Sempre retorna o desconto disponível, independente do toggle
         return pointsAvailable * redemptionRate;
+    };
+    
+    // Função para calcular desconto aplicado (só quando toggle está ativo)
+    const calculateAppliedDiscount = () => {
+        if (!usePoints) return 0;
+        return calculateDiscountPoints();
     };
 
     const calculateFinalTotal = () => {
         const subtotal = calculateTotal();
-        const discount = calculateDiscountPoints();
+        const discount = calculateAppliedDiscount(); // Usa desconto aplicado (só quando toggle está ativo)
         return subtotal + deliveryFee - discount;
     };
 

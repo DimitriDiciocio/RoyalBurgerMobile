@@ -116,22 +116,15 @@ export default function ItensCesta({
             {((item.selectedExtras && item.selectedExtras.length > 0) || 
               (item.modifications && item.modifications.length > 0)) && (
                 <View style={styles.modificationsSection}>
-                    <Text style={styles.modificationsTitle}>Modificações:</Text>
-                    
                     {/* Exibir extras (ingredientes adicionais) */}
                     {item.selectedExtras && item.selectedExtras.length > 0 && item.selectedExtras.map((extra, index) => {
-                        // Calcular preço total do extra (quantity * price)
-                        const extraTotalPrice = (parseFloat(extra.quantity) || 0) * (parseFloat(extra.price) || 0);
+                        const quantity = parseInt(extra.quantity || 1, 10);
                         return (
                             <View key={`extra-${index}`} style={styles.modificationItem}>
-                                <View style={styles.modificationIcon}>
-                                    <Text style={styles.modificationIconText}>+</Text>
+                                <View style={styles.extraIcon}>
+                                    <Text style={styles.extraIconText}>{quantity}</Text>
                                 </View>
-                                <Text style={styles.modificationQuantity}>{extra.quantity || 1}</Text>
                                 <Text style={styles.modificationName}>{extra.name || 'Extra'}</Text>
-                                <Text style={styles.modificationPrice}>
-                                    +R$ {extraTotalPrice.toFixed(2).replace('.', ',')}
-                                </Text>
                             </View>
                         );
                     })}
@@ -140,25 +133,26 @@ export default function ItensCesta({
                     {item.modifications && item.modifications.length > 0 && item.modifications.map((mod, index) => {
                         // Para base_modifications, o delta pode ser positivo ou negativo
                         const delta = parseFloat(mod.delta) || 0;
-                        const modPrice = parseFloat(mod.additionalPrice) || parseFloat(mod.price) || 0;
-                        const modTotalPrice = Math.abs(delta) * modPrice;
                         const isPositive = delta > 0;
                         
                         return (
                             <View key={`mod-${index}`} style={styles.modificationItem}>
                                 <View style={[styles.modificationIcon, !isPositive && styles.modificationIconNegative]}>
-                                    <Text style={styles.modificationIconText}>{isPositive ? '+' : '-'}</Text>
+                                    <Text style={styles.modificationIconText}>{Math.abs(delta)}</Text>
                                 </View>
-                                <Text style={styles.modificationQuantity}>{Math.abs(delta)}</Text>
                                 <Text style={styles.modificationName}>{mod.name || mod.ingredient_name || 'Ingrediente'}</Text>
-                                {modTotalPrice > 0 && (
-                                    <Text style={[styles.modificationPrice, !isPositive && styles.modificationPriceNegative]}>
-                                        {isPositive ? '+' : '-'}R$ {modTotalPrice.toFixed(2).replace('.', ',')}
-                                    </Text>
-                                )}
                             </View>
                         );
                     })}
+                </View>
+            )}
+
+            {/* Seção de Observações */}
+            {item.observacoes && item.observacoes.trim().length > 0 && (
+                <View style={styles.observationsSection}>
+                    <Text style={styles.observationsText}>
+                        <Text style={styles.observationsLabel}>Obs:</Text> {item.observacoes}
+                    </Text>
                 </View>
             )}
 
@@ -323,6 +317,41 @@ const styles = StyleSheet.create({
     },
     modificationPriceNegative: {
         color: '#FF4444',
+    },
+    extraIcon: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#E0E0E0',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 8,
+    },
+    extraIconText: {
+        color: '#000000',
+        fontSize: 12,
+        fontWeight: '600',
+        textAlign: 'center',
+        lineHeight: 14,
+    },
+    observationsSection: {
+        marginTop: 12,
+        marginBottom: 12,
+        padding: 12,
+        paddingLeft: 16,
+        backgroundColor: '#FFFEF0',
+        borderRadius: 8,
+        borderLeftWidth: 4,
+        borderLeftColor: '#FFC107',
+    },
+    observationsText: {
+        fontSize: 14,
+        color: '#000000',
+        lineHeight: 20,
+    },
+    observationsLabel: {
+        fontWeight: '600',
+        color: '#000000',
     },
     bottomSection: {
         flexDirection: 'row',

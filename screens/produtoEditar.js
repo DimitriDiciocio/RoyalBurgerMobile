@@ -356,9 +356,22 @@ import api from '../services/api';
             defaultIngredients.forEach((ing, index) => {
                 const ingredientId = ing.id || ing.ingredient_id || index;
                 const initialQty = parseFloat(ing.portions || 0) || 0;
-                const currentQty = defaultIngredientsQuantities[ingredientId] !== undefined 
-                    ? defaultIngredientsQuantities[ingredientId] 
-                    : initialQty;
+                
+                let currentQty = initialQty;
+                if (defaultIngredientsQuantities[ingredientId] !== undefined) {
+                    const savedValue = defaultIngredientsQuantities[ingredientId];
+                    // Se for um objeto, extrair o valor numérico
+                    if (typeof savedValue === 'object' && savedValue !== null) {
+                        currentQty = parseFloat(savedValue.current || savedValue.quantity || 0) || 0;
+                        // Se tiver delta, somar com portions inicial
+                        if (savedValue.delta !== undefined) {
+                            currentQty = initialQty + parseFloat(savedValue.delta || 0);
+                        }
+                    } else {
+                        // Se for número direto, usar
+                        currentQty = parseFloat(savedValue) || 0;
+                    }
+                }
                 
                 if (currentQty > initialQty) {
                     const extra = findIngredientPrice(ing, ingredientId);
@@ -374,12 +387,14 @@ import api from '../services/api';
             });
             
             // Extras adicionados (quantidade adicional acima do mínimo)
+            // IMPORTANTE: Para exibição, mostrar apenas a quantidade adicional acima do mínimo
+            // Mas para a API, enviar TODA a quantidade (incluindo o mínimo)
             extraIngredients.forEach((ing, index) => {
                 const ingredientId = ing.id || ing.ingredient_id || `extra-${index}`;
                 const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
                 const currentQty = selectedExtras[ingredientId] !== undefined ? selectedExtras[ingredientId] : minQty;
                 
-                // Mostrar apenas se quantidade atual é maior que o mínimo
+                // Mostrar apenas se quantidade atual é maior que o mínimo (para exibição)
                 if (currentQty > minQty) {
                     const extra = findIngredientPrice(ing, ingredientId);
                     const additionalQty = currentQty - minQty;
@@ -390,6 +405,57 @@ import api from '../services/api';
                             additionalPrice: extra * additionalQty
                         });
                     }
+                }
+            });
+            
+            // Converter selectedExtras para formato da API (array de {ingredient_id, quantity})
+            // IMPORTANTE: Enviar TODA a quantidade dos extras (incluindo o mínimo), não apenas a adicional
+            const extrasForAPI = [];
+            extraIngredients.forEach((ing, index) => {
+                const ingredientId = ing.id || ing.ingredient_id || `extra-${index}`;
+                const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+                const currentQty = selectedExtras[ingredientId] !== undefined ? selectedExtras[ingredientId] : minQty;
+                
+                // Enviar para API se quantidade > 0 (incluindo o mínimo)
+                if (currentQty > 0) {
+                    extrasForAPI.push({
+                        ingredient_id: Number(ingredientId),
+                        quantity: Number(currentQty)
+                    });
+                }
+            });
+            
+            // Converter baseModifications para formato da API
+            const baseModificationsForAPI = [];
+            defaultIngredients.forEach((ing, index) => {
+                const ingredientId = ing.id || ing.ingredient_id || index;
+                const initialQty = parseFloat(ing.portions || 0) || 0;
+                
+                let currentQty = initialQty;
+                if (defaultIngredientsQuantities[ingredientId] !== undefined) {
+                    const savedValue = defaultIngredientsQuantities[ingredientId];
+                    // Se for um objeto, extrair o valor numérico
+                    if (typeof savedValue === 'object' && savedValue !== null) {
+                        currentQty = parseFloat(savedValue.current || savedValue.quantity || 0) || 0;
+                        // Se tiver delta, somar com portions inicial
+                        if (savedValue.delta !== undefined) {
+                            currentQty = initialQty + parseFloat(savedValue.delta || 0);
+                        }
+                    } else {
+                        // Se for número direto, usar
+                        currentQty = parseFloat(savedValue) || 0;
+                    }
+                }
+                
+                // Calcular delta (diferença entre quantidade atual e inicial)
+                const delta = currentQty - initialQty;
+                
+                // Enviar para API apenas se houver mudança
+                if (delta !== 0) {
+                    baseModificationsForAPI.push({
+                        ingredient_id: Number(ingredientId),
+                        delta: Number(delta)
+                    });
                 }
             });
             
@@ -405,9 +471,11 @@ import api from '../services/api';
                         `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}` : 
                         produto?.imageSource?.uri,
                     observacoes: observacoes,
-                    selectedExtras: selectedExtras,
+                    selectedExtras: selectedExtras, // Manter para compatibilidade
+                    extras: extrasForAPI, // Enviar extras no formato da API
+                    baseModifications: baseModificationsForAPI, // Enviar modificações no formato da API
                     defaultIngredientsQuantities: defaultIngredientsQuantities,
-                    modifications: modifications
+                    modifications: modifications // Para exibição
                 });
             } else {
                 // Se não houver editItem (não deveria acontecer nesta tela), adiciona normalmente
@@ -422,9 +490,11 @@ import api from '../services/api';
                         produto?.imageSource?.uri,
                     productId: productData?.id || produto?.id,
                     observacoes: observacoes,
-                    selectedExtras: selectedExtras,
+                    selectedExtras: selectedExtras, // Manter para compatibilidade
+                    extras: extrasForAPI, // Enviar extras no formato da API
+                    baseModifications: baseModificationsForAPI, // Enviar modificações no formato da API
                     defaultIngredientsQuantities: defaultIngredientsQuantities,
-                    modifications: modifications
+                    modifications: modifications // Para exibição
                 });
             }
             
@@ -497,9 +567,24 @@ import api from '../services/api';
                 defaultIngredients.forEach((ing, index) => {
                     const ingredientId = ing.id || ing.ingredient_id || index;
                     // Se estiver editando, usar os valores salvos; senão usar portions
-                    const initialQty = editItem?.defaultIngredientsQuantities?.[ingredientId] !== undefined
-                        ? editItem.defaultIngredientsQuantities[ingredientId]
-                        : parseFloat(ing.portions || 0) || 0;
+                    let initialQty = parseFloat(ing.portions || 0) || 0;
+                    
+                    if (editItem?.defaultIngredientsQuantities?.[ingredientId] !== undefined) {
+                        const savedValue = editItem.defaultIngredientsQuantities[ingredientId];
+                        // Se for um objeto (com delta/current), extrair o valor numérico
+                        if (typeof savedValue === 'object' && savedValue !== null) {
+                            initialQty = parseFloat(savedValue.current || savedValue.delta || savedValue.quantity || 0) || 0;
+                            // Se tiver portions inicial, somar com delta
+                            if (savedValue.delta !== undefined) {
+                                const basePortions = parseFloat(ing.portions || 0) || 0;
+                                initialQty = basePortions + parseFloat(savedValue.delta || 0);
+                            }
+                        } else {
+                            // Se for número direto, usar
+                            initialQty = parseFloat(savedValue) || 0;
+                        }
+                    }
+                    
                     initialQuantities[ingredientId] = initialQty;
                 });
                 setDefaultIngredientsQuantities(initialQuantities);
@@ -552,12 +637,26 @@ import api from '../services/api';
             defaultIngredients.forEach((ing, index) => {
                 const ingredientId = ing.id || ing.ingredient_id || index;
                 const extra = findIngredientPrice(ing, ingredientId);
-                                                  const initialQty = parseFloat(ing.portions || 0) || 0;
-                                  const currentQty = defaultIngredientsQuantities[ingredientId] !== undefined 
-                                      ? defaultIngredientsQuantities[ingredientId] 
-                                      : initialQty;
-                                  // Calcular apenas a quantidade adicional além do padrão inicial
-                                  const additionalQty = Math.max(0, currentQty - initialQty);
+                const initialQty = parseFloat(ing.portions || 0) || 0;
+                
+                let currentQty = initialQty;
+                if (defaultIngredientsQuantities[ingredientId] !== undefined) {
+                    const savedValue = defaultIngredientsQuantities[ingredientId];
+                    // Se for um objeto, extrair o valor numérico
+                    if (typeof savedValue === 'object' && savedValue !== null) {
+                        currentQty = parseFloat(savedValue.current || savedValue.quantity || 0) || 0;
+                        // Se tiver delta, somar com portions inicial
+                        if (savedValue.delta !== undefined) {
+                            currentQty = initialQty + parseFloat(savedValue.delta || 0);
+                        }
+                    } else {
+                        // Se for número direto, usar
+                        currentQty = parseFloat(savedValue) || 0;
+                    }
+                }
+                
+                // Calcular apenas a quantidade adicional além do padrão inicial
+                const additionalQty = Math.max(0, currentQty - initialQty);
                 total += extra * additionalQty;
             });
             return total;
@@ -598,8 +697,16 @@ import api from '../services/api';
             const currentItem = basketItems.find(item => item.id === editItem.id);
             if (!currentItem) return basketTotal;
             
+            // Garantir que os valores são números válidos
+            const oldTotal = parseFloat(currentItem.total || 0) || 0;
+            const newTotal = parseFloat(temporaryItemTotal || 0) || 0;
+            const currentBasketTotal = parseFloat(basketTotal || 0) || 0;
+            
             // Subtrair o total do item antigo e adicionar o novo total
-            return basketTotal - currentItem.total + temporaryItemTotal;
+            const calculatedTotal = currentBasketTotal - oldTotal + newTotal;
+            
+            // Garantir que não retorne negativo ou NaN
+            return isNaN(calculatedTotal) || calculatedTotal < 0 ? currentBasketTotal : calculatedTotal;
         }, [basketTotal, basketItems, editItem, temporaryItemTotal]);
 
         const handleOpenExtrasModal = () => {
@@ -718,9 +825,24 @@ import api from '../services/api';
                                    const ingredientId = ing.id || ing.ingredient_id || index;
                                    const extra = findIngredientPrice(ing, ingredientId);
                                    // Usar a quantidade do estado (que já foi inicializada com valores editados se existirem)
-                                   const currentQty = defaultIngredientsQuantities[ingredientId] !== undefined 
-                                       ? defaultIngredientsQuantities[ingredientId] 
-                                       : parseFloat(ing.portions || 0) || 0;
+                                   let currentQty = parseFloat(ing.portions || 0) || 0;
+                                   
+                                   if (defaultIngredientsQuantities[ingredientId] !== undefined) {
+                                       const savedValue = defaultIngredientsQuantities[ingredientId];
+                                       // Se for um objeto, extrair o valor numérico
+                                       if (typeof savedValue === 'object' && savedValue !== null) {
+                                           currentQty = parseFloat(savedValue.current || savedValue.quantity || 0) || 0;
+                                           // Se tiver delta, somar com portions inicial
+                                           if (savedValue.delta !== undefined) {
+                                               const basePortions = parseFloat(ing.portions || 0) || 0;
+                                               currentQty = basePortions + parseFloat(savedValue.delta || 0);
+                                           }
+                                       } else {
+                                           // Se for número direto, usar
+                                           currentQty = parseFloat(savedValue) || 0;
+                                       }
+                                   }
+                                   
                                    const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
                                    const maxQty = ing.max_quantity || ing.maxQuantity || null;
                                   return (
