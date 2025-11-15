@@ -59,6 +59,9 @@ Garantir que o RoyalBurgerMobile siga **exatamente** o mesmo fluxo de pedido do 
    └─ Loading state durante validação
 
 5. ADICIONAR À CESTA
+   ├─ Validar permissão do usuário (canUserAddToCart)
+   │  ├─ Apenas clientes e atendentes podem adicionar itens
+   │  └─ Usuários não autenticados (convidados) podem adicionar
    ├─ Validar capacidade antes de adicionar
    ├─ POST /api/cart/items com:
    │  ├─ product_id
@@ -153,6 +156,7 @@ Garantir que o RoyalBurgerMobile siga **exatamente** o mesmo fluxo de pedido do 
 | **Cronômetro de contagem regressiva** | 🔴 Alta | Não implementado ou não usa maior tempo de validade |
 | **Validação de estoque em promoções** | 🔴 Alta | Produtos sem estoque podem aparecer em promoções |
 | **Filtrar promoções expiradas** | 🔴 Alta | Promoções expiradas podem aparecer |
+| **Validação de permissão para carrinho** | 🔴 Alta | Não valida se usuário pode adicionar itens (apenas clientes/atendentes) |
 
 ### **⚠️ DIVERGÊNCIAS E INCONSISTÊNCIAS**
 
@@ -170,7 +174,8 @@ Garantir que o RoyalBurgerMobile siga **exatamente** o mesmo fluxo de pedido do 
 | **Validação de estoque em novidades** | ✅ Implementado | ❌ Não aplicado | Produtos sem estoque podem aparecer |
 | **Seção de Promoções Especiais** | ✅ Implementado | ❌ Não implementado | Usuário não vê promoções |
 | **Cronômetro com maior tempo de validade** | ✅ Implementado | ❌ Não implementado | Cronômetro não reflete tempo correto |
-| **Validação de estoque em promoções** | ✅ Implementado | ❌ Não aplicado | Produtos sem estoque podem aparecer |
+| **Validação de estoque em promoções** | ✅ Implementado | ❌ Não aplicado | Produtos sem estoque podem aparecer em promoções |
+| **Validação de permissão para carrinho** | ✅ `canUserAddToCart()` | ❌ Não implementado | Admins podem tentar adicionar itens incorretamente |
 
 ---
 
@@ -274,6 +279,14 @@ import { getRecentlyAddedProducts, filterProductsWithStock } from './services/pr
 // ALTERAÇÃO: Função para carregar produtos recentemente adicionados (novidades)
 const loadRecentlyAddedProducts = async () => {
   try {
+    // ALTERAÇÃO: Cache específico por período para evitar produtos expirados do cache
+    // Incluir days no cache key para invalidar quando período mudar
+    const cacheKey = `${CACHE_KEYS.recentlyAdded}_${RECENTLY_ADDED_DAYS}`;
+    const cached = cacheManager.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+    
     // ALTERAÇÃO: Chamar API com parâmetro days para filtrar por período
     const response = await getRecentlyAddedProducts({
       page: 1,
@@ -292,6 +305,9 @@ const loadRecentlyAddedProducts = async () => {
       .map(product => formatProductForCard(product))
       .filter(product => product !== null); // Remove produtos indisponíveis
     
+    // ALTERAÇÃO: Usar cache key específico por período
+    cacheManager.set(cacheKey, formattedProducts, CACHE_TTL);
+    
     return formattedProducts;
   } catch (error) {
     // ALTERAÇÃO: Removido console.error em produção
@@ -299,7 +315,10 @@ const loadRecentlyAddedProducts = async () => {
     if (isDev) {
       console.error('Erro ao carregar novidades:', error);
     }
-    return [];
+    // Retornar cache se disponível em caso de erro
+    const cacheKey = `${CACHE_KEYS.recentlyAdded}_${RECENTLY_ADDED_DAYS}`;
+    const cached = cacheManager.get(cacheKey);
+    return cached || [];
   }
 };
 
@@ -333,6 +352,7 @@ const loadHomeSections = async () => {
 2. **Validação Frontend:** Validar estoque de cada produto usando `filterProductsWithStock()` antes de exibir
 3. **Badges de Estoque:** Adicionar badges de estoque limitado/baixo nos cards de novidades
 4. **Cache:** Usar cache curto (60s) para refletir mudanças de estoque
+5. **Cache Específico por Período:** Usar cache key específico que inclui o período (`${CACHE_KEYS.recentlyAdded}_${RECENTLY_ADDED_DAYS}`) para invalidar corretamente quando o período mudar
 
 **Implementação:**
 
@@ -365,12 +385,14 @@ if (!recentlyAddedProducts || recentlyAddedProducts.length === 0) {
 - [ ] Confirmar que `getRecentlyAddedProducts` aceita parâmetro `days`
 - [ ] Adicionar constante `RECENTLY_ADDED_DAYS = 30` em arquivo de configuração
 - [ ] Modificar `loadHomeSections` ou função equivalente para chamar `getRecentlyAddedProducts` com `days`
+- [ ] Implementar cache específico por período (`${CACHE_KEYS.recentlyAdded}_${RECENTLY_ADDED_DAYS}`)
 - [ ] Adicionar validação de estoque usando `filterProductsWithStock()` antes de exibir
 - [ ] Adicionar badges de estoque nos cards de novidades
 - [ ] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem)
 - [ ] Testar que produtos antigos (sem `CREATED_AT` ou fora do período) não aparecem
 - [ ] Testar que apenas produtos com estoque aparecem
 - [ ] Verificar que produtos são ordenados por data (mais recentes primeiro)
+- [ ] Verificar que cache é invalidado corretamente quando período muda
 
 ---
 
@@ -1410,6 +1432,49 @@ const styles = StyleSheet.create({
 
 ### **3.1 Modificar `services/cartService.js`**
 
+**Adicionar validação de permissão:**
+
+```javascript
+/**
+ * Verifica se o usuário pode adicionar itens ao carrinho
+ * ALTERAÇÃO: Apenas clientes e atendentes podem adicionar itens ao carrinho
+ * @returns {Object} { allowed: boolean, message?: string }
+ */
+const canUserAddToCart = () => {
+  const isAuth = isAuthenticated();
+  
+  // Se não estiver logado, permite (usuário convidado pode adicionar)
+  if (!isAuth) {
+    return { allowed: true };
+  }
+  
+  // Se estiver logado, verifica o role
+  const user = getStoredUser();
+  if (!user) {
+    return { 
+      allowed: false, 
+      message: 'Não foi possível verificar suas permissões. Faça login novamente.' 
+    };
+  }
+  
+  // Verifica diferentes campos possíveis para o tipo/role do usuário
+  const userRole = (user.role || user.profile || user.type || user.user_type || 'customer').toLowerCase();
+  
+  // Permite apenas clientes e atendentes
+  const allowedRoles = ['cliente', 'customer', 'atendente', 'attendant'];
+  const isAllowed = allowedRoles.includes(userRole);
+  
+  if (!isAllowed) {
+    return { 
+      allowed: false, 
+      message: 'Apenas clientes e atendentes podem adicionar itens à cesta.' 
+    };
+  }
+  
+  return { allowed: true };
+};
+```
+
 **Melhorar tratamento de erros de estoque:**
 
 ```javascript
@@ -1422,6 +1487,16 @@ export const addItemToCart = async ({
   baseModifications = []
 }) => {
   try {
+    // ALTERAÇÃO: Validar se o usuário pode adicionar itens ao carrinho
+    const permissionCheck = canUserAddToCart();
+    if (!permissionCheck.allowed) {
+      return {
+        success: false,
+        error: permissionCheck.message || 'Você não tem permissão para adicionar itens à cesta.',
+        errorType: 'PERMISSION_DENIED'
+      };
+    }
+    
     // ... código existente ...
     
     const response = await api.post('/cart/items', payload);
@@ -1464,6 +1539,16 @@ export const addItemToCart = async ({
 // ALTERAÇÃO: Melhorar tratamento de erros em updateCartItem
 export const updateCartItem = async (cartItemId, updates = {}) => {
   try {
+    // ALTERAÇÃO: Validar se o usuário pode atualizar itens no carrinho
+    const permissionCheck = canUserAddToCart();
+    if (!permissionCheck.allowed) {
+      return {
+        success: false,
+        error: permissionCheck.message || 'Você não tem permissão para atualizar itens na cesta.',
+        errorType: 'PERMISSION_DENIED'
+      };
+    }
+    
     // ... código existente ...
     
   } catch (error) {
@@ -1833,8 +1918,12 @@ const getFriendlyErrorMessage = (error) => {
 - [ ] Adicionar estilos para loading e mensagens
 
 ### **✅ Etapa 3: Melhorar Tratamento de Erros**
+- [ ] Implementar função `canUserAddToCart()` em `cartService.js`
+- [ ] Adicionar validação de permissão em `addItemToCart()`
+- [ ] Adicionar validação de permissão em `updateCartItem()`
 - [ ] Melhorar tratamento de erros de estoque em `cartService.js`
 - [ ] Adicionar tratamento específico para `INSUFFICIENT_STOCK` em `cesta.js`
+- [ ] Adicionar tratamento específico para `PERMISSION_DENIED` em `cesta.js` e `produto.js`
 - [ ] Atualizar capacidade após erro de estoque em `produto.js`
 
 ### **✅ Etapa 4: Checkout**
@@ -3371,7 +3460,7 @@ import DetalhesPedido from './screens/detalhesPedido';
 
 **Data:** 2025-01-27  
 **Autor:** Sistema de Integração  
-**Versão:** 1.4 (Atualizado com Seção de Promoções Especiais e Cronômetro com Maior Tempo de Validade)
+**Versão:** 1.5 (Atualizado com Validação de Permissões para Carrinho e Cache Específico por Período)
 
 ---
 
