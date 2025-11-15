@@ -149,6 +149,10 @@ Garantir que o RoyalBurgerMobile siga **exatamente** o mesmo fluxo de pedido do 
 | **Validação de tempo para novidades** | 🔴 Alta | Não filtra por período de criação |
 | **Usar parâmetro days na API de novidades** | 🔴 Alta | Não passa período configurável |
 | **Validar estoque de produtos em novidades** | 🔴 Alta | Produtos sem estoque podem aparecer |
+| **Seção de Promoções Especiais** | 🔴 Alta | Não exibe promoções ativas |
+| **Cronômetro de contagem regressiva** | 🔴 Alta | Não implementado ou não usa maior tempo de validade |
+| **Validação de estoque em promoções** | 🔴 Alta | Produtos sem estoque podem aparecer em promoções |
+| **Filtrar promoções expiradas** | 🔴 Alta | Promoções expiradas podem aparecer |
 
 ### **⚠️ DIVERGÊNCIAS E INCONSISTÊNCIAS**
 
@@ -164,6 +168,9 @@ Garantir que o RoyalBurgerMobile siga **exatamente** o mesmo fluxo de pedido do 
 | **Debounce** | ✅ 500ms | ❌ Não implementado | Performance inferior |
 | **Novidades com validação de tempo** | ✅ Implementado | ❌ Não usa parâmetro days | Produtos antigos podem aparecer |
 | **Validação de estoque em novidades** | ✅ Implementado | ❌ Não aplicado | Produtos sem estoque podem aparecer |
+| **Seção de Promoções Especiais** | ✅ Implementado | ❌ Não implementado | Usuário não vê promoções |
+| **Cronômetro com maior tempo de validade** | ✅ Implementado | ❌ Não implementado | Cronômetro não reflete tempo correto |
+| **Validação de estoque em promoções** | ✅ Implementado | ❌ Não aplicado | Produtos sem estoque podem aparecer |
 
 ---
 
@@ -364,6 +371,222 @@ if (!recentlyAddedProducts || recentlyAddedProducts.length === 0) {
 - [ ] Testar que produtos antigos (sem `CREATED_AT` ou fora do período) não aparecem
 - [ ] Testar que apenas produtos com estoque aparecem
 - [ ] Verificar que produtos são ordenados por data (mais recentes primeiro)
+
+---
+
+## 🎯 **ETAPA 0.5: Seção de Promoções Especiais com Cronômetro**
+
+### **0.5.1 API de Promoções**
+
+**Endpoint:** `GET /api/promotions`
+
+**Parâmetros:**
+- `include_expired` (opcional): Incluir promoções expiradas (padrão: false)
+
+**Comportamento:**
+- Retorna promoções ativas com produtos associados
+- Cada promoção possui campo `expires_at` (timestamp de expiração)
+- Produtos com promoção devem ter estoque disponível
+
+**Resposta:**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "product_id": 123,
+      "discount_percentage": 20,
+      "expires_at": "2024-02-01T23:59:59",
+      "product": {
+        "id": 123,
+        "name": "Produto em Promoção",
+        "price": "29.90",
+        "image_url": "/api/uploads/products/123.jpeg"
+      }
+    }
+  ]
+}
+```
+
+### **0.5.2 Regra do Cronômetro de Contagem Regressiva**
+
+**REGRA CRÍTICA:** O cronômetro de contagem regressiva na seção de promoções especiais deve exibir o tempo correspondente ao produto que tiver nas promoções com o **maior tempo de validade** (maior `expires_at`).
+
+**Implementação:**
+
+```javascript
+// ALTERAÇÃO: Importar funções necessárias
+import { getPromotions } from '../services/promotionService';
+import { filterProductsWithStock } from '../services/productService';
+
+// ALTERAÇÃO: Função para carregar promoções especiais
+const loadPromotionsSection = async () => {
+  try {
+    // Buscar promoções ativas
+    const response = await getPromotions({ include_expired: false });
+    const promotions = response?.items || [];
+    
+    if (!promotions || promotions.length === 0) {
+      return { products: [], longestExpiry: null };
+    }
+    
+    // Filtrar promoções expiradas e produtos inativos
+    const now = new Date();
+    const validPromotions = promotions
+      .filter(promo => {
+        // Verificar se produto está ativo
+        if (!promo.product || !promo.product.is_active) {
+          return false;
+        }
+        // Verificar se promoção não está expirada
+        if (promo.expires_at) {
+          const expiresAt = new Date(promo.expires_at);
+          if (expiresAt <= now) {
+            return false;
+          }
+        }
+        return true;
+      })
+      .slice(0, 10); // Limitar a 10 promoções
+    
+    // Preparar produtos com dados de promoção
+    const productsWithPromotion = validPromotions.map(promo => ({
+      product: {
+        ...promo.product,
+        id: promo.product_id,
+        price: promo.product.price,
+        image_url: promo.product.image_url,
+      },
+      promotion: promo
+    }));
+    
+    // Validar estoque de produtos com promoção
+    const productsToDisplay = productsWithPromotion.map(({ product }) => product);
+    const productsWithStock = await filterProductsWithStock(productsToDisplay);
+    
+    // Combinar produtos validados com suas promoções
+    const availableProductsWithPromotion = productsWithPromotion
+      .map(({ product, promotion }) => {
+        const validatedProduct = productsWithStock.find(p => p.id === product.id);
+        if (validatedProduct) {
+          return { product: validatedProduct, promotion };
+        }
+        return null;
+      })
+      .filter(item => item !== null);
+    
+    // ALTERAÇÃO: Encontrar a promoção com maior tempo de validade para o cronômetro
+    const promotionWithLongestValidity = availableProductsWithPromotion
+      .filter(({ promotion }) => promotion && promotion.expires_at)
+      .reduce((longest, current) => {
+        if (!longest) return current;
+        const longestExpiry = new Date(longest.promotion.expires_at);
+        const currentExpiry = new Date(current.promotion.expires_at);
+        return currentExpiry > longestExpiry ? current : longest;
+      }, null);
+    
+    return {
+      products: availableProductsWithPromotion,
+      longestExpiry: promotionWithLongestValidity?.promotion?.expires_at || null
+    };
+  } catch (error) {
+    // ALTERAÇÃO: Removido console.error em produção
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao carregar promoções:', error);
+    }
+    return { products: [], longestExpiry: null };
+  }
+};
+```
+
+### **0.5.3 Componente de Cronômetro**
+
+**Implementar componente `TimerPromotions` (já existe, mas precisa ser integrado corretamente):**
+
+```javascript
+// ALTERAÇÃO: Usar o componente TimerPromotions existente
+import TimerPromotions from '../components/TimerPromotions';
+
+// ALTERAÇÃO: Renderizar cronômetro com maior tempo de validade
+const renderPromotionsSection = (promotionsData) => {
+  const { products, longestExpiry } = promotionsData;
+  
+  if (!products || products.length === 0) {
+    return null; // Ocultar seção se não houver promoções
+  }
+  
+  return (
+    <View style={styles.promotionsContainer}>
+      {/* ALTERAÇÃO: Título com cronômetro */}
+      <View style={styles.promotionsHeader}>
+        <Text style={styles.promotionsTitle}>Promoções Especiais</Text>
+        {/* ALTERAÇÃO: Cronômetro usando maior tempo de validade */}
+        {longestExpiry && (
+          <TimerPromotions
+            endTime={longestExpiry}
+            onExpire={() => {
+              // Recarregar promoções quando expirar
+              loadPromotionsSection();
+            }}
+          />
+        )}
+      </View>
+      
+      {/* Lista de produtos em promoção */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {products.map(({ product, promotion }) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            promotion={promotion}
+          />
+        ))}
+      </ScrollView>
+    </View>
+  );
+};
+```
+
+### **0.5.4 Validação de Estoque para Promoções**
+
+**CRÍTICO:** Produtos em promoções devem seguir as mesmas regras de validação de estoque da listagem principal.
+
+**Regras:**
+1. **Filtro da API:** Promoções já são filtradas por `include_expired=false`
+2. **Validação Frontend:** Validar estoque de cada produto usando `filterProductsWithStock()` antes de exibir
+3. **Badges de Estoque:** Adicionar badges de estoque limitado/baixo nos cards de promoções
+4. **Cache:** Usar cache curto (60s) para refletir mudanças de estoque
+
+### **0.5.5 Tratamento de Erros e Estados Vazios**
+
+```javascript
+// ALTERAÇÃO: Tratamento quando não há promoções
+if (!promotionsData.products || promotionsData.products.length === 0) {
+  // Opção 1: Ocultar seção de promoções
+  return null;
+  
+  // Opção 2: Exibir mensagem amigável
+  // return <Text style={styles.emptyMessage}>Nenhuma promoção no momento. Volte em breve!</Text>;
+}
+```
+
+### **0.5.6 Checklist de Implementação**
+
+- [ ] Confirmar que `getPromotions` existe e retorna promoções com `expires_at`
+- [ ] Implementar função `loadPromotionsSection()` para carregar promoções
+- [ ] Filtrar promoções expiradas antes de exibir
+- [ ] Validar estoque de produtos com promoção usando `filterProductsWithStock()`
+- [ ] **Implementar lógica para encontrar promoção com maior tempo de validade**
+- [ ] **Passar `expires_at` da promoção com maior validade para o cronômetro**
+- [ ] Integrar componente `TimerPromotions` com maior tempo de validade
+- [ ] Adicionar badges de estoque nos cards de promoções
+- [ ] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem)
+- [ ] Testar que apenas promoções não expiradas aparecem
+- [ ] Testar que apenas produtos com estoque aparecem
+- [ ] **Testar que cronômetro exibe tempo da promoção com maior validade**
+- [ ] Verificar que cronômetro atualiza quando promoção expira
+- [ ] Verificar cache e invalidação após 60s
 
 ---
 
@@ -1568,6 +1791,22 @@ const getFriendlyErrorMessage = (error) => {
 - [ ] Verificar que produtos são ordenados por data (mais recentes primeiro)
 - [ ] Verificar que cache é invalidado corretamente
 
+### **✅ Etapa 0.5: Seção de Promoções Especiais**
+- [ ] Confirmar que `getPromotions` existe e retorna promoções com `expires_at`
+- [ ] Implementar função `loadPromotionsSection()` para carregar promoções
+- [ ] Filtrar promoções expiradas antes de exibir
+- [ ] Validar estoque de produtos com promoção usando `filterProductsWithStock()`
+- [ ] **Implementar lógica para encontrar promoção com maior tempo de validade**
+- [ ] **Passar `expires_at` da promoção com maior validade para o cronômetro**
+- [ ] Integrar componente `TimerPromotions` com maior tempo de validade
+- [ ] Adicionar badges de estoque nos cards de promoções
+- [ ] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem)
+- [ ] Testar que apenas promoções não expiradas aparecem
+- [ ] Testar que apenas produtos com estoque aparecem
+- [ ] **Testar que cronômetro exibe tempo da promoção com maior validade**
+- [ ] Verificar que cronômetro atualiza quando promoção expira
+- [ ] Verificar cache e invalidação após 60s
+
 ### **✅ Etapa 1: Listagem de Produtos**
 - [ ] Adicionar suporte a `filter_unavailable` em `productService.js`
 - [ ] Adicionar função `simulateProductCapacity()` em `productService.js`
@@ -1791,6 +2030,21 @@ const onInsufficientStock = (error) => {
 - [ ] Verificar cache e invalidação após 60s
 - [ ] Testar paginação (se implementada)
 - [ ] Verificar tratamento de erros da API
+
+### **Teste 0.5: Seção de Promoções Especiais**
+- [ ] Verificar que promoções ativas são carregadas corretamente
+- [ ] Verificar que promoções expiradas não aparecem
+- [ ] Verificar que apenas produtos com estoque aparecem em promoções
+- [ ] Verificar badges de estoque limitado/baixo em produtos em promoção
+- [ ] **Verificar que cronômetro exibe tempo da promoção com maior validade**
+- [ ] **Testar com múltiplas promoções: cronômetro deve usar a que expira mais tarde**
+- [ ] Verificar que cronômetro atualiza corretamente a cada segundo
+- [ ] Verificar que quando promoção expira, cronômetro para ou recarrega seção
+- [ ] Verificar estado vazio quando não há promoções
+- [ ] Verificar que validação de estoque funciona corretamente
+- [ ] Verificar cache e invalidação após 60s
+- [ ] Verificar tratamento de erros da API
+- [ ] Testar que produtos sem estoque não aparecem mesmo com promoção ativa
 
 ### **Teste 1: Listagem de Produtos**
 - [ ] Verificar que apenas produtos com capacidade ≥ 1 são exibidos
@@ -3102,6 +3356,7 @@ import DetalhesPedido from './screens/detalhesPedido';
 ## 🔄 **PRÓXIMOS PASSOS**
 
 0. **Implementar Etapa 0 (Seção de Novidades com Validação de Tempo)**
+0.5. **Implementar Etapa 0.5 (Seção de Promoções Especiais com Cronômetro)**
 1. Implementar Etapa 1 (Listagem)
 2. Implementar Etapa 2 (Montagem)
 3. Implementar Etapa 3 (Cesta)
@@ -3116,7 +3371,7 @@ import DetalhesPedido from './screens/detalhesPedido';
 
 **Data:** 2025-01-27  
 **Autor:** Sistema de Integração  
-**Versão:** 1.3 (Atualizado com Validação de Tempo para Novidades)
+**Versão:** 1.4 (Atualizado com Seção de Promoções Especiais e Cronômetro com Maior Tempo de Validade)
 
 ---
 
@@ -3160,4 +3415,65 @@ const novidadesMes = await getRecentlyAddedProducts({ days: 60 });
 - Produtos antigos (sem `CREATED_AT`) nunca aparecem como novidades
 - A validação de estoque garante que apenas produtos disponíveis são exibidos
 - Cache deve ser curto (60s) para refletir mudanças de estoque e novos produtos
+
+---
+
+## 📝 **NOTAS SOBRE CRONÔMETRO DE PROMOÇÕES ESPECIAIS**
+
+### **Regra do Cronômetro**
+
+**REGRA CRÍTICA:** O cronômetro de contagem regressiva na seção de promoções especiais deve exibir o tempo correspondente ao produto que tiver nas promoções com o **maior tempo de validade** (maior `expires_at`).
+
+### **Como Funciona**
+
+1. **Backend:**
+   - Cada promoção possui campo `expires_at` (timestamp de expiração)
+   - API retorna promoções ativas com `include_expired=false`
+   - Produtos associados às promoções devem estar ativos
+
+2. **Frontend Mobile:**
+   - Deve carregar todas as promoções ativas
+   - Deve filtrar promoções expiradas (validação adicional no frontend)
+   - Deve validar estoque de cada produto antes de exibir
+   - **Deve encontrar a promoção com maior `expires_at` entre todas as promoções válidas**
+   - **Deve passar o `expires_at` da promoção com maior validade para o componente `TimerPromotions`**
+
+3. **Lógica de Seleção:**
+   ```javascript
+   // Encontrar promoção com maior tempo de validade
+   const promotionWithLongestValidity = availableProductsWithPromotion
+     .filter(({ promotion }) => promotion && promotion.expires_at)
+     .reduce((longest, current) => {
+       if (!longest) return current;
+       const longestExpiry = new Date(longest.promotion.expires_at);
+       const currentExpiry = new Date(current.promotion.expires_at);
+       return currentExpiry > longestExpiry ? current : longest;
+     }, null);
+   ```
+
+### **Exemplos de Uso**
+
+```javascript
+// Carregar promoções e encontrar maior tempo de validade
+const promotionsData = await loadPromotionsSection();
+const { products, longestExpiry } = promotionsData;
+
+// Usar longestExpiry no cronômetro
+<TimerPromotions
+  endTime={longestExpiry}
+  onExpire={() => {
+    // Recarregar promoções quando expirar
+    loadPromotionsSection();
+  }}
+/>
+```
+
+### **Importante**
+
+- O cronômetro **sempre** deve usar a promoção com maior tempo de validade, não a primeira da lista
+- Se houver múltiplas promoções, o cronômetro reflete o tempo da que expira mais tarde
+- Quando a promoção com maior validade expira, o cronômetro deve parar ou recarregar a seção
+- A validação de estoque garante que apenas produtos disponíveis são exibidos
+- Cache deve ser curto (60s) para refletir mudanças de estoque e novas promoções
+- Promoções expiradas não devem aparecer, mesmo que ainda estejam na resposta da API
 
