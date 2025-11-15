@@ -133,6 +133,8 @@ Garantir que o RoyalBurgerMobile siga **exatamente** o mesmo fluxo de pedido do 
 | Funcionalidade | Prioridade | Impacto |
 |----------------|------------|---------|
 | **Filtrar produtos indisponíveis na listagem** | 🔴 Alta | Usuário vê produtos sem estoque |
+| **Validar estoque antes de exibir produtos** | 🔴 Alta | Produtos sem estoque podem aparecer mesmo com filtro da API |
+| **Adicionar availability_status aos produtos** | 🔴 Alta | Badges e validações não funcionam corretamente |
 | **Badges de estoque na listagem** | 🟡 Média | UX: não mostra estoque limitado |
 | **Validação dinâmica de capacidade** | 🔴 Alta | Permite adicionar produtos sem estoque |
 | **Simular capacidade com extras** | 🔴 Alta | Não valida estoque ao montar produto |
@@ -149,6 +151,8 @@ Garantir que o RoyalBurgerMobile siga **exatamente** o mesmo fluxo de pedido do 
 | Item | Web | Mobile | Impacto |
 |------|-----|--------|---------|
 | **Filtro de produtos** | `filter_unavailable=true` | ❌ Não aplicado | Produtos sem estoque aparecem |
+| **Validação antes de exibir** | ✅ `validateProductStockWithCapacity()` | ❌ Não implementado | Produtos sem estoque podem aparecer |
+| **Filtro com validação** | ✅ `filterProductsWithStock()` | ❌ Não implementado | Não adiciona `availability_status` |
 | **Validação de capacidade** | ✅ Implementado | ❌ Não implementado | Permite adicionar sem estoque |
 | **Badges de estoque** | ✅ Implementado | ❌ Não implementado | UX inconsistente |
 | **Validação no checkout** | ✅ Preventiva | ⚠️ Apenas backend | UX ruim (erro no final) |
@@ -514,6 +518,185 @@ const styles = StyleSheet.create({
   },
 });
 ```
+
+### **1.3 Adicionar Validações de Exibição de Produtos**
+
+**CRÍTICO:** Antes de exibir qualquer produto na listagem, é necessário validar se ele tem estoque disponível. Isso garante que o usuário não veja produtos que não podem ser adicionados ao carrinho.
+
+**Adicionar funções de validação em `services/productService.js`:**
+
+```javascript
+/**
+ * Valida se um produto tem estoque disponível e retorna dados de capacidade
+ * ALTERAÇÃO: Verifica capacidade/estoque antes de exibir e retorna dados completos
+ * @param {Object} product - Dados do produto
+ * @returns {Promise<Object|null>} { isValid: boolean, capacityData: Object } ou null em caso de erro
+ */
+export const validateProductStockWithCapacity = async (product) => {
+  if (!product || !product.id) {
+    return { isValid: false, capacityData: null };
+  }
+
+  try {
+    // Verificar capacidade do produto (quantidade 1, sem extras, sem modificações)
+    const capacityData = await simulateProductCapacity(product.id, [], 1, []);
+    
+    // Produto está disponível se is_available é true e max_quantity >= 1
+    const isValid = capacityData?.is_available === true && (capacityData?.max_quantity ?? 0) >= 1;
+    
+    return { isValid, capacityData };
+  } catch (error) {
+    // ALTERAÇÃO: Em caso de erro, considerar produto indisponível para segurança
+    // TODO: REVISAR - Implementar logging estruturado condicional (apenas em modo debug)
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error(`Erro ao validar estoque do produto ${product.id}:`, error);
+    }
+    return { isValid: false, capacityData: null };
+  }
+};
+
+/**
+ * Filtra produtos que têm estoque disponível e adiciona availability_status
+ * ALTERAÇÃO: Valida estoque de múltiplos produtos em paralelo e adiciona status de disponibilidade
+ * @param {Array} products - Lista de produtos para validar
+ * @returns {Promise<Array>} Lista de produtos com estoque disponível e availability_status
+ */
+export const filterProductsWithStock = async (products) => {
+  if (!products || products.length === 0) {
+    return [];
+  }
+
+  // Validar estoque de todos os produtos em paralelo
+  const stockValidations = await Promise.allSettled(
+    products.map(product => validateProductStockWithCapacity(product))
+  );
+
+  // Filtrar apenas produtos com estoque disponível e adicionar availability_status
+  const availableProducts = [];
+  for (let i = 0; i < products.length; i++) {
+    const validation = stockValidations[i];
+    if (validation.status === 'fulfilled' && validation.value.isValid) {
+      const product = { ...products[i] };
+      const capacityData = validation.value.capacityData;
+      
+      // ALTERAÇÃO: Adicionar availability_status e max_quantity do capacityData ao produto
+      if (capacityData) {
+        if (capacityData.availability_status) {
+          product.availability_status = capacityData.availability_status;
+        }
+        // Adicionar max_quantity para cálculo de badge se availability_status não estiver presente
+        if (capacityData.max_quantity !== undefined && capacityData.max_quantity !== null) {
+          product.max_quantity = capacityData.max_quantity;
+        }
+      }
+      availableProducts.push(product);
+    }
+  }
+
+  return availableProducts;
+};
+```
+
+**Modificar função de carregamento de produtos para usar validação:**
+
+```javascript
+// ALTERAÇÃO: Importar funções de validação
+import { getAllProducts, filterProductsWithStock } from '../services/productService';
+
+// ALTERAÇÃO: Modificar loadProducts para validar estoque antes de exibir
+const loadProducts = async () => {
+  try {
+    setLoading(true);
+    
+    // ALTERAÇÃO: Filtrar produtos indisponíveis na API
+    const response = await getAllProducts({
+      page_size: 1000,
+      include_inactive: false,
+      filter_unavailable: true // Filtrar produtos sem estoque na API
+    });
+    
+    const allProducts = response?.items || [];
+    
+    // ALTERAÇÃO: Filtrar apenas produtos ativos
+    const activeProducts = allProducts.filter((product) => {
+      const isActive = product.is_active !== false && 
+                      product.is_active !== 0 && 
+                      product.is_active !== "false";
+      return isActive;
+    });
+    
+    // ALTERAÇÃO: Validar estoque de cada produto e adicionar availability_status
+    // Isso garante que produtos sem estoque não sejam exibidos mesmo se passarem pelo filtro da API
+    const validatedProducts = await filterProductsWithStock(activeProducts);
+    
+    setProducts(validatedProducts);
+  } catch (error) {
+    // ALTERAÇÃO: Removido console.error em produção
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao carregar produtos:', error);
+    }
+    setProducts([]);
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+**Melhorar função de renderização de badge para calcular status quando não presente:**
+
+```javascript
+// ALTERAÇÃO: Melhorar função para calcular availability_status baseado em max_quantity
+const renderStockBadge = (product) => {
+  let availabilityStatus = String(product.availability_status || '').toLowerCase();
+  
+  // ALTERAÇÃO: Se availability_status não estiver definido, calcular baseado em max_quantity
+  if (!availabilityStatus && product.max_quantity !== undefined && product.max_quantity !== null) {
+    if (product.max_quantity <= 5) {
+      availabilityStatus = 'limited';
+    } else if (product.max_quantity <= 15) {
+      availabilityStatus = 'low_stock';
+    }
+  }
+  
+  if (availabilityStatus === 'limited') {
+    return (
+      <View style={styles.stockBadgeLimited}>
+        <Text style={styles.stockBadgeText}>Últimas unidades</Text>
+      </View>
+    );
+  } else if (availabilityStatus === 'low_stock') {
+    return (
+      <View style={styles.stockBadgeLow}>
+        <Text style={styles.stockBadgeText}>Estoque baixo</Text>
+      </View>
+    );
+  }
+  
+  return null;
+};
+```
+
+**Regras de Validação de Exibição:**
+
+1. **Validação Obrigatória:** Todo produto deve ser validado antes de ser exibido na listagem
+2. **Critérios de Disponibilidade:**
+   - `is_available === true` (do capacityData)
+   - `max_quantity >= 1` (do capacityData)
+3. **Cálculo de Badges:**
+   - **"Últimas unidades"** (limited): `availability_status === 'limited'` OU `max_quantity <= 5`
+   - **"Estoque baixo"** (low_stock): `availability_status === 'low_stock'` OU `max_quantity <= 15`
+4. **Validação em Paralelo:** Usar `Promise.allSettled` para validar múltiplos produtos simultaneamente
+5. **Tratamento de Erros:** Em caso de erro na validação, considerar produto indisponível (não exibir)
+6. **Enriquecimento de Dados:** Adicionar `availability_status` e `max_quantity` aos produtos validados para uso posterior
+
+**Notas Importantes:**
+
+- A validação deve ser feita **após** o filtro da API (`filter_unavailable=true`) para garantir dupla validação
+- Produtos sem estoque (`is_available === false` ou `max_quantity < 1`) **NÃO devem ser exibidos**
+- O `availability_status` e `max_quantity` devem ser preservados nos produtos para uso em badges e outras validações
+- A validação em paralelo melhora a performance, mas pode gerar muitas requisições simultâneas (considerar rate limiting se necessário)
 
 ---
 
@@ -1175,8 +1358,12 @@ const getFriendlyErrorMessage = (error) => {
 - [ ] Adicionar suporte a `filter_unavailable` em `productService.js`
 - [ ] Adicionar função `simulateProductCapacity()` em `productService.js`
 - [ ] Adicionar função `getProductCapacity()` em `productService.js`
+- [ ] Adicionar função `validateProductStockWithCapacity()` em `productService.js`
+- [ ] Adicionar função `filterProductsWithStock()` em `productService.js`
 - [ ] Modificar tela de listagem para usar `filter_unavailable=true`
+- [ ] Modificar função `loadProducts()` para validar estoque antes de exibir
 - [ ] Adicionar badges de estoque nos cards de produtos
+- [ ] Melhorar função `renderStockBadge()` para calcular status baseado em `max_quantity`
 - [ ] Adicionar estilos para badges de estoque
 
 ### **✅ Etapa 2: Montagem do Produto**
@@ -1218,33 +1405,47 @@ const getFriendlyErrorMessage = (error) => {
 
 **Regra:** O estoque deve ser validado em múltiplas camadas:
 
-1. **Listagem:** Filtrar produtos com `capacity < 1`
-2. **Montagem:** Validar capacidade dinamicamente ao alterar quantidade/extras
-3. **Adicionar à Cesta:** Validar antes de adicionar (frontend + backend)
-4. **Checkout:** Revalidar todos os itens antes de finalizar (frontend + backend)
+1. **Listagem (API):** Filtrar produtos com `filter_unavailable=true`
+2. **Listagem (Frontend):** Validar estoque de cada produto antes de exibir usando `validateProductStockWithCapacity()`
+3. **Montagem:** Validar capacidade dinamicamente ao alterar quantidade/extras
+4. **Adicionar à Cesta:** Validar antes de adicionar (frontend + backend)
+5. **Checkout:** Revalidar todos os itens antes de finalizar (frontend + backend)
 
 **Implementação:**
 
 ```javascript
 // Exemplo de validação em cada etapa
-// 1. Listagem
-const products = await getAllProducts({ filter_unavailable: true });
+// 1. Listagem (API)
+const response = await getAllProducts({ filter_unavailable: true });
 
-// 2. Montagem (com debounce)
+// 2. Listagem (Frontend - Validação de Exibição)
+const activeProducts = response.items.filter(p => p.is_active);
+const validatedProducts = await filterProductsWithStock(activeProducts);
+// validatedProducts agora contém apenas produtos com estoque e inclui availability_status
+
+// 3. Montagem (com debounce)
 debouncedUpdateProductCapacity(false);
 
-// 3. Adicionar à cesta (imediato)
+// 4. Adicionar à cesta (imediato)
 const capacity = await updateProductCapacity(false, true);
 if (capacity.max_quantity < quantity) {
   // Bloquear adição
 }
 
-// 4. Checkout (preventivo)
+// 5. Checkout (preventivo)
 const validation = await validateStockBeforeCheckout();
 if (!validation.valid) {
   // Oferecer remover itens
 }
 ```
+
+**Regras de Validação de Exibição:**
+
+- **Critérios de Disponibilidade:** Produto só é exibido se `is_available === true` E `max_quantity >= 1`
+- **Validação em Paralelo:** Usar `Promise.allSettled` para validar múltiplos produtos simultaneamente
+- **Enriquecimento de Dados:** Adicionar `availability_status` e `max_quantity` aos produtos validados
+- **Tratamento de Erros:** Em caso de erro na validação, considerar produto indisponível (não exibir)
+- **Dupla Validação:** Validar tanto na API (`filter_unavailable=true`) quanto no frontend para garantir segurança
 
 ### **2. Regras de Cesta**
 
@@ -1365,8 +1566,15 @@ const onInsufficientStock = (error) => {
 
 ### **Teste 1: Listagem de Produtos**
 - [ ] Verificar que apenas produtos com capacidade ≥ 1 são exibidos
-- [ ] Verificar badges de estoque limitado/baixo
-- [ ] Verificar que produtos indisponíveis não aparecem
+- [ ] Verificar que produtos são validados antes de serem exibidos
+- [ ] Verificar que `validateProductStockWithCapacity()` é chamada para cada produto
+- [ ] Verificar que `filterProductsWithStock()` filtra produtos sem estoque
+- [ ] Verificar que `availability_status` e `max_quantity` são adicionados aos produtos validados
+- [ ] Verificar badges de estoque limitado/baixo (baseado em `availability_status` ou `max_quantity`)
+- [ ] Verificar cálculo automático de badge quando `availability_status` não está presente
+- [ ] Verificar que produtos indisponíveis não aparecem (mesmo se passarem pelo filtro da API)
+- [ ] Verificar tratamento de erros (produtos com erro na validação não são exibidos)
+- [ ] Verificar validação em paralelo (performance com múltiplos produtos)
 - [ ] Testar cache (produtos devem atualizar após 60s)
 
 ### **Teste 2: Montagem de Produto**
@@ -1414,11 +1622,14 @@ const onInsufficientStock = (error) => {
 1. **Cache:** O cache de produtos deve ter TTL curto (60s) para refletir mudanças de estoque
 2. **Reservas Temporárias:** O backend já cria reservas temporárias ao adicionar ao carrinho (TTL ~10 min)
 3. **Validação Dupla:** Sempre validar no frontend (UX) e no backend (segurança)
-4. **Mensagens:** Usar mensagens do backend quando disponíveis (já incluem detalhes de conversão de unidades)
-5. **Performance:** Usar debounce (500ms) para evitar muitas chamadas à API durante interações rápidas
-6. **Loading States:** Sempre mostrar feedback visual durante operações assíncronas
-7. **Tratamento de Erros:** Tratar especificamente erros de estoque (INSUFFICIENT_STOCK)
-8. **Sincronização:** Sempre sincronizar carrinho com servidor (não armazenar itens localmente)
+4. **Validação de Exibição:** Produtos devem ser validados antes de serem exibidos usando `validateProductStockWithCapacity()` e `filterProductsWithStock()`
+5. **Enriquecimento de Dados:** Produtos validados devem ter `availability_status` e `max_quantity` adicionados para uso em badges e outras validações
+6. **Validação em Paralelo:** Usar `Promise.allSettled` para validar múltiplos produtos simultaneamente, mas considerar rate limiting se necessário
+7. **Mensagens:** Usar mensagens do backend quando disponíveis (já incluem detalhes de conversão de unidades)
+8. **Performance:** Usar debounce (500ms) para evitar muitas chamadas à API durante interações rápidas
+9. **Loading States:** Sempre mostrar feedback visual durante operações assíncronas (incluindo validação de estoque)
+10. **Tratamento de Erros:** Tratar especificamente erros de estoque (INSUFFICIENT_STOCK) e considerar produtos com erro na validação como indisponíveis
+11. **Sincronização:** Sempre sincronizar carrinho com servidor (não armazenar itens localmente)
 
 ---
 
@@ -2676,5 +2887,5 @@ import DetalhesPedido from './screens/detalhesPedido';
 
 **Data:** 2025-01-27  
 **Autor:** Sistema de Integração  
-**Versão:** 1.1 (Atualizado com Histórico e Detalhes)
+**Versão:** 1.2 (Atualizado com Validações de Exibição de Produtos)
 
