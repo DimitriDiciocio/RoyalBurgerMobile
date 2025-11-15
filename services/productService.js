@@ -309,15 +309,19 @@ export const getMostOrderedProducts = async (options = {}) => {
 
 /**
  * Obtém produtos recentemente adicionados (novidades).
- * @param {object} options - Opções de paginação
+ * @param {object} options - Opções de paginação e período
+ * @param {number} options.page - Número da página (padrão: 1)
+ * @param {number} options.page_size - Tamanho da página (padrão: 10)
+ * @param {number} options.days - Período em dias para considerar como novidade (padrão: 30)
  * @returns {Promise<object>} - Lista de produtos recentemente adicionados
  */
 export const getRecentlyAddedProducts = async (options = {}) => {
   try {
     console.log("Obtendo produtos recentemente adicionados com opções:", options);
-    const { page = 1, page_size = 10 } = options;
+    const { page = 1, page_size = 10, days = 30 } = options;
+    // ALTERAÇÃO: Passa parâmetro days para API filtrar produtos criados no período
     const response = await api.get("/products/recently-added", {
-      params: { page, page_size },
+      params: { page, page_size, days },
     });
     return response.data;
   } catch (error) {

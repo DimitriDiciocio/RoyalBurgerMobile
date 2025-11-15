@@ -127,6 +127,7 @@ Garantir que o RoyalBurgerMobile siga **exatamente** o mesmo fluxo de pedido do 
 | **Tela de Pagamento** | ✅ Implementado | `screens/pagamento.js` | Formulário de checkout |
 | **Criar Pedido** | ✅ Implementado | `services/orderService.js` | Cria pedido via API |
 | **Validação de Carrinho** | ✅ Parcial | `services/cartService.js` | `validateCartForOrder` existe, mas não valida estoque preventivamente |
+| **Seção de Novidades** | ⚠️ Parcial | `App.js`, `services/productService.js` | Carrega produtos, mas não usa validação de tempo |
 
 ### **❌ O QUE FALTA NO MOBILE**
 
@@ -145,6 +146,9 @@ Garantir que o RoyalBurgerMobile siga **exatamente** o mesmo fluxo de pedido do 
 | **Validação preventiva no checkout** | 🔴 Alta | Usuário descobre problema só no final |
 | **Remover itens sem estoque automaticamente** | 🟡 Média | UX: processo manual |
 | **Tratamento específico de INSUFFICIENT_STOCK** | 🔴 Alta | Erros genéricos, sem contexto |
+| **Validação de tempo para novidades** | 🔴 Alta | Não filtra por período de criação |
+| **Usar parâmetro days na API de novidades** | 🔴 Alta | Não passa período configurável |
+| **Validar estoque de produtos em novidades** | 🔴 Alta | Produtos sem estoque podem aparecer |
 
 ### **⚠️ DIVERGÊNCIAS E INCONSISTÊNCIAS**
 
@@ -158,10 +162,208 @@ Garantir que o RoyalBurgerMobile siga **exatamente** o mesmo fluxo de pedido do 
 | **Validação no checkout** | ✅ Preventiva | ⚠️ Apenas backend | UX ruim (erro no final) |
 | **Tratamento de erro** | ✅ Específico | ⚠️ Genérico | Mensagens pouco claras |
 | **Debounce** | ✅ 500ms | ❌ Não implementado | Performance inferior |
+| **Novidades com validação de tempo** | ✅ Implementado | ❌ Não usa parâmetro days | Produtos antigos podem aparecer |
+| **Validação de estoque em novidades** | ✅ Implementado | ❌ Não aplicado | Produtos sem estoque podem aparecer |
 
 ---
 
 ## 📋 **ROTEIRO DE IMPLEMENTAÇÃO DETALHADO**
+
+---
+
+## 🎯 **ETAPA 0: Seção de Novidades com Validação de Tempo**
+
+### **0.1 API de Novidades**
+
+**Endpoint:** `GET /api/products/recently-added`
+
+**Parâmetros:**
+- `page` (opcional): Número da página (padrão: 1)
+- `page_size` (opcional): Tamanho da página (padrão: 10)
+- `days` (opcional): Período em dias para considerar como novidade (padrão: 30 dias)
+
+**Comportamento:**
+- A API filtra produtos criados nos últimos N dias usando o campo `CREATED_AT` da tabela `PRODUCTS`
+- Retorna apenas produtos ativos (`IS_ACTIVE = TRUE`) criados no período especificado
+- Ordena por `CREATED_AT DESC` (mais recentes primeiro)
+- Produtos sem `CREATED_AT` (antigos) não são considerados novidades
+
+**Resposta:**
+```json
+{
+  "items": [
+    {
+      "id": 123,
+      "name": "Produto Exemplo",
+      "description": "Descrição",
+      "price": "29.90",
+      "image_url": "/api/uploads/products/123.jpeg",
+      "preparation_time_minutes": 15,
+      "category_id": 1,
+      "category_name": "Burgers",
+      "created_at": "2024-01-27 10:30:00",
+      "is_active": true,
+      "image_hash": "abc123..."
+    }
+  ],
+  "pagination": {
+    "total": 10,
+    "page": 1,
+    "page_size": 10,
+    "total_pages": 1
+  }
+}
+```
+
+### **0.2 Modificar `services/productService.js`**
+
+**Já implementado:** A função `getRecentlyAddedProducts` já foi atualizada para aceitar o parâmetro `days`.
+
+**Confirmar implementação:**
+```javascript
+/**
+ * Obtém produtos recentemente adicionados (novidades).
+ * @param {object} options - Opções de paginação e período
+ * @param {number} options.page - Número da página (padrão: 1)
+ * @param {number} options.page_size - Tamanho da página (padrão: 10)
+ * @param {number} options.days - Período em dias para considerar como novidade (padrão: 30)
+ * @returns {Promise<object>} - Lista de produtos recentemente adicionados
+ */
+export const getRecentlyAddedProducts = async (options = {}) => {
+  try {
+    console.log("Obtendo produtos recentemente adicionados com opções:", options);
+    const { page = 1, page_size = 10, days = 30 } = options;
+    // ALTERAÇÃO: Passa parâmetro days para API filtrar produtos criados no período
+    const response = await api.get("/products/recently-added", {
+      params: { page, page_size, days },
+    });
+    return response.data;
+  } catch (error) {
+    console.log("Erro ao obter produtos recentemente adicionados:", error);
+    throw error;
+  }
+};
+```
+
+### **0.3 Adicionar Constante de Configuração**
+
+**Criar arquivo de configuração ou adicionar em `App.js` ou arquivo de constantes:**
+
+```javascript
+// ALTERAÇÃO: Período em dias para considerar produtos como novidades (padrão: 30 dias)
+// Produtos criados nos últimos N dias serão exibidos na seção de novidades
+export const RECENTLY_ADDED_DAYS = 30;
+```
+
+### **0.4 Modificar Carregamento de Novidades em `App.js`**
+
+**Localizar seção que carrega novidades (provavelmente em `loadHomeSections`):**
+
+```javascript
+// ALTERAÇÃO: Importar constante e função de novidades
+import { RECENTLY_ADDED_DAYS } from './config/constants'; // ou de onde estiver definido
+import { getRecentlyAddedProducts, filterProductsWithStock } from './services/productService';
+
+// ALTERAÇÃO: Função para carregar produtos recentemente adicionados (novidades)
+const loadRecentlyAddedProducts = async () => {
+  try {
+    // ALTERAÇÃO: Chamar API com parâmetro days para filtrar por período
+    const response = await getRecentlyAddedProducts({
+      page: 1,
+      page_size: 10,
+      days: RECENTLY_ADDED_DAYS // Usar constante configurável
+    });
+    
+    const allProducts = response?.items || [];
+    
+    // ALTERAÇÃO: Validar estoque de cada produto antes de exibir
+    // Garante que apenas produtos com estoque disponível aparecem em novidades
+    const validatedProducts = await filterProductsWithStock(allProducts);
+    
+    // ALTERAÇÃO: Formatar produtos para exibição
+    const formattedProducts = validatedProducts
+      .map(product => formatProductForCard(product))
+      .filter(product => product !== null); // Remove produtos indisponíveis
+    
+    return formattedProducts;
+  } catch (error) {
+    // ALTERAÇÃO: Removido console.error em produção
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao carregar novidades:', error);
+    }
+    return [];
+  }
+};
+
+// ALTERAÇÃO: Integrar no carregamento de seções da home
+const loadHomeSections = async () => {
+  try {
+    setLoadingSections(true);
+    
+    // Carregar produtos padrão (existentes)
+    // ... código existente ...
+    
+    // ALTERAÇÃO: Carregar produtos recentemente adicionados (novidades)
+    const recentlyAddedProducts = await loadRecentlyAddedProducts();
+    setComboData(recentlyAddedProducts); // ou setRecentlyAddedData se tiver estado separado
+    
+    // ... resto do código ...
+  } catch (error) {
+    // ... tratamento de erro ...
+  } finally {
+    setLoadingSections(false);
+  }
+};
+```
+
+### **0.5 Validação de Estoque para Novidades**
+
+**CRÍTICO:** Produtos em novidades devem seguir as mesmas regras de validação de estoque da listagem principal.
+
+**Regras:**
+1. **Filtro da API:** Produtos já são filtrados por `filter_unavailable` (se aplicável) e período de tempo
+2. **Validação Frontend:** Validar estoque de cada produto usando `filterProductsWithStock()` antes de exibir
+3. **Badges de Estoque:** Adicionar badges de estoque limitado/baixo nos cards de novidades
+4. **Cache:** Usar cache curto (60s) para refletir mudanças de estoque
+
+**Implementação:**
+
+```javascript
+// ALTERAÇÃO: Validar estoque e adicionar availability_status aos produtos de novidades
+const validatedProducts = await filterProductsWithStock(recentlyAddedProducts);
+
+// ALTERAÇÃO: Renderizar badges de estoque nos cards (mesmo componente usado na listagem principal)
+{renderStockBadge(product)}
+```
+
+### **0.6 Tratamento de Erros e Estados Vazios**
+
+```javascript
+// ALTERAÇÃO: Tratamento quando não há novidades
+if (!recentlyAddedProducts || recentlyAddedProducts.length === 0) {
+  // Opção 1: Ocultar seção de novidades
+  setComboData([]);
+  
+  // Opção 2: Exibir mensagem amigável
+  // setRecentlyAddedMessage('Nenhuma novidade no momento. Volte em breve!');
+  
+  // Opção 3: Exibir produtos mais pedidos como fallback
+  // setComboData(mostOrderedProducts);
+}
+```
+
+### **0.7 Checklist de Implementação**
+
+- [ ] Confirmar que `getRecentlyAddedProducts` aceita parâmetro `days`
+- [ ] Adicionar constante `RECENTLY_ADDED_DAYS = 30` em arquivo de configuração
+- [ ] Modificar `loadHomeSections` ou função equivalente para chamar `getRecentlyAddedProducts` com `days`
+- [ ] Adicionar validação de estoque usando `filterProductsWithStock()` antes de exibir
+- [ ] Adicionar badges de estoque nos cards de novidades
+- [ ] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem)
+- [ ] Testar que produtos antigos (sem `CREATED_AT` ou fora do período) não aparecem
+- [ ] Testar que apenas produtos com estoque aparecem
+- [ ] Verificar que produtos são ordenados por data (mais recentes primeiro)
 
 ---
 
@@ -1354,6 +1556,18 @@ const getFriendlyErrorMessage = (error) => {
 
 ## 📋 **CHECKLIST DE IMPLEMENTAÇÃO**
 
+### **✅ Etapa 0: Seção de Novidades**
+- [ ] Confirmar que `getRecentlyAddedProducts` aceita parâmetro `days`
+- [ ] Adicionar constante `RECENTLY_ADDED_DAYS = 30` em arquivo de configuração
+- [ ] Modificar função de carregamento de novidades para passar `days` na API
+- [ ] Adicionar validação de estoque usando `filterProductsWithStock()` antes de exibir
+- [ ] Adicionar badges de estoque nos cards de novidades
+- [ ] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem)
+- [ ] Testar que produtos antigos (sem `CREATED_AT` ou fora do período) não aparecem
+- [ ] Testar que apenas produtos com estoque aparecem
+- [ ] Verificar que produtos são ordenados por data (mais recentes primeiro)
+- [ ] Verificar que cache é invalidado corretamente
+
 ### **✅ Etapa 1: Listagem de Produtos**
 - [ ] Adicionar suporte a `filter_unavailable` em `productService.js`
 - [ ] Adicionar função `simulateProductCapacity()` em `productService.js`
@@ -1563,6 +1777,20 @@ const onInsufficientStock = (error) => {
 ---
 
 ## 🧪 **CHECKLIST DE TESTES FUNCIONAIS**
+
+### **Teste 0: Seção de Novidades**
+- [ ] Verificar que produtos criados nos últimos 30 dias aparecem
+- [ ] Verificar que produtos criados há mais de 30 dias não aparecem
+- [ ] Verificar que produtos sem `CREATED_AT` não aparecem
+- [ ] Verificar que apenas produtos com estoque disponível aparecem
+- [ ] Verificar que produtos são ordenados por data (mais recentes primeiro)
+- [ ] Verificar badges de estoque limitado/baixo em produtos de novidades
+- [ ] Testar alteração do período (ex: `days=7` para última semana)
+- [ ] Verificar estado vazio quando não há novidades
+- [ ] Verificar que validação de estoque funciona corretamente
+- [ ] Verificar cache e invalidação após 60s
+- [ ] Testar paginação (se implementada)
+- [ ] Verificar tratamento de erros da API
 
 ### **Teste 1: Listagem de Produtos**
 - [ ] Verificar que apenas produtos com capacidade ≥ 1 são exibidos
@@ -2873,6 +3101,7 @@ import DetalhesPedido from './screens/detalhesPedido';
 
 ## 🔄 **PRÓXIMOS PASSOS**
 
+0. **Implementar Etapa 0 (Seção de Novidades com Validação de Tempo)**
 1. Implementar Etapa 1 (Listagem)
 2. Implementar Etapa 2 (Montagem)
 3. Implementar Etapa 3 (Cesta)
@@ -2887,5 +3116,48 @@ import DetalhesPedido from './screens/detalhesPedido';
 
 **Data:** 2025-01-27  
 **Autor:** Sistema de Integração  
-**Versão:** 1.2 (Atualizado com Validações de Exibição de Produtos)
+**Versão:** 1.3 (Atualizado com Validação de Tempo para Novidades)
+
+---
+
+## 📝 **NOTAS SOBRE VALIDAÇÃO DE TEMPO EM NOVIDADES**
+
+### **Como Funciona**
+
+1. **Backend:**
+   - Tabela `PRODUCTS` possui campo `CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
+   - API filtra produtos onde `CREATED_AT >= (CURRENT_TIMESTAMP - N dias)`
+   - Produtos sem `CREATED_AT` (NULL) não são considerados novidades
+   - Ordenação por `CREATED_AT DESC` (mais recentes primeiro)
+
+2. **Frontend Mobile:**
+   - Deve passar parâmetro `days` na chamada da API (padrão: 30 dias)
+   - Deve validar estoque de cada produto antes de exibir (usando `filterProductsWithStock()`)
+   - Deve exibir badges de estoque quando aplicável
+   - Deve tratar estado vazio quando não há novidades
+
+3. **Configuração:**
+   - Período padrão: 30 dias (configurável via constante `RECENTLY_ADDED_DAYS`)
+   - Produtos criados nos últimos N dias são considerados novidades
+   - Produtos fora do período não aparecem na seção
+
+### **Exemplos de Uso**
+
+```javascript
+// Últimos 30 dias (padrão)
+const novidades = await getRecentlyAddedProducts({ days: 30 });
+
+// Últimos 7 dias
+const novidadesSemana = await getRecentlyAddedProducts({ days: 7 });
+
+// Últimos 60 dias
+const novidadesMes = await getRecentlyAddedProducts({ days: 60 });
+```
+
+### **Importante**
+
+- A validação de tempo é feita no **backend**, mas o **frontend** deve validar estoque
+- Produtos antigos (sem `CREATED_AT`) nunca aparecem como novidades
+- A validação de estoque garante que apenas produtos disponíveis são exibidos
+- Cache deve ser curto (60s) para refletir mudanças de estoque e novos produtos
 
