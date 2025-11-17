@@ -27,9 +27,10 @@ import Pagamento from "./screens/pagamento";
 import React, { useEffect, useState } from 'react';
 import { isAuthenticated, getStoredUserData, logout, getCurrentUserProfile } from "./services";
 import { getLoyaltyBalance, getCustomerAddresses } from "./services/customerService";
-import { getAllProducts, getMostOrderedProducts, getRecentlyAddedProducts } from "./services/productService";
-import { getAllPromotions } from "./services/promotionService";
+import { getAllProducts, getMostOrderedProducts, getRecentlyAddedProducts, filterProductsWithStock } from "./services/productService";
+import { getAllPromotions, getPromotionByProductId } from "./services/promotionService";
 import { BasketProvider, useBasket } from "./contexts/BasketContext";
+import { RECENTLY_ADDED_DAYS } from "./config/constants";
 import api from "./services/api";
 
 const Stack = createNativeStackNavigator();
@@ -48,6 +49,8 @@ function HomeScreen({ navigation }) {
     const [promotionsData, setPromotionsData] = useState([]);
     const [comboData, setComboData] = useState([]);
     const [loadingSections, setLoadingSections] = useState(true);
+    // ALTERAÇÃO: Estado para armazenar maior tempo de validade das promoções
+    const [promoLongestExpiry, setPromoLongestExpiry] = useState(null);
 
     const fetchEnderecos = async (userId) => {
         try {
@@ -173,8 +176,30 @@ function HomeScreen({ navigation }) {
         }
         
         const basePrice = parseFloat(product.price || 0);
-        const finalPrice = promotion ? (basePrice - parseFloat(promotion.discount_value || 0)) : basePrice;
+        
+        // ALTERAÇÃO: Calcular desconto corretamente usando discount_percentage ou discount_value
+        let finalPrice = basePrice;
+        let discountPercentage = null;
+        let discountValue = 0;
+        
+        if (promotion) {
+            // Priorizar discount_percentage se disponível
+            if (promotion.discount_percentage && parseFloat(promotion.discount_percentage) > 0) {
+                discountPercentage = parseFloat(promotion.discount_percentage);
+                finalPrice = basePrice * (1 - discountPercentage / 100);
+                discountValue = basePrice - finalPrice;
+            } else if (promotion.discount_value && parseFloat(promotion.discount_value) > 0) {
+                discountValue = parseFloat(promotion.discount_value);
+                finalPrice = basePrice - discountValue;
+                // Calcular percentual para exibição
+                if (basePrice > 0) {
+                    discountPercentage = (discountValue / basePrice) * 100;
+                }
+            }
+        }
+        
         const priceFormatted = `R$ ${finalPrice.toFixed(2).replace('.', ',')}`;
+        const originalPriceFormatted = `R$ ${basePrice.toFixed(2).replace('.', ',')}`;
         
         // Monta URL da imagem - usa o baseURL da API
         let imageUrl = null;
@@ -202,16 +227,141 @@ function HomeScreen({ navigation }) {
         const safeDescription = (product.description || 'Descrição rápida...').substring(0, MAX_DESCRIPTION_LENGTH);
         
         return {
+            ...product, // Inclui todos os dados originais para uso na tela de produto
+            // ALTERAÇÃO: Sobrescrever campos formatados após o spread para garantir prioridade
             id: product.id,
             title: safeName,
             description: safeDescription,
-            price: priceFormatted,
+            price: priceFormatted, // ALTERAÇÃO: Preço final formatado (com desconto se houver) - deve vir depois do spread
+            originalPrice: promotion ? originalPriceFormatted : null, // Preço original (apenas se houver promoção)
+            discountPercentage: discountPercentage ? Math.round(discountPercentage) : null, // Percentual de desconto arredondado
             deliveryTime: `${product.preparation_time_minutes || 30} - ${(product.preparation_time_minutes || 30) + 10} min`,
             deliveryPrice: "R$ 5,00", // Valor fixo por enquanto, pode vir das settings depois
             imageSource: imageUrl ? { uri: imageUrl } : null,
             expires_at: promotion?.expires_at || null, // Para o timer de promoção
-            ...product // Inclui todos os dados originais para uso na tela de produto
+            promotion: promotion, // ALTERAÇÃO: Passa objeto completo da promoção
+            // ALTERAÇÃO: Preservar availability_status e max_quantity para badges
+            availability_status: product.availability_status,
+            availabilityStatus: product.availability_status, // Compatibilidade com diferentes nomes
+            max_quantity: product.max_quantity
         };
+    };
+
+    // ALTERAÇÃO: Função para carregar produtos recentemente adicionados (novidades)
+    const loadRecentlyAddedProducts = async () => {
+        try {
+            // ALTERAÇÃO: Chamar API com parâmetro days para filtrar por período
+            const response = await getRecentlyAddedProducts({
+                page: 1,
+                page_size: 10,
+                days: RECENTLY_ADDED_DAYS // Usar constante configurável
+            });
+            
+            const allProducts = response?.items || [];
+            
+            // ALTERAÇÃO: Validar estoque de cada produto antes de exibir
+            // Garante que apenas produtos com estoque disponível aparecem em novidades
+            const validatedProducts = await filterProductsWithStock(allProducts);
+            
+            // ALTERAÇÃO: Formatar produtos para exibição
+            const formattedProducts = validatedProducts
+                .map(product => formatProductForCard(product))
+                .filter(product => product !== null); // Remove produtos indisponíveis
+            
+            return formattedProducts;
+        } catch (error) {
+            // ALTERAÇÃO: Removido console.error em produção
+            const isDev = __DEV__;
+            if (isDev) {
+                console.error('Erro ao carregar novidades:', error);
+            }
+            return [];
+        }
+    };
+
+    // ALTERAÇÃO: Função para carregar promoções especiais
+    const loadPromotionsSection = async () => {
+        try {
+            // Buscar promoções ativas
+            const response = await getAllPromotions({ include_expired: false });
+            const promotions = response?.items || response || [];
+            
+            if (!promotions || promotions.length === 0) {
+                return { products: [], longestExpiry: null };
+            }
+            
+            // Filtrar promoções expiradas e produtos inativos
+            const now = new Date();
+            const validPromotions = promotions
+                .filter(promo => {
+                    // Verificar se produto está ativo
+                    if (!promo.product || !promo.product.is_active) {
+                        return false;
+                    }
+                    // Verificar se promoção não está expirada
+                    if (promo.expires_at) {
+                        const expiresAt = new Date(promo.expires_at);
+                        if (expiresAt <= now) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .slice(0, 10); // Limitar a 10 promoções
+            
+            // Preparar produtos com dados de promoção
+            const productsWithPromotion = validPromotions.map(promo => ({
+                product: {
+                    ...promo.product,
+                    id: promo.product_id || promo.product?.id,
+                    price: promo.product.price,
+                    image_url: promo.product.image_url,
+                },
+                promotion: promo
+            }));
+            
+            // ALTERAÇÃO: Validar estoque de produtos com promoção
+            const productsToDisplay = productsWithPromotion.map(({ product }) => product);
+            const productsWithStock = await filterProductsWithStock(productsToDisplay);
+            
+            // Combinar produtos validados com suas promoções
+            const availableProductsWithPromotion = productsWithPromotion
+                .map(({ product, promotion }) => {
+                    const validatedProduct = productsWithStock.find(p => p.id === product.id);
+                    if (validatedProduct) {
+                        return { product: validatedProduct, promotion };
+                    }
+                    return null;
+                })
+                .filter(item => item !== null);
+            
+            // ALTERAÇÃO: Encontrar a promoção com maior tempo de validade para o cronômetro
+            const promotionWithLongestValidity = availableProductsWithPromotion
+                .filter(({ promotion }) => promotion && promotion.expires_at)
+                .reduce((longest, current) => {
+                    if (!longest) return current;
+                    const longestExpiry = new Date(longest.promotion.expires_at);
+                    const currentExpiry = new Date(current.promotion.expires_at);
+                    return currentExpiry > longestExpiry ? current : longest;
+                }, null);
+            
+            // Formatar produtos para exibição
+            const formattedProducts = availableProductsWithPromotion
+                .map(({ product, promotion }) => formatProductForCard(product, promotion))
+                .filter(product => product !== null);
+            
+            return {
+                products: formattedProducts,
+                longestExpiry: promotionWithLongestValidity?.promotion?.expires_at || null
+            };
+        } catch (error) {
+            // ALTERAÇÃO: Removido console.error em produção
+            const isDev = __DEV__;
+            if (isDev) {
+                console.error('Erro ao carregar promoções:', error);
+            }
+            return { products: [], longestExpiry: null };
+        }
     };
 
     // Carrega dados das seções da home (seguindo o padrão do web)
@@ -220,26 +370,18 @@ function HomeScreen({ navigation }) {
             try {
                 setLoadingSections(true);
                 
-                // No web, todas as seções horizontais recebem os mesmos produtos (primeiros 6)
-                // Carregar todos os produtos ativos
+                // Carregar produtos mais pedidos
                 try {
-                    console.log('[App.js] Carregando produtos...');
+                    console.log('[App.js] Carregando produtos mais pedidos...');
+                    // ALTERAÇÃO: Filtrar produtos indisponíveis na API
                     const allProductsResponse = await getAllProducts({ 
                         page_size: 1000,
-                        include_inactive: false 
-                    });
-                    console.log('[App.js] Resposta recebida:', {
-                        hasResponse: !!allProductsResponse,
-                        hasItems: !!allProductsResponse?.items,
-                        itemsType: Array.isArray(allProductsResponse?.items) ? 'array' : typeof allProductsResponse?.items,
-                        itemsLength: allProductsResponse?.items?.length || 0,
-                        responseType: Array.isArray(allProductsResponse) ? 'array' : typeof allProductsResponse,
-                        responseKeys: allProductsResponse ? Object.keys(allProductsResponse) : []
+                        include_inactive: false,
+                        filter_unavailable: true // Filtrar produtos sem estoque na API
                     });
                     const allProducts = allProductsResponse?.items || (Array.isArray(allProductsResponse) ? allProductsResponse : []);
-                    console.log('[App.js] Produtos processados:', allProducts.length);
                     
-                    // Filtrar apenas produtos ativos (dupla verificação)
+                    // ALTERAÇÃO: Filtrar apenas produtos ativos
                     const activeProducts = allProducts.filter((product) => {
                         const isActive = 
                             product.is_active !== false &&
@@ -248,45 +390,50 @@ function HomeScreen({ navigation }) {
                         return isActive;
                     });
                     
-                    // Pegar os primeiros 6 produtos para todas as seções horizontais (como no web)
-                    const firstProducts = activeProducts.slice(0, 6);
+                    // ALTERAÇÃO: Validar estoque de cada produto e adicionar availability_status
+                    const validatedProducts = await filterProductsWithStock(activeProducts);
                     
-                    // Formatar produtos para as seções
-                    const formattedProducts = firstProducts
-                        .map(product => formatProductForCard(product))
-                        .filter(product => product !== null); // Remove produtos indisponíveis
+                    // Pegar os primeiros 6 produtos para "Os mais pedidos"
+                    const firstProducts = validatedProducts.slice(0, 6);
                     
-                    // Todas as seções horizontais recebem os mesmos produtos (como no web)
+                    // ALTERAÇÃO: Buscar promoções para os produtos mais pedidos
+                    const productsWithPromotions = await Promise.allSettled(
+                        firstProducts.map(async (product) => {
+                            let promotion = null;
+                            try {
+                                if (product.id) {
+                                    promotion = await getPromotionByProductId(product.id);
+                                }
+                            } catch (error) {
+                                // Ignora erros ao buscar promoção (produto pode não ter promoção)
+                            }
+                            return { product, promotion };
+                        })
+                    );
+                    
+                    // Formatar produtos para as seções com suas promoções
+                    const formattedProducts = productsWithPromotions
+                        .filter(result => result.status === 'fulfilled')
+                        .map(result => {
+                            const { product, promotion } = result.value;
+                            return formatProductForCard(product, promotion);
+                        })
+                        .filter(product => product !== null);
+                    
                     setMostOrderedData(formattedProducts);
-                    setComboData(formattedProducts);
-                    
-                    // Para promoções, tentar carregar promoções reais, mas usar os mesmos produtos como fallback
-                    try {
-                        const promotionsResponse = await getAllPromotions();
-                        const promotions = promotionsResponse.items || promotionsResponse || [];
-                        if (promotions.length > 0) {
-                            const formattedPromotions = promotions
-                                .map(promotion => {
-                                    const product = promotion.product || promotion;
-                                    return formatProductForCard(product, promotion);
-                                })
-                                .filter(product => product !== null);
-                            setPromotionsData(formattedPromotions);
-                        } else {
-                            // Se não houver promoções, usar os mesmos produtos
-                            setPromotionsData(formattedProducts);
-                        }
-                    } catch (error) {
-                        console.log('Erro ao carregar promoções, usando produtos padrão:', error);
-                        // Em caso de erro, usar os mesmos produtos
-                        setPromotionsData(formattedProducts);
-                    }
                 } catch (error) {
-                    console.log('Erro ao carregar produtos:', error);
+                    console.log('Erro ao carregar produtos mais pedidos:', error);
                     setMostOrderedData([]);
-                    setPromotionsData([]);
-                    setComboData([]);
                 }
+                
+                // ALTERAÇÃO: Carregar produtos recentemente adicionados (novidades)
+                const recentlyAddedProducts = await loadRecentlyAddedProducts();
+                setComboData(recentlyAddedProducts);
+                
+                // ALTERAÇÃO: Carregar promoções especiais
+                const promotionsData = await loadPromotionsSection();
+                setPromotionsData(promotionsData.products);
+                setPromoLongestExpiry(promotionsData.longestExpiry);
             } catch (error) {
                 console.log('Erro ao carregar seções da home:', error);
             } finally {
@@ -297,10 +444,10 @@ function HomeScreen({ navigation }) {
         loadHomeSections();
     }, [isFocused]);
 
-    // Calcula tempo de expiração da primeira promoção (se houver)
+    // ALTERAÇÃO: Calcula tempo de expiração da promoção com maior validade
     const getPromoEndTime = () => {
-        if (promotionsData.length > 0 && promotionsData[0].expires_at) {
-            return new Date(promotionsData[0].expires_at);
+        if (promoLongestExpiry) {
+            return new Date(promoLongestExpiry);
         }
         // Fallback: 1 hora a partir de agora
         const defaultTime = new Date();
@@ -310,21 +457,20 @@ function HomeScreen({ navigation }) {
 
     const handlePromoExpire = () => {
         console.log('Promoção expirou!');
-        // Recarrega promoções quando uma expira
-        const loadPromotions = async () => {
+        // ALTERAÇÃO: Recarrega promoções quando uma expira
+        const reloadPromotions = async () => {
             try {
-                const promotionsResponse = await getAllPromotions();
-                const promotions = promotionsResponse.items || promotionsResponse || [];
-                const formattedPromotions = promotions.map(promotion => {
-                    const product = promotion.product || promotion;
-                    return formatProductForCard(product, promotion);
-                });
-                setPromotionsData(formattedPromotions);
+                const promotionsData = await loadPromotionsSection();
+                setPromotionsData(promotionsData.products);
+                setPromoLongestExpiry(promotionsData.longestExpiry);
             } catch (error) {
-                console.log('Erro ao recarregar promoções:', error);
+                const isDev = __DEV__;
+                if (isDev) {
+                    console.error('Erro ao recarregar promoções:', error);
+                }
             }
         };
-        loadPromotions();
+        reloadPromotions();
     };
 
     const handleLogout = async () => {

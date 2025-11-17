@@ -13,6 +13,8 @@ import {
 import { FontAwesome } from '@expo/vector-icons';
 import CardItemHorizontal from "./CardItemHorizontal";
 import { getAllCategories, getProductsByCategory } from '../services';
+import { filterProductsWithStock } from '../services/productService';
+import { getPromotionByProductId } from '../services/promotionService';
 import api from '../services/api';
 
 
@@ -77,7 +79,11 @@ export default function MenuCategory({
     const loadProductsForCategory = async (categoryId) => {
         try {
             setLoadingProducts(true);
-            const response = await getProductsByCategory(categoryId, { page_size: 50 });
+            // ALTERAÇÃO: Filtrar produtos indisponíveis na API
+            const response = await getProductsByCategory(categoryId, { 
+                page_size: 50,
+                filter_unavailable: true // Filtrar produtos sem estoque na API
+            });
             console.log(`[MenuCategory] Resposta da API para categoria ${categoryId}:`, {
                 hasResponse: !!response,
                 responseKeys: response ? Object.keys(response) : [],
@@ -106,9 +112,21 @@ export default function MenuCategory({
             }
             console.log(`[MenuCategory] Produtos extraídos para categoria ${categoryId}:`, products.length, 'produtos');
             
+            // ALTERAÇÃO: Filtrar apenas produtos ativos
+            const activeProducts = products.filter((product) => {
+                const isActive = product.is_active !== false && 
+                                product.is_active !== 0 && 
+                                product.is_active !== "false";
+                return isActive;
+            });
+            
+            // ALTERAÇÃO: Validar estoque de cada produto e adicionar availability_status
+            // Isso garante que produtos sem estoque não sejam exibidos mesmo se passarem pelo filtro da API
+            const validatedProducts = await filterProductsWithStock(activeProducts);
+            
             setProducts(prev => ({
                 ...prev,
-                [categoryId]: products
+                [categoryId]: validatedProducts
             }));
         } catch (error) {
             console.log('Erro ao carregar produtos da categoria:', error);
@@ -129,7 +147,11 @@ export default function MenuCategory({
             // Carrega produtos de todas as categorias em paralelo
             const productPromises = categories.map(async (category) => {
                 try {
-                    const response = await getProductsByCategory(category.id, { page_size: 50 });
+                    // ALTERAÇÃO: Filtrar produtos indisponíveis na API
+                    const response = await getProductsByCategory(category.id, { 
+                        page_size: 50,
+                        filter_unavailable: true // Filtrar produtos sem estoque na API
+                    });
                     console.log(`[MenuCategory] Resposta da API para categoria ${category.id}:`, {
                         hasResponse: !!response,
                         responseKeys: response ? Object.keys(response) : [],
@@ -158,9 +180,21 @@ export default function MenuCategory({
                     }
                     console.log(`[MenuCategory] Produtos extraídos para categoria ${category.id}:`, products.length, 'produtos');
                     
+                    // ALTERAÇÃO: Filtrar apenas produtos ativos
+                    const activeProducts = products.filter((product) => {
+                        const isActive = product.is_active !== false && 
+                                        product.is_active !== 0 && 
+                                        product.is_active !== "false";
+                        return isActive;
+                    });
+                    
+                    // ALTERAÇÃO: Validar estoque de cada produto e adicionar availability_status
+                    // Isso garante que produtos sem estoque não sejam exibidos mesmo se passarem pelo filtro da API
+                    const validatedProducts = await filterProductsWithStock(activeProducts);
+                    
                     return {
                         categoryId: category.id,
-                        products: products
+                        products: validatedProducts
                     };
                 } catch (error) {
                     console.log(`Erro ao carregar produtos da categoria ${category.id}:`, error);
@@ -198,6 +232,57 @@ export default function MenuCategory({
         };
     }, []);
 
+    // ALTERAÇÃO: Estado para armazenar promoções dos produtos
+    const [productPromotions, setProductPromotions] = useState({});
+
+    // ALTERAÇÃO: Buscar promoções para todos os produtos em um useEffect separado
+    useEffect(() => {
+        const fetchPromotions = async () => {
+            // Coletar todos os IDs de produtos únicos
+            const allProductIds = [];
+            Object.values(products).forEach(categoryProducts => {
+                if (Array.isArray(categoryProducts)) {
+                    categoryProducts.forEach(product => {
+                        if (product?.id && !allProductIds.includes(product.id)) {
+                            allProductIds.push(product.id);
+                        }
+                    });
+                }
+            });
+
+            if (allProductIds.length === 0) return;
+
+            // Buscar promoções para todos os produtos em paralelo
+            const promotionsMap = {};
+            const promotionsResults = await Promise.allSettled(
+                allProductIds.map(async (productId) => {
+                    try {
+                        const promotion = await getPromotionByProductId(productId);
+                        return { productId, promotion };
+                    } catch (error) {
+                        // Ignora erros ao buscar promoção (produto pode não ter promoção)
+                        return { productId, promotion: null };
+                    }
+                })
+            );
+
+            promotionsResults.forEach((result) => {
+                if (result.status === 'fulfilled') {
+                    const { productId, promotion } = result.value;
+                    if (promotion) {
+                        promotionsMap[productId] = promotion;
+                    }
+                }
+            });
+
+            setProductPromotions(promotionsMap);
+        };
+
+        if (Object.keys(products).length > 0) {
+            fetchPromotions();
+        }
+    }, [products]);
+
     // Transformar dados em lista plana usando dados reais da API
     const flattenedData = [];
     const dataToUse = categories;
@@ -233,33 +318,71 @@ export default function MenuCategory({
                 id: `header-${category.id}`
             });
 
+            // ALTERAÇÃO: Processar produtos com promoções do estado
             activeProducts.forEach((item) => {
-                // availability_status pode ser: 'available', 'low_stock', 'unavailable', 'unknown'
-                // Não filtramos produtos indisponíveis - eles serão exibidos com marcação visual
-                const availabilityStatus = item.availability_status || 'unknown';
+                const promotion = productPromotions[item.id] || null;
+                
+                // ALTERAÇÃO: availability_status já vem validado do filterProductsWithStock
+                // Produtos indisponíveis já foram filtrados, então todos aqui estão disponíveis
+                let availabilityStatus = item.availability_status || 'unknown';
+                
+                // ALTERAÇÃO: Se availability_status não estiver presente, calcular baseado em max_quantity
+                if (!availabilityStatus && item.max_quantity !== undefined && item.max_quantity !== null) {
+                    if (item.max_quantity <= 5) {
+                        availabilityStatus = 'limited';
+                    } else if (item.max_quantity <= 15) {
+                        availabilityStatus = 'low_stock';
+                    } else {
+                        availabilityStatus = 'available';
+                    }
+                }
                 
                 const imageUrl = item?.id
                     ? `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}`
                     : null;
                 
+                // ALTERAÇÃO: Calcular preço com desconto se houver promoção
+                const basePrice = parseFloat(item.price || 0);
+                let finalPrice = basePrice;
+                let discountPercentage = null;
+                
+                if (promotion) {
+                    // Priorizar discount_percentage se disponível
+                    if (promotion.discount_percentage && parseFloat(promotion.discount_percentage) > 0) {
+                        discountPercentage = parseFloat(promotion.discount_percentage);
+                        finalPrice = basePrice * (1 - discountPercentage / 100);
+                    } else if (promotion.discount_value && parseFloat(promotion.discount_value) > 0) {
+                        const discountValue = parseFloat(promotion.discount_value);
+                        finalPrice = basePrice - discountValue;
+                        // Calcular percentual para exibição
+                        if (basePrice > 0) {
+                            discountPercentage = (discountValue / basePrice) * 100;
+                        }
+                    }
+                }
+                
+                const priceFormatted = `R$ ${finalPrice.toFixed(2).replace('.', ',')}`;
+                const originalPriceFormatted = promotion ? `R$ ${basePrice.toFixed(2).replace('.', ',')}` : null;
+                
                 // Transformar produto da API para o formato esperado pelo CardItemHorizontal
                 const formattedItem = {
                     id: item.id,
+                    name: item.name, // ALTERAÇÃO: adiciona campo name para compatibilidade com tela de produto
                     title: item.name,
                     description: item.description || 'Descrição não disponível',
-                    price: `R$ ${parseFloat(item.price).toFixed(2).replace('.', ',')}`,
+                    price: priceFormatted, // Preço final (com desconto se houver)
+                    originalPrice: originalPriceFormatted, // Preço original (apenas se houver promoção)
+                    discountPercentage: discountPercentage ? Math.round(discountPercentage) : null, // Percentual de desconto arredondado
                     deliveryTime: `${item.preparation_time_minutes || 30} min`,
                     deliveryPrice: 'R$ 5,00', // Valor fixo por enquanto
                     imageSource: imageUrl ? { uri: imageUrl } : null,
                     categoryId: item.category_id,
-                    // Produto está disponível se estiver ativo E não estiver marcado como unavailable
-                    isAvailable: item.is_active !== false && availabilityStatus !== 'unavailable',
-                    availabilityStatus: availabilityStatus // Passa o status para uso futuro se necessário
+                    promotion: promotion, // ALTERAÇÃO: Passa objeto completo da promoção
+                    // ALTERAÇÃO: Produtos já foram validados, então todos estão disponíveis
+                    isAvailable: true,
+                    availabilityStatus: availabilityStatus, // Passa o status para badges
+                    max_quantity: item.max_quantity // Passa max_quantity para badges
                 };
-                
-                if (availabilityStatus === 'unavailable') {
-                    console.log(`[MenuCategory] Produto ${item.id} (${item.name}) está indisponível, mas será exibido com marcação visual`);
-                }
 
                 flattenedData.push({
                     type: 'item',
@@ -446,13 +569,18 @@ export default function MenuCategory({
                     title={item.item.title}
                     description={item.item.description}
                     price={item.item.price}
+                    originalPrice={item.item.originalPrice} // ALTERAÇÃO: passa preço original para exibir riscado
+                    discountPercentage={item.item.discountPercentage} // ALTERAÇÃO: passa percentual de desconto para badge
                     deliveryTime={item.item.deliveryTime}
                     deliveryPrice={item.item.deliveryPrice}
                     imageSource={item.item.imageSource}
                     isAvailable={item.item.isAvailable}
                     productId={item.item.id}
+                    produto={item.item} // ALTERAÇÃO: passa objeto completo para exibição imediata na tela de produto
                     navigation={navigation}
                     onPress={() => onItemPress(item.item)}
+                    availabilityStatus={item.item.availabilityStatus} // ALTERAÇÃO: passa status de disponibilidade para badges
+                    max_quantity={item.item.max_quantity} // ALTERAÇÃO: passa quantidade máxima para badges
                 />
             );
         }

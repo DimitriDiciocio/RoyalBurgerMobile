@@ -1,52 +1,97 @@
 import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import CachedImage from './CachedImage';
-import { checkProductAvailability } from '../services/productService';
 
 export default function CardItemHorizontal({
                                                title = "Nome produto",
                                                description = "Descrição dos itens ...",
                                                price = "R$50,00",
+                                               originalPrice = null, // ALTERAÇÃO: preço original (para exibir riscado quando houver promoção)
+                                               discountPercentage = null, // ALTERAÇÃO: percentual de desconto para badge
                                                deliveryTime = "40 - 50 min",
                                                deliveryPrice = "R$5,00",
                                                imageSource = null,
                                                isAvailable = true,
                                                onPress = () => {},
                                                productId = null,
-                                               navigation = null
+                                               produto = null, // ALTERAÇÃO: objeto completo do produto para exibição imediata
+                                               navigation = null,
+                                               availabilityStatus = null, // ALTERAÇÃO: status de disponibilidade para badges
+                                               max_quantity = null // ALTERAÇÃO: quantidade máxima disponível
                                            }) {
-    const [checking, setChecking] = React.useState(false);
-    
-    const handlePress = async () => {
-        // Se não tem productId ou navigation, só chama onPress
-        if (!navigation || !productId) {
+    // ALTERAÇÃO: Função para renderizar badge de desconto
+    const renderDiscountBadge = () => {
+        if (discountPercentage && discountPercentage > 0) {
+            return (
+                <View style={styles.discountBadge}>
+                    <Text style={styles.discountBadgeText}>-{discountPercentage}%</Text>
+                </View>
+            );
+        }
+        return null;
+    };
+    // ALTERAÇÃO: Função para renderizar badge de estoque
+    const renderStockBadge = () => {
+        let status = String(availabilityStatus || '').toLowerCase();
+        
+        // ALTERAÇÃO: Se availability_status não estiver definido, calcular baseado em max_quantity
+        if (!status && max_quantity !== undefined && max_quantity !== null) {
+            if (max_quantity <= 5) {
+                status = 'limited';
+            } else if (max_quantity <= 15) {
+                status = 'low_stock';
+            } else {
+                return null; // Não exibir badge se estoque está bom
+            }
+        }
+        
+        if (status === 'limited') {
+            return (
+                <View style={styles.stockBadgeLimited}>
+                    <Text style={styles.stockBadgeText}>Últimas unidades</Text>
+                </View>
+            );
+        } else if (status === 'low_stock') {
+            return (
+                <View style={styles.stockBadgeLow}>
+                    <Text style={styles.stockBadgeText}>Estoque baixo</Text>
+                </View>
+            );
+        }
+        
+        return null;
+    };
+    const handlePress = () => {
+        // ALTERAÇÃO: navegação instantânea passando objeto completo do produto
+        // Isso permite exibição imediata dos dados enquanto a API carrega
+        if (!navigation) {
             onPress();
             return;
         }
         
-        try {
-            setChecking(true);
+        // Se tiver objeto produto completo, passa ele junto com productId
+        // Isso permite que a tela mostre dados imediatamente (imagem, título, etc)
+        if (produto || productId) {
+            // ALTERAÇÃO: normaliza objeto produto para formato esperado pela tela
+            // Se produto já tem name, usa; senão converte title para name
+            const normalizedProduto = produto ? {
+                ...produto,
+                name: produto.name || produto.title || title,
+                id: produto.id || productId
+            } : {
+                id: productId,
+                name: title,
+                description,
+                price,
+                imageSource
+            };
             
-            // Verificar disponibilidade antes de navegar
-            const availability = await checkProductAvailability(productId, 1);
-            
-            if (!availability.is_available) {
-                Alert.alert(
-                    'Produto Indisponível',
-                    availability.message || 'Este produto está temporariamente indisponível devido à falta de ingredientes em estoque.',
-                    [{ text: 'OK' }]
-                );
-                return;
-            }
-            
-            // Se disponível, navega normalmente
-            navigation.navigate('Produto', { productId });
-        } catch (error) {
-            console.error('Erro ao verificar disponibilidade:', error);
-            // Em caso de erro na verificação, permite navegar (fail-safe)
-            navigation.navigate('Produto', { productId });
-        } finally {
-            setChecking(false);
+            navigation.navigate('Produto', { 
+                produto: normalizedProduto,
+                productId: productId || normalizedProduto?.id
+            });
+        } else {
+            onPress();
         }
     };
 
@@ -54,7 +99,7 @@ export default function CardItemHorizontal({
         <TouchableOpacity
             style={[styles.container, !isAvailable && styles.unavailable]}
             onPress={handlePress}
-            disabled={!isAvailable || checking}
+            disabled={!isAvailable}
         >
             <View style={styles.imageWrapper}>
                 {imageSource ? (
@@ -66,14 +111,13 @@ export default function CardItemHorizontal({
                 ) : (
                     <View style={styles.image} />
                 )}
+                {/* ALTERAÇÃO: Badge de desconto (prioridade sobre badge de estoque) */}
+                {isAvailable && renderDiscountBadge()}
+                {/* ALTERAÇÃO: Badge de estoque (apenas se não houver badge de desconto) */}
+                {isAvailable && !discountPercentage && renderStockBadge()}
                 {!isAvailable && (
                     <View style={styles.unavailableOverlay}>
                         <Text style={styles.unavailableText}>Indisponível</Text>
-                    </View>
-                )}
-                {checking && (
-                    <View style={styles.checkingOverlay}>
-                        <ActivityIndicator size="small" color="#FFF" />
                     </View>
                 )}
             </View>
@@ -92,11 +136,23 @@ export default function CardItemHorizontal({
                 >
                     {description}
                 </Text>
-                <Text
-                    style={[styles.price, !isAvailable && styles.unavailableText]}
-                >
-                    {price}
-                </Text>
+                {/* ALTERAÇÃO: Exibir preço original riscado e novo preço em destaque quando houver promoção */}
+                {originalPrice ? (
+                    <View style={styles.priceContainer}>
+                        <Text style={[styles.originalPrice, !isAvailable && styles.unavailableText]}>
+                            {originalPrice}
+                        </Text>
+                        <Text style={[styles.price, !isAvailable && styles.unavailableText]}>
+                            {price}
+                        </Text>
+                    </View>
+                ) : (
+                    <Text
+                        style={[styles.price, !isAvailable && styles.unavailableText]}
+                    >
+                        {price}
+                    </Text>
+                )}
                 {isAvailable && (
                     <View style={styles.containerDelivery}>
                         <Text style={styles.descriptionDel}>{deliveryTime}</Text>
@@ -166,7 +222,8 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
         lineHeight: 18,
-        flex: 1,
+        marginBottom: 4,
+        // ALTERAÇÃO: removido flex: 1 para evitar que a descrição seja cortada por linha branca
     },
     price: {
         fontSize: 18,
@@ -195,14 +252,60 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: 'bold',
     },
-    checkingOverlay: {
+    // ALTERAÇÃO: Estilos para badges de estoque
+    stockBadgeLimited: {
         position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
-        justifyContent: 'center',
+        top: 8,
+        right: 8,
+        backgroundColor: '#ffc107',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 4,
+        zIndex: 10,
+    },
+    stockBadgeLow: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        backgroundColor: '#ff9800',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 4,
+        zIndex: 10,
+    },
+    stockBadgeText: {
+        fontSize: 10,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        color: '#000',
+    },
+    // ALTERAÇÃO: Estilos para badge de desconto
+    discountBadge: {
+        position: 'absolute',
+        top: 8,
+        left: 8,
+        backgroundColor: '#F44336',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 4,
+        zIndex: 10,
+    },
+    discountBadgeText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    // ALTERAÇÃO: Container para preços (original riscado + novo preço)
+    priceContainer: {
+        flexDirection: 'row',
         alignItems: 'center',
+        gap: 8,
+        marginVertical: 4,
+    },
+    originalPrice: {
+        fontSize: 14,
+        fontWeight: '400',
+        color: '#999',
+        textDecorationLine: 'line-through',
     },
 });

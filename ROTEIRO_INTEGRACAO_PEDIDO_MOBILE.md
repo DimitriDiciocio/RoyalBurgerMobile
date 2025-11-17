@@ -382,17 +382,17 @@ if (!recentlyAddedProducts || recentlyAddedProducts.length === 0) {
 
 ### **0.7 Checklist de Implementação**
 
-- [ ] Confirmar que `getRecentlyAddedProducts` aceita parâmetro `days`
-- [ ] Adicionar constante `RECENTLY_ADDED_DAYS = 30` em arquivo de configuração
-- [ ] Modificar `loadHomeSections` ou função equivalente para chamar `getRecentlyAddedProducts` com `days`
-- [ ] Implementar cache específico por período (`${CACHE_KEYS.recentlyAdded}_${RECENTLY_ADDED_DAYS}`)
-- [ ] Adicionar validação de estoque usando `filterProductsWithStock()` antes de exibir
-- [ ] Adicionar badges de estoque nos cards de novidades
-- [ ] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem)
-- [ ] Testar que produtos antigos (sem `CREATED_AT` ou fora do período) não aparecem
-- [ ] Testar que apenas produtos com estoque aparecem
-- [ ] Verificar que produtos são ordenados por data (mais recentes primeiro)
-- [ ] Verificar que cache é invalidado corretamente quando período muda
+- [x] Confirmar que `getRecentlyAddedProducts` aceita parâmetro `days` ✅ **IMPLEMENTADO**
+- [x] Adicionar constante `RECENTLY_ADDED_DAYS = 30` em arquivo de configuração ✅ **IMPLEMENTADO** (`config/constants.js`)
+- [x] Modificar `loadHomeSections` ou função equivalente para chamar `getRecentlyAddedProducts` com `days` ✅ **IMPLEMENTADO** (`App.js` - função `loadRecentlyAddedProducts`)
+- [ ] Implementar cache específico por período (`${CACHE_KEYS.recentlyAdded}_${RECENTLY_ADDED_DAYS}`) ⚠️ **PENDENTE** (cache não implementado ainda)
+- [x] Adicionar validação de estoque usando `filterProductsWithStock()` antes de exibir ✅ **IMPLEMENTADO**
+- [x] Adicionar badges de estoque nos cards de novidades ✅ **IMPLEMENTADO** (`CardItemVertical` com props `availabilityStatus` e `max_quantity`)
+- [x] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem) ✅ **IMPLEMENTADO** (seção não aparece se array vazio)
+- [ ] Testar que produtos antigos (sem `CREATED_AT` ou fora do período) não aparecem ⚠️ **PENDENTE TESTE**
+- [ ] Testar que apenas produtos com estoque aparecem ⚠️ **PENDENTE TESTE**
+- [ ] Verificar que produtos são ordenados por data (mais recentes primeiro) ⚠️ **PENDENTE TESTE** (API ordena)
+- [ ] Verificar que cache é invalidado corretamente quando período muda ⚠️ **PENDENTE** (cache não implementado)
 
 ---
 
@@ -595,20 +595,20 @@ if (!promotionsData.products || promotionsData.products.length === 0) {
 
 ### **0.5.6 Checklist de Implementação**
 
-- [ ] Confirmar que `getPromotions` existe e retorna promoções com `expires_at`
-- [ ] Implementar função `loadPromotionsSection()` para carregar promoções
-- [ ] Filtrar promoções expiradas antes de exibir
-- [ ] Validar estoque de produtos com promoção usando `filterProductsWithStock()`
-- [ ] **Implementar lógica para encontrar promoção com maior tempo de validade**
-- [ ] **Passar `expires_at` da promoção com maior validade para o cronômetro**
-- [ ] Integrar componente `TimerPromotions` com maior tempo de validade
-- [ ] Adicionar badges de estoque nos cards de promoções
-- [ ] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem)
-- [ ] Testar que apenas promoções não expiradas aparecem
-- [ ] Testar que apenas produtos com estoque aparecem
-- [ ] **Testar que cronômetro exibe tempo da promoção com maior validade**
-- [ ] Verificar que cronômetro atualiza quando promoção expira
-- [ ] Verificar cache e invalidação após 60s
+- [x] Confirmar que `getPromotions` existe e retorna promoções com `expires_at` ✅ **IMPLEMENTADO** (`getAllPromotions` em `promotionService.js`)
+- [x] Implementar função `loadPromotionsSection()` para carregar promoções ✅ **IMPLEMENTADO** (`App.js`)
+- [x] Filtrar promoções expiradas antes de exibir ✅ **IMPLEMENTADO**
+- [x] Validar estoque de produtos com promoção usando `filterProductsWithStock()` ✅ **IMPLEMENTADO**
+- [x] **Implementar lógica para encontrar promoção com maior tempo de validade** ✅ **IMPLEMENTADO**
+- [x] **Passar `expires_at` da promoção com maior validade para o cronômetro** ✅ **IMPLEMENTADO** (via `promoLongestExpiry` e `getPromoEndTime()`)
+- [x] Integrar componente `TimerPromotions` com maior tempo de validade ✅ **IMPLEMENTADO** (já integrado em `ViewCardItem`)
+- [x] Adicionar badges de estoque nos cards de promoções ✅ **IMPLEMENTADO** (`CardItemVertical` com props `availabilityStatus` e `max_quantity`)
+- [x] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem) ✅ **IMPLEMENTADO** (seção não aparece se array vazio)
+- [ ] Testar que apenas promoções não expiradas aparecem ⚠️ **PENDENTE TESTE**
+- [ ] Testar que apenas produtos com estoque aparecem ⚠️ **PENDENTE TESTE**
+- [ ] **Testar que cronômetro exibe tempo da promoção com maior validade** ⚠️ **PENDENTE TESTE**
+- [x] Verificar que cronômetro atualiza quando promoção expira ✅ **IMPLEMENTADO** (`handlePromoExpire` recarrega promoções)
+- [ ] Verificar cache e invalidação após 60s ⚠️ **PENDENTE** (cache não implementado)
 
 ---
 
@@ -1865,32 +1865,32 @@ const getFriendlyErrorMessage = (error) => {
 ## 📋 **CHECKLIST DE IMPLEMENTAÇÃO**
 
 ### **✅ Etapa 0: Seção de Novidades**
-- [ ] Confirmar que `getRecentlyAddedProducts` aceita parâmetro `days`
-- [ ] Adicionar constante `RECENTLY_ADDED_DAYS = 30` em arquivo de configuração
-- [ ] Modificar função de carregamento de novidades para passar `days` na API
-- [ ] Adicionar validação de estoque usando `filterProductsWithStock()` antes de exibir
-- [ ] Adicionar badges de estoque nos cards de novidades
-- [ ] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem)
-- [ ] Testar que produtos antigos (sem `CREATED_AT` ou fora do período) não aparecem
-- [ ] Testar que apenas produtos com estoque aparecem
-- [ ] Verificar que produtos são ordenados por data (mais recentes primeiro)
-- [ ] Verificar que cache é invalidado corretamente
+- [x] Confirmar que `getRecentlyAddedProducts` aceita parâmetro `days` ✅ **IMPLEMENTADO**
+- [x] Adicionar constante `RECENTLY_ADDED_DAYS = 30` em arquivo de configuração ✅ **IMPLEMENTADO** (`config/constants.js`)
+- [x] Modificar função de carregamento de novidades para passar `days` na API ✅ **IMPLEMENTADO** (`App.js` - função `loadRecentlyAddedProducts`)
+- [x] Adicionar validação de estoque usando `filterProductsWithStock()` antes de exibir ✅ **IMPLEMENTADO**
+- [x] Adicionar badges de estoque nos cards de novidades ✅ **IMPLEMENTADO** (`CardItemVertical` com props)
+- [x] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem) ✅ **IMPLEMENTADO**
+- [ ] Testar que produtos antigos (sem `CREATED_AT` ou fora do período) não aparecem ⚠️ **PENDENTE TESTE**
+- [ ] Testar que apenas produtos com estoque aparecem ⚠️ **PENDENTE TESTE**
+- [ ] Verificar que produtos são ordenados por data (mais recentes primeiro) ⚠️ **PENDENTE TESTE** (API ordena)
+- [ ] Verificar que cache é invalidado corretamente ⚠️ **PENDENTE** (cache não implementado)
 
 ### **✅ Etapa 0.5: Seção de Promoções Especiais**
-- [ ] Confirmar que `getPromotions` existe e retorna promoções com `expires_at`
-- [ ] Implementar função `loadPromotionsSection()` para carregar promoções
-- [ ] Filtrar promoções expiradas antes de exibir
-- [ ] Validar estoque de produtos com promoção usando `filterProductsWithStock()`
-- [ ] **Implementar lógica para encontrar promoção com maior tempo de validade**
-- [ ] **Passar `expires_at` da promoção com maior validade para o cronômetro**
-- [ ] Integrar componente `TimerPromotions` com maior tempo de validade
-- [ ] Adicionar badges de estoque nos cards de promoções
-- [ ] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem)
-- [ ] Testar que apenas promoções não expiradas aparecem
-- [ ] Testar que apenas produtos com estoque aparecem
-- [ ] **Testar que cronômetro exibe tempo da promoção com maior validade**
-- [ ] Verificar que cronômetro atualiza quando promoção expira
-- [ ] Verificar cache e invalidação após 60s
+- [x] Confirmar que `getPromotions` existe e retorna promoções com `expires_at` ✅ **IMPLEMENTADO** (`getAllPromotions` em `promotionService.js`)
+- [x] Implementar função `loadPromotionsSection()` para carregar promoções ✅ **IMPLEMENTADO** (`App.js`)
+- [x] Filtrar promoções expiradas antes de exibir ✅ **IMPLEMENTADO**
+- [x] Validar estoque de produtos com promoção usando `filterProductsWithStock()` ✅ **IMPLEMENTADO**
+- [x] **Implementar lógica para encontrar promoção com maior tempo de validade** ✅ **IMPLEMENTADO**
+- [x] **Passar `expires_at` da promoção com maior validade para o cronômetro** ✅ **IMPLEMENTADO** (via `promoLongestExpiry` e `getPromoEndTime()`)
+- [x] Integrar componente `TimerPromotions` com maior tempo de validade ✅ **IMPLEMENTADO** (já integrado em `ViewCardItem`)
+- [x] Adicionar badges de estoque nos cards de promoções ✅ **IMPLEMENTADO** (`CardItemVertical` com props)
+- [x] Implementar tratamento de estado vazio (ocultar seção ou mostrar mensagem) ✅ **IMPLEMENTADO**
+- [ ] Testar que apenas promoções não expiradas aparecem ⚠️ **PENDENTE TESTE**
+- [ ] Testar que apenas produtos com estoque aparecem ⚠️ **PENDENTE TESTE**
+- [ ] **Testar que cronômetro exibe tempo da promoção com maior validade** ⚠️ **PENDENTE TESTE**
+- [x] Verificar que cronômetro atualiza quando promoção expira ✅ **IMPLEMENTADO** (`handlePromoExpire` recarrega promoções)
+- [ ] Verificar cache e invalidação após 60s ⚠️ **PENDENTE** (cache não implementado)
 
 ### **✅ Etapa 1: Listagem de Produtos**
 - [ ] Adicionar suporte a `filter_unavailable` em `productService.js`

@@ -528,8 +528,8 @@ import api from '../services/api';
         };
 
         const handleBasketPress = () => {
-            // Por enquanto, não faz nada
-            console.log('Ver cesta pressionado na tela de produto');
+            // ALTERAÇÃO: navega para a tela da cesta quando o botão é pressionado
+            navigation.navigate('Cesta');
         };
 
         // Separar ingredientes em produto padrão e extras

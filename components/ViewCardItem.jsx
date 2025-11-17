@@ -48,10 +48,14 @@ export default function ViewCardItem({
             title={item.title}
             description={item.description}
             price={item.price}
+            originalPrice={item.originalPrice} // ALTERAÇÃO: passa preço original para exibir riscado
+            discountPercentage={item.discountPercentage} // ALTERAÇÃO: passa percentual de desconto para badge
             deliveryTime={item.deliveryTime}
             deliveryPrice={item.deliveryPrice}
             imageSource={item.imageSource}
             onPress={() => handleCardPress(item)}
+            availabilityStatus={item.availability_status || item.availabilityStatus} // ALTERAÇÃO: passa status de disponibilidade para badges
+            max_quantity={item.max_quantity} // ALTERAÇÃO: passa quantidade máxima para badges
         />
     );
 

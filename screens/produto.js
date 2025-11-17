@@ -14,6 +14,7 @@ import { getCustomerAddresses, getLoyaltyBalance } from '../services/customerSer
 import { getMenuProduct } from '../services/menuService';
 import { getProductIngredients, getProductById, checkProductAvailability } from '../services/productService';
 import { getAllIngredients } from '../services/ingredientService';
+import { getPromotionByProductId } from '../services/promotionService';
 import { useBasket } from '../contexts/BasketContext';
 import BasketFooter from '../components/BasketFooter';
 import api from '../services/api';
@@ -26,7 +27,7 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
             return await checkProductAvailability(productId, quantity);
         }
         // Se não estiver disponível, faz a chamada diretamente à API
-        console.warn('checkProductAvailability não disponível, usando chamada direta à API');
+        // ALTERAÇÃO: log de fallback removido para evitar ruído no console
         const response = await api.get(`/products/${productId}/availability`, {
             params: { quantity }
         });
@@ -47,11 +48,7 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
 
     export default function Produto({navigation, route}) {
         const { produto, productId, editItem } = route.params || {};
-        
-        // Debug: log do productId recebido
-        console.log('[DEBUG] Produto screen - productId recebido:', productId);
-        console.log('[DEBUG] Produto screen - produto recebido:', produto);
-        console.log('[DEBUG] Produto screen - editItem recebido:', editItem);
+        // ALTERAÇÃO: removidos logs de depuração que poluíam o console durante a navegação
         
         const [isExpanded, setIsExpanded] = useState(false);
         const rotateValue = useRef(new Animated.Value(0)).current;
@@ -65,6 +62,7 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
         const [loadingProduct, setLoadingProduct] = useState(false);
         const [productData, setProductData] = useState(null);
         const [productIngredients, setProductIngredients] = useState([]);
+        const [promotion, setPromotion] = useState(null); // ALTERAÇÃO: estado para promoção do produto
         const [observacoes, setObservacoes] = useState('');
         const [quantity, setQuantity] = useState(1);
         const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -74,6 +72,29 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
         const [ingredientsCache, setIngredientsCache] = useState(null); // Cache de ingredientes da API
         const [defaultIngredientsQuantities, setDefaultIngredientsQuantities] = useState({}); // {ingredientId: quantity}
         const { addToBasket, updateBasketItem, removeFromBasket, basketItems, basketTotal, basketItemCount } = useBasket();
+
+        const productImageSource = useMemo(() => {
+            // ALTERAÇÃO: centraliza escolha da imagem e evita piscar enquanto a API carrega
+            if (productData?.id && productData?.image_url) {
+                return {
+                    uri: `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}`
+                };
+            }
+
+            if (produto?.id && produto?.image_url) {
+                return {
+                    uri: `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${produto.id}`
+                };
+            }
+
+            if (produto?.imageSource) {
+                return produto.imageSource;
+            }
+
+            return null;
+        }, [productData?.id, productData?.image_url, produto?.id, produto?.image_url, produto?.imageSource]);
+
+        const shouldShowInitialLoader = loadingProduct && !productImageSource;
 
         const fetchEnderecos = async (userId) => {
             try {
@@ -296,42 +317,38 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                     }
 
                     if (!isCancelled) {
-                        // Log para depuração do retorno
-                        console.log('[DEBUG] Produto - dados recebidos da API:', data);
                         setProductData(data || produto || null);
                         
-                        // IMPORTANTE: Se data veio de getProductById, já tem ingredientes com max_quantity calculado
-                        // Se não, busca ingredientes separadamente (mas pode ter max_quantity incorreto)
+                        // ALTERAÇÃO: Buscar promoção do produto
                         const pid = idToFetch || data?.id;
                         if (pid) {
-                            // Se data já tem ingredientes (vindo de getProductById), usa eles
-                            if (data && data.ingredients && Array.isArray(data.ingredients) && data.ingredients.length > 0) {
-                                console.log('[DEBUG] Usando ingredientes de getProductById (max_quantity calculado)');
-                                if (!isCancelled) setProductIngredients(data.ingredients);
-                            } else {
-                                // Fallback: busca ingredientes separadamente (pode ter max_quantity incorreto)
-                                try {
-                                    const ingredientsResponse = await getProductIngredients(pid);
-                                    // Tratar resposta que pode ser array direto ou objeto com items
-                                    let ingredientsList = [];
-                                    if (Array.isArray(ingredientsResponse)) {
-                                        ingredientsList = ingredientsResponse;
-                                    } else if (ingredientsResponse && ingredientsResponse.items && Array.isArray(ingredientsResponse.items)) {
-                                        ingredientsList = ingredientsResponse.items;
-                                    }
-                                    if (!isCancelled) setProductIngredients(ingredientsList);
-                                    // Log de diagnóstico: produto sem ingredientes disponíveis
-                                    if (!isCancelled && (!ingredientsList || ingredientsList.length === 0)) {
-                                        console.warn('[DIAGNOSTICO] Produto sem ingredientes disponíveis:', {
-                                            productId: pid,
-                                            productName: (data?.name || produto?.name || produto?.title || 'Produto'),
-                                            message: 'Nenhum ingrediente retornado pela API'
-                                        });
-                                    }
-                                } catch (e) {
-                                    console.error('Erro ao buscar ingredientes:', e);
-                                    if (!isCancelled) setProductIngredients([]);
+                            try {
+                                const productPromotion = await getPromotionByProductId(pid);
+                                if (!isCancelled) setPromotion(productPromotion);
+                            } catch (e) {
+                                // Ignora erros ao buscar promoção (produto pode não ter promoção)
+                                if (!isCancelled) setPromotion(null);
+                            }
+                        } else {
+                            setPromotion(null);
+                        }
+                        
+                        // ALTERAÇÃO: sempre busca ingredientes separadamente para manter a mesma ordem do ProdutoEditar
+                        // Isso garante que a ordem original seja preservada (não alfabética)
+                        if (pid) {
+                            try {
+                                const ingredientsResponse = await getProductIngredients(pid);
+                                // Tratar resposta que pode ser array direto ou objeto com items
+                                let ingredientsList = [];
+                                if (Array.isArray(ingredientsResponse)) {
+                                    ingredientsList = ingredientsResponse;
+                                } else if (ingredientsResponse && ingredientsResponse.items && Array.isArray(ingredientsResponse.items)) {
+                                    ingredientsList = ingredientsResponse.items;
                                 }
+                                if (!isCancelled) setProductIngredients(ingredientsList);
+                            } catch (e) {
+                                console.error('Erro ao buscar ingredientes:', e);
+                                if (!isCancelled) setProductIngredients([]);
                             }
                         } else {
                             setProductIngredients([]);
@@ -378,16 +395,16 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
         };
 
         const handleBasketPress = () => {
-            // Por enquanto, não faz nada
-            console.log('Ver cesta pressionado na tela de produto');
+            // ALTERAÇÃO: navega para a tela da cesta quando o botão é pressionado
+            navigation.navigate('Cesta');
         };
 
         // Separar ingredientes em produto padrão e extras
         const defaultIngredients = productIngredients.filter((ing) => {
+            // ALTERAÇÃO: usa mesma regra de ProdutoEditar para ordenar/filtrar ingredientes padrão
             const portions = parseFloat(ing.portions || 0) || 0;
             const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
             const maxQty = ing.max_quantity || ing.maxQuantity;
-            // Excluir se portions <= 0 ou se min_quantity === max_quantity (sem possibilidade de alteração)
             if (portions <= 0) return false;
             if (maxQty !== null && maxQty !== undefined) {
                 const maxQtyNum = parseInt(maxQty, 10);
@@ -414,57 +431,18 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
         };
 
         const extraIngredients = productIngredients.filter((ing) => {
+            // ALTERAÇÃO: mesma lógica do ProdutoEditar para manter a ordem original dos extras
             const portions = parseFloat(ing.portions || 0) || 0;
-            // Só inclui extras (portions === 0)
-            if (portions !== 0) return false;
-            
-            // Verifica se o ingrediente está disponível
-            const isAvailable = ing.is_available !== false;
-            if (!isAvailable) return false;
-            
-            // max_quantity já vem calculado pela API considerando estoque e quantidade do produto
-            // IMPORTANTE: Só mostra extras que têm estoque disponível (max_quantity > 0) ou sem limite de regra
-            const maxAvailable = ing.max_quantity;
-            const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
-            
-            // Se max_quantity é null/undefined, não há limite de regra (pode ter estoque infinito)
-            // Se max_quantity é 0, não há estoque disponível - NÃO MOSTRAR
-            // Se max_quantity > 0, há estoque disponível - MOSTRAR
-            // Se max_quantity é null mas min_quantity > 0, pode mostrar (será validado depois)
-            
-            // Só mostra se:
-            // 1. max_quantity é null (sem limite de regra) - pode ter estoque
-            // 2. max_quantity > 0 (tem estoque disponível)
-            // 3. max_quantity >= min_quantity (pelo menos pode adicionar o mínimo)
-            if (maxAvailable === null || maxAvailable === undefined) {
-                // Sem limite de regra, verifica se tem estoque através de availability_info
-                const availabilityInfo = ing.availability_info;
-                if (availabilityInfo && availabilityInfo.max_available !== undefined) {
-                    // Se max_available da availability_info é 0, não tem estoque
-                    return availabilityInfo.max_available > 0 || minQty > 0;
-                }
-                // Se não tem availability_info, assume que pode ter estoque (será validado depois)
-                return true;
-            }
-            
-            // Se max_quantity é 0, não tem estoque suficiente
-            if (maxAvailable === 0) return false;
-            
-            // Se max_quantity > 0, tem estoque disponível
-            // Mas só mostra se max_quantity >= min_quantity (pode adicionar pelo menos o mínimo)
-            return maxAvailable >= minQty;
+            return portions === 0;
         });
 
-        // Contar apenas extras com quantidade maior que o mínimo
+        // Somar a quantidade total de extras selecionados (comportamento idêntico ao ProdutoEditar)
         const selectedExtrasCount = extraIngredients.reduce((total, ing) => {
-            const ingredientId = String(ing.id || ing.ingredient_id || `extra-${extraIngredients.indexOf(ing)}`);
+            // ALTERAÇÃO: contagem de extras igual ao ProdutoEditar (inclui quantidade mínima)
+            const ingredientId = ing.id || ing.ingredient_id || `extra-${extraIngredients.indexOf(ing)}`;
             const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
             const currentQty = selectedExtras[ingredientId] !== undefined ? selectedExtras[ingredientId] : minQty;
-            // Contar apenas se quantidade atual é maior que o mínimo
-            if (currentQty > minQty) {
-                return total + 1; // Conta quantos extras têm quantidade adicional
-            }
-            return total;
+            return total + currentQty;
         }, 0);
 
         // Inicializar quantidades dos ingredientes padrão quando forem carregados
@@ -572,6 +550,24 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
             return defaultIngredientsTotal + extrasTotal;
         }, [defaultIngredientsTotal, extrasTotal]);
 
+        // ALTERAÇÃO: Calcular preço final do produto com desconto se houver promoção
+        const finalProductPrice = useMemo(() => {
+            const basePrice = parseFloat(productData?.price || produto?.price || 0);
+            
+            if (promotion) {
+                // Priorizar discount_percentage se disponível
+                if (promotion.discount_percentage && parseFloat(promotion.discount_percentage) > 0) {
+                    const discountPercentage = parseFloat(promotion.discount_percentage);
+                    return basePrice * (1 - discountPercentage / 100);
+                } else if (promotion.discount_value && parseFloat(promotion.discount_value) > 0) {
+                    const discountValue = parseFloat(promotion.discount_value);
+                    return basePrice - discountValue;
+                }
+            }
+            
+            return basePrice;
+        }, [productData?.price, produto?.price, promotion]);
+
         const handleOpenExtrasModal = () => {
             // Inicializar estado temporário com valores salvos ou valores mínimos de cada ingrediente
             // max_quantity já vem calculado da API considerando a quantity atual
@@ -666,24 +662,16 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                         </TouchableOpacity>
                         
                         <View style={styles.centerImageContainer}>
-                            {loadingProduct ? (
+                            {shouldShowInitialLoader ? (
                                 <ActivityIndicator size="large" color="#000" />
+                            ) : productImageSource ? (
+                                <Image
+                                    source={productImageSource}
+                                    style={styles.centerImage}
+                                    resizeMode="contain"
+                                />
                             ) : (
-                                productData?.image_url ? (
-                                    <Image
-                                        source={{ uri: `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}` }}
-                                        style={styles.centerImage}
-                                        resizeMode="contain"
-                                    />
-                                ) : produto?.imageSource ? (
-                                    <Image
-                                        source={produto.imageSource}
-                                        style={styles.centerImage}
-                                        resizeMode="contain"
-                                    />
-                                ) : (
-                                    <View style={styles.centerImage} />
-                                )
+                                <View style={styles.centerImage} />
                             )}
                         </View>
                     </View>
@@ -717,16 +705,7 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                    // IMPORTANTE: Usar apenas max_quantity (minúsculo) da API, não maxQuantity (maiúsculo) que pode vir de cache antigo
                                    const maxQty = ing.max_quantity !== undefined && ing.max_quantity !== null ? ing.max_quantity : null;
                                    
-                                   // Debug: log para verificar valores
-                                   if (ingredientId === '28' || displayName.includes('Bovino')) {
-                                       console.log(`[DEBUG] Ingrediente ${displayName} (${ingredientId}):`, {
-                                           max_quantity: ing.max_quantity,
-                                           maxQuantity: ing.maxQuantity,
-                                           max_quantity_rule: ing.max_quantity_rule,
-                                           maxQty_usado: maxQty,
-                                           minQty: minQty
-                                       });
-                                   }
+                                   // ALTERAÇÃO: logs de depuração de ingredientes removidos para evitar ruído
                                    
                                   return (
                                       <IngredienteMenu
@@ -775,7 +754,7 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                      />
 
                      <QuantidadePrecoBar
-                         unitPrice={productData?.price || 0}
+                         unitPrice={finalProductPrice} // ALTERAÇÃO: usa preço final com desconto se houver promoção
                          initialQuantity={quantity}
                          additionalTotal={totalAdditionalPrice}
                          onQuantityChange={setQuantity}
@@ -874,7 +853,7 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                     );
                                     
                                     if (!ing) {
-                                        console.warn(`[Produto] Ingrediente extra não encontrado: ${ingredientId}`);
+                                        // ALTERAÇÃO: log removido ao ignorar extra inexistente
                                         return; // Pula se não encontrado
                                     }
                                     
@@ -883,13 +862,13 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                     
                                     // Validar quantidade mínima
                                     if (quantity < minQty) {
-                                        console.warn(`[Produto] Quantidade de extra abaixo do mínimo: ${ingredientId}, qty: ${quantity}, min: ${minQty}`);
+                                        // ALTERAÇÃO: log removido ao validar quantidade mínima
                                         return; // Pula se abaixo do mínimo
                                     }
                                     
                                     // Validar quantidade máxima (se houver limite)
                                     if (maxQty !== null && maxQty !== undefined && maxQty > 0 && quantity > maxQty) {
-                                        console.warn(`[Produto] Quantidade de extra excede o máximo: ${ingredientId}, qty: ${quantity}, max: ${maxQty}`);
+                                        // ALTERAÇÃO: log removido ao ajustar quantidade máxima
                                         // Ajusta para o máximo disponível
                                         quantity = maxQty;
                                     }
@@ -903,18 +882,11 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                             quantity: quantity // Quantidade total (incluindo min_quantity)
                                         });
                                     } else {
-                                        console.warn(`[Produto] Quantidade de extra abaixo do mínimo: ${ingredientId}, qty: ${quantity}, min: ${minQty}`);
+                                        // ALTERAÇÃO: log removido ao ignorar extra abaixo do mínimo
                                     }
                                 });
                                 
-                                console.log('[Produto] Adicionando ao carrinho:', {
-                                    productId: productData?.id || produto?.id,
-                                    quantity: quantity,
-                                    extrasCount: extrasArray.length,
-                                    extras: extrasArray,
-                                    baseModificationsCount: baseModifications.length,
-                                    selectedExtras: selectedExtras // Para debug
-                                });
+                                // ALTERAÇÃO: log de depuração do carrinho removido para evitar ruído
                                 
                                 // IMPORTANTE: O BasketContext espera selectedExtras no formato { ingredientId: quantity }
                                 // Mas também aceita extras já convertidos no formato da API
@@ -979,14 +951,9 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                                 unavailable_count: unavailable.length,
                                                 unavailable_ingredients: unavailable
                                             };
-                                            console.warn('[DIAGNOSTICO] Produto indisponível (estoque/ingredientes): ' + JSON.stringify(diag, null, 2));
+                                            // ALTERAÇÃO: log detalhado de indisponibilidade removido para reduzir ruído
                                         } catch (logErr) {
-                                            // Fallback em caso de erro ao montar log
-                                            console.warn('[DIAGNOSTICO] Produto indisponível (falha ao detalhar ingredientes):', {
-                                                productId,
-                                                productName: (productData?.name || produto?.name || produto?.title || 'Produto'),
-                                                quantity
-                                            });
+                                            // ALTERAÇÃO: fallback de log removido para reduzir ruído
                                         }
                                          Alert.alert(
                                              'Produto Indisponível',
@@ -1110,17 +1077,7 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                           // NÃO usar maxQuantity (maiúsculo) que pode vir de cache antigo
                                           const maxQty = ing.max_quantity !== undefined && ing.max_quantity !== null ? ing.max_quantity : null;
                                           
-                                          // Debug: log para verificar valores
-                                          if (ingredientId === '28' || displayName.includes('Bovino')) {
-                                              console.log(`[DEBUG] Extra ${displayName} (${ingredientId}):`, {
-                                                  max_quantity: ing.max_quantity,
-                                                  maxQuantity: ing.maxQuantity,
-                                                  max_quantity_rule: ing.max_quantity_rule,
-                                                  maxQty_usado: maxQty,
-                                                  minQty: minQty,
-                                                  availability_info: ing.availability_info
-                                              });
-                                          }
+                                          // ALTERAÇÃO: logs de depuração de extras removidos para evitar ruído
                                           
                                           const initialExtraQty = minQty || 0;
                                           const currentQuantity = tempSelectedExtras[ingredientId] !== undefined 
