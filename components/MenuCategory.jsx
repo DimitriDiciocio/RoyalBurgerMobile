@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import {
     View,
     Text,
@@ -42,6 +43,7 @@ export default function MenuCategory({
     const firstCategoryHeaderRef = useRef(null);
     const scrollY = useRef(new Animated.Value(0)).current;
     const stickyAnimatedValue = useRef(new Animated.Value(0)).current;
+    const isFocused = useIsFocused(); // ALTERAÇÃO: para recarregar promoções quando a tela receber foco
 
     // Carregar categorias da API
     useEffect(() => {
@@ -236,6 +238,7 @@ export default function MenuCategory({
     const [productPromotions, setProductPromotions] = useState({});
 
     // ALTERAÇÃO: Buscar promoções para todos os produtos em um useEffect separado
+    // Adicionado isFocused para recarregar promoções quando a tela receber foco (atualiza em tempo real)
     useEffect(() => {
         const fetchPromotions = async () => {
             // Coletar todos os IDs de produtos únicos
@@ -271,6 +274,9 @@ export default function MenuCategory({
                     const { productId, promotion } = result.value;
                     if (promotion) {
                         promotionsMap[productId] = promotion;
+                    } else {
+                        // ALTERAÇÃO: Remove promoção do mapa se não existir mais (para atualizar quando promoção é removida)
+                        promotionsMap[productId] = null;
                     }
                 }
             });
@@ -281,7 +287,7 @@ export default function MenuCategory({
         if (Object.keys(products).length > 0) {
             fetchPromotions();
         }
-    }, [products]);
+    }, [products, isFocused]); // ALTERAÇÃO: adicionado isFocused para recarregar quando a tela receber foco
 
     // Transformar dados em lista plana usando dados reais da API
     const flattenedData = [];

@@ -61,6 +61,36 @@ export default function CardItemHorizontal({
         
         return null;
     };
+
+    // ALTERAÇÃO: Formatação de preço (copiado do CardItemVertical)
+    const formattedPrice = React.useMemo(() => {
+        // ALTERAÇÃO: garante que o valor seja exibido no formato monetário brasileiro
+        if (typeof price === 'number' && !Number.isNaN(price)) {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+                minimumFractionDigits: 2
+            }).format(price);
+        }
+
+        if (typeof price === 'string') {
+            const trimmed = price.trim();
+            if (trimmed.startsWith('R$')) {
+                return trimmed;
+            }
+
+            const numeric = Number(trimmed.replace(/[^\d,-]/g, '').replace(',', '.'));
+            if (!Number.isNaN(numeric)) {
+                return new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                    minimumFractionDigits: 2
+                }).format(numeric);
+            }
+        }
+
+        return 'R$0,00';
+    }, [price]);
     const handlePress = () => {
         // ALTERAÇÃO: navegação instantânea passando objeto completo do produto
         // Isso permite exibição imediata dos dados enquanto a API carrega
@@ -143,14 +173,16 @@ export default function CardItemHorizontal({
                             {originalPrice}
                         </Text>
                         <Text style={[styles.price, !isAvailable && styles.unavailableText]}>
-                            {price}
+                            {typeof price === 'string' && price.startsWith('R$') 
+                                ? price 
+                                : formattedPrice}
                         </Text>
                     </View>
                 ) : (
                     <Text
                         style={[styles.price, !isAvailable && styles.unavailableText]}
                     >
-                        {price}
+                        {formattedPrice}
                     </Text>
                 )}
                 {isAvailable && (
@@ -229,12 +261,13 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: '#101010',
-        marginVertical: 4,
+        marginBottom: 0, // ALTERAÇÃO: removido marginVertical para reduzir gap
+        marginTop: 4,
     },
     containerDelivery: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 4,
+        marginTop: 2, // ALTERAÇÃO: reduzido de 4 para 2 para diminuir gap
     },
     descriptionDel: {
         fontSize: 12,
@@ -300,7 +333,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        marginVertical: 4,
+        marginTop: 4,
+        marginBottom: 0, // ALTERAÇÃO: removido marginVertical, apenas marginTop para reduzir gap
     },
     originalPrice: {
         fontSize: 14,
