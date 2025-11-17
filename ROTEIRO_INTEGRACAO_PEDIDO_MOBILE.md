@@ -3395,6 +3395,357 @@ import DetalhesPedido from './screens/detalhesPedido';
 
 ---
 
+## 💰 **ETAPA 8: INTEGRAÇÃO COM SISTEMA DE FLUXO DE CAIXA**
+
+### **8.1 Criar Serviço de API - `services/financialService.js`**
+
+**Objetivo:** Centralizar todas as chamadas à API de movimentações financeiras.
+
+```javascript
+/**
+ * Serviço de Movimentações Financeiras
+ * Gerencia todas as requisições relacionadas ao fluxo de caixa
+ */
+
+import api from './api';
+
+const FINANCIAL_API_BASE = '/financial-movements';
+
+/**
+ * Lista movimentações financeiras com filtros
+ * @param {Object} filters - Filtros de busca
+ * @returns {Promise<Array>}
+ */
+export const getFinancialMovements = async (filters = {}) => {
+  try {
+    const params = {};
+    
+    if (filters.start_date) params.start_date = filters.start_date;
+    if (filters.end_date) params.end_date = filters.end_date;
+    if (filters.type) params.type = filters.type;
+    if (filters.category) params.category = filters.category;
+    if (filters.payment_status) params.payment_status = filters.payment_status;
+    if (filters.related_entity_type) params.related_entity_type = filters.related_entity_type;
+    if (filters.related_entity_id) params.related_entity_id = filters.related_entity_id;
+    if (filters.reconciled !== undefined) params.reconciled = filters.reconciled;
+    
+    const response = await api.get(`${FINANCIAL_API_BASE}/movements`, { params });
+    return response.data?.items || response.data || [];
+  } catch (error) {
+    // ALTERAÇÃO: Removido console.error em produção
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao buscar movimentações financeiras:', error);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Obtém movimentações relacionadas a um pedido
+ * @param {number} orderId - ID do pedido
+ * @returns {Promise<Object>} Objeto com revenue, cmv, fee e cálculos
+ */
+export const getOrderFinancialInfo = async (orderId) => {
+  try {
+    const movements = await getFinancialMovements({
+      related_entity_type: 'order',
+      related_entity_id: orderId
+    });
+    
+    if (!movements || movements.length === 0) {
+      return null;
+    }
+    
+    // Agrupar por tipo
+    const revenue = movements.find(m => m.type === 'REVENUE');
+    const cmv = movements.find(m => m.type === 'CMV');
+    const fee = movements.find(m => 
+      m.type === 'EXPENSE' && 
+      (m.subcategory === 'Taxas de Pagamento' || m.category === 'Taxas')
+    );
+    
+    // Calcular lucro
+    const revenueValue = revenue?.value || 0;
+    const cmvValue = cmv?.value || 0;
+    const feeValue = fee?.value || 0;
+    const grossProfit = revenueValue - cmvValue;
+    const netProfit = grossProfit - feeValue;
+    const margin = revenueValue > 0 ? (netProfit / revenueValue) * 100 : 0;
+    
+    return {
+      revenue: revenueValue,
+      cmv: cmvValue,
+      fee: feeValue,
+      grossProfit,
+      netProfit,
+      margin: margin.toFixed(2),
+      hasData: true
+    };
+  } catch (error) {
+    // ALTERAÇÃO: Removido console.error em produção
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao buscar informações financeiras do pedido:', error);
+    }
+    return null;
+  }
+};
+```
+
+### **8.2 Atualizar `screens/detalhesPedido.js`**
+
+**Adicionar estado e carregamento de informações financeiras:**
+
+```javascript
+// ALTERAÇÃO: Importar serviço financeiro
+import { getOrderFinancialInfo } from '../services/financialService';
+
+// ALTERAÇÃO: Adicionar estado para informações financeiras
+const [financialInfo, setFinancialInfo] = useState(null);
+const [loadingFinancialInfo, setLoadingFinancialInfo] = useState(false);
+
+// ALTERAÇÃO: Carregar informações financeiras quando pedido for carregado
+useEffect(() => {
+  const fetchFinancialInfo = async () => {
+    if (!orderId || !order) return;
+    
+    // ALTERAÇÃO: Apenas carregar informações financeiras se o pedido estiver finalizado
+    const status = order.status?.toLowerCase();
+    const isCompleted = status === 'completed' || status === 'delivered' || status === 'concluido';
+    
+    if (!isCompleted) {
+      return; // Não exibir informações financeiras para pedidos não finalizados
+    }
+    
+    try {
+      setLoadingFinancialInfo(true);
+      const info = await getOrderFinancialInfo(orderId);
+      setFinancialInfo(info);
+    } catch (error) {
+      // ALTERAÇÃO: Removido console.error em produção
+      const isDev = __DEV__;
+      if (isDev) {
+        console.error('Erro ao carregar informações financeiras:', error);
+      }
+      setFinancialInfo(null);
+    } finally {
+      setLoadingFinancialInfo(false);
+    }
+  };
+  
+  if (order) {
+    fetchFinancialInfo();
+  }
+}, [orderId, order]);
+
+// ALTERAÇÃO: Função para renderizar informações financeiras
+const renderFinancialInfo = () => {
+  if (!financialInfo || !financialInfo.hasData) {
+    return null;
+  }
+  
+  const { revenue, cmv, fee, grossProfit, netProfit, margin } = financialInfo;
+  
+  return (
+    <View style={styles.financialInfoContainer}>
+      <Text style={styles.financialInfoTitle}>Informações Financeiras</Text>
+      
+      <View style={styles.financialInfoGrid}>
+        <View style={styles.financialInfoItem}>
+          <Text style={styles.financialInfoLabel}>Receita:</Text>
+          <Text style={[styles.financialInfoValue, styles.revenueValue]}>
+            R$ {revenue.toFixed(2).replace('.', ',')}
+          </Text>
+        </View>
+        
+        <View style={styles.financialInfoItem}>
+          <Text style={styles.financialInfoLabel}>CMV:</Text>
+          <Text style={[styles.financialInfoValue, styles.cmvValue]}>
+            R$ {cmv.toFixed(2).replace('.', ',')}
+          </Text>
+        </View>
+        
+        {fee > 0 && (
+          <View style={styles.financialInfoItem}>
+            <Text style={styles.financialInfoLabel}>Taxa:</Text>
+            <Text style={[styles.financialInfoValue, styles.expenseValue]}>
+              R$ {fee.toFixed(2).replace('.', ',')}
+            </Text>
+          </View>
+        )}
+        
+        <View style={styles.financialInfoItem}>
+          <Text style={styles.financialInfoLabel}>Lucro Bruto:</Text>
+          <Text style={[
+            styles.financialInfoValue,
+            grossProfit >= 0 ? styles.positiveValue : styles.negativeValue
+          ]}>
+            R$ {grossProfit.toFixed(2).replace('.', ',')}
+          </Text>
+        </View>
+        
+        <View style={styles.financialInfoItem}>
+          <Text style={styles.financialInfoLabel}>Lucro Líquido:</Text>
+          <Text style={[
+            styles.financialInfoValue,
+            netProfit >= 0 ? styles.positiveValue : styles.negativeValue
+          ]}>
+            R$ {netProfit.toFixed(2).replace('.', ',')}
+          </Text>
+        </View>
+        
+        <View style={styles.financialInfoItem}>
+          <Text style={styles.financialInfoLabel}>Margem:</Text>
+          <Text style={[
+            styles.financialInfoValue,
+            netProfit >= 0 ? styles.positiveValue : styles.negativeValue
+          ]}>
+            {margin}%
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+};
+```
+
+**Adicionar renderização no JSX (após resumo financeiro):**
+
+```javascript
+{/* Resumo Financeiro */}
+{renderOrderSummary()}
+
+{/* ALTERAÇÃO: Informações Financeiras (apenas para pedidos finalizados) */}
+{loadingFinancialInfo ? (
+  <View style={styles.financialInfoContainer}>
+    <ActivityIndicator size="small" color="#FFC107" />
+    <Text style={styles.loadingText}>Carregando informações financeiras...</Text>
+  </View>
+) : (
+  renderFinancialInfo()
+)}
+```
+
+**Adicionar estilos:**
+
+```javascript
+// ALTERAÇÃO: Adicionar estilos para informações financeiras
+const styles = StyleSheet.create({
+  // ... estilos existentes ...
+  
+  financialInfoContainer: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2563eb',
+  },
+  financialInfoTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  financialInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  financialInfoItem: {
+    flexDirection: 'column',
+    minWidth: '45%',
+    marginBottom: 8,
+  },
+  financialInfoLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  financialInfoValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  revenueValue: {
+    color: '#10b981', // Verde para receita
+  },
+  cmvValue: {
+    color: '#f59e0b', // Amarelo/Laranja para CMV
+  },
+  expenseValue: {
+    color: '#ef4444', // Vermelho para despesas
+  },
+  positiveValue: {
+    color: '#10b981', // Verde para valores positivos
+  },
+  negativeValue: {
+    color: '#ef4444', // Vermelho para valores negativos
+  },
+});
+```
+
+### **8.3 Regras de Exibição**
+
+**CRÍTICO:** As informações financeiras devem ser exibidas apenas quando:
+
+1. **Pedido Finalizado:** Apenas pedidos com status `completed`, `delivered` ou `concluido` devem exibir informações financeiras
+2. **Dados Disponíveis:** Se não houver movimentações financeiras relacionadas ao pedido, não exibir a seção
+3. **Permissões:** Considerar se o usuário tem permissão para ver informações financeiras (apenas admin/manager em produção, mas para mobile pode ser apenas informativo)
+
+**Implementação:**
+
+```javascript
+// ALTERAÇÃO: Verificar se deve exibir informações financeiras
+const shouldShowFinancialInfo = () => {
+  if (!order) return false;
+  
+  const status = order.status?.toLowerCase();
+  const isCompleted = status === 'completed' || 
+                      status === 'delivered' || 
+                      status === 'concluido';
+  
+  return isCompleted && financialInfo && financialInfo.hasData;
+};
+```
+
+### **8.4 Tratamento de Erros**
+
+```javascript
+// ALTERAÇÃO: Tratamento de erros ao carregar informações financeiras
+const fetchFinancialInfo = async () => {
+  if (!orderId || !order) return;
+  
+  const status = order.status?.toLowerCase();
+  const isCompleted = status === 'completed' || status === 'delivered' || status === 'concluido';
+  
+  if (!isCompleted) {
+    return;
+  }
+  
+  try {
+    setLoadingFinancialInfo(true);
+    const info = await getOrderFinancialInfo(orderId);
+    setFinancialInfo(info);
+  } catch (error) {
+    // ALTERAÇÃO: Removido console.error em produção
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao carregar informações financeiras:', error);
+    }
+    // Não exibir erro para o usuário, apenas não mostrar informações financeiras
+    setFinancialInfo(null);
+  } finally {
+    setLoadingFinancialInfo(false);
+  }
+};
+```
+
+---
+
 ## 📋 **CHECKLIST DE IMPLEMENTAÇÃO ATUALIZADO**
 
 ### **✅ Etapa 6: Histórico de Pedidos**
@@ -3415,6 +3766,20 @@ import DetalhesPedido from './screens/detalhesPedido';
 - [ ] Adicionar rota de navegação
 - [ ] Adicionar estilos completos
 - [ ] Testar integração com histórico
+
+### **✅ Etapa 8: Integração com Fluxo de Caixa**
+- [ ] Criar arquivo `services/financialService.js`
+- [ ] Implementar função `getFinancialMovements()`
+- [ ] Implementar função `getOrderFinancialInfo()`
+- [ ] Adicionar estado para informações financeiras em `detalhesPedido.js`
+- [ ] Implementar carregamento de informações financeiras
+- [ ] Implementar função `renderFinancialInfo()`
+- [ ] Adicionar renderização no JSX (após resumo financeiro)
+- [ ] Adicionar estilos para informações financeiras
+- [ ] Implementar validação de exibição (apenas pedidos finalizados)
+- [ ] Implementar tratamento de erros
+- [ ] Testar exibição de informações financeiras em pedidos finalizados
+- [ ] Testar que informações não aparecem em pedidos não finalizados
 
 ---
 
@@ -3440,6 +3805,19 @@ import DetalhesPedido from './screens/detalhesPedido';
 - [ ] Verificar navegação de volta
 - [ ] Verificar tratamento de erros
 
+### **Teste 9: Integração com Fluxo de Caixa**
+- [ ] Verificar que informações financeiras são carregadas apenas para pedidos finalizados
+- [ ] Verificar que informações financeiras não aparecem para pedidos não finalizados
+- [ ] Verificar exibição correta de receita, CMV, taxas, lucro bruto e líquido
+- [ ] Verificar cálculo correto da margem de lucro
+- [ ] Verificar cores corretas para valores positivos/negativos
+- [ ] Verificar que seção não aparece quando não há dados financeiros
+- [ ] Verificar loading state durante carregamento
+- [ ] Verificar tratamento de erros (não deve quebrar a tela)
+- [ ] Testar com pedido que tem todas as movimentações (revenue, CMV, fee)
+- [ ] Testar com pedido que tem apenas revenue e CMV (sem fee)
+- [ ] Verificar formatação de valores monetários (R$ X,XX)
+
 ---
 
 ## 🔄 **PRÓXIMOS PASSOS**
@@ -3453,14 +3831,15 @@ import DetalhesPedido from './screens/detalhesPedido';
 5. Implementar Etapa 5 (UX)
 6. **Implementar Etapa 6 (Histórico de Pedidos)**
 7. **Implementar Etapa 7 (Detalhes do Pedido)**
-8. Testar integração completa
-9. Ajustar conforme feedback
+8. **Implementar Etapa 8 (Integração com Fluxo de Caixa)**
+9. Testar integração completa
+10. Ajustar conforme feedback
 
 ---
 
 **Data:** 2025-01-27  
 **Autor:** Sistema de Integração  
-**Versão:** 1.5 (Atualizado com Validação de Permissões para Carrinho e Cache Específico por Período)
+**Versão:** 1.6 (Atualizado com Integração com Sistema de Fluxo de Caixa)
 
 ---
 
@@ -3565,4 +3944,78 @@ const { products, longestExpiry } = promotionsData;
 - A validação de estoque garante que apenas produtos disponíveis são exibidos
 - Cache deve ser curto (60s) para refletir mudanças de estoque e novas promoções
 - Promoções expiradas não devem aparecer, mesmo que ainda estejam na resposta da API
+
+---
+
+## 📝 **NOTAS SOBRE INTEGRAÇÃO COM FLUXO DE CAIXA**
+
+### **Como Funciona**
+
+1. **Backend:**
+   - Quando um pedido é finalizado (status `delivered`), o sistema automaticamente registra:
+     - **REVENUE**: Receita do pedido (valor total)
+     - **CMV**: Custo de Mercadoria Vendida (custo dos ingredientes)
+     - **EXPENSE**: Taxa de pagamento (se aplicável, baseado no método de pagamento)
+   - Todas as movimentações são vinculadas ao pedido via `related_entity_type='order'` e `related_entity_id`
+
+2. **Frontend Mobile:**
+   - Deve buscar movimentações financeiras relacionadas ao pedido usando `getOrderFinancialInfo(orderId)`
+   - Deve exibir informações apenas para pedidos finalizados (`completed`, `delivered`, `concluido`)
+   - Deve calcular e exibir:
+     - Receita (REVENUE)
+     - CMV (Custo de Mercadoria Vendida)
+     - Taxa de Pagamento (EXPENSE com subcategory 'Taxas de Pagamento')
+     - Lucro Bruto (Receita - CMV)
+     - Lucro Líquido (Lucro Bruto - Taxa)
+     - Margem de Lucro (Lucro Líquido / Receita * 100)
+
+3. **Regras de Exibição:**
+   - **Apenas pedidos finalizados:** Informações financeiras só devem aparecer quando o pedido estiver com status finalizado
+   - **Dados disponíveis:** Se não houver movimentações financeiras, não exibir a seção
+   - **Tratamento de erros:** Em caso de erro ao carregar, não exibir a seção (não quebrar a tela)
+
+### **Estrutura de Dados**
+
+```javascript
+// Resposta de getOrderFinancialInfo(orderId)
+{
+  revenue: 50.00,        // Valor da receita
+  cmv: 15.00,            // Custo de mercadoria vendida
+  fee: 1.25,             // Taxa de pagamento (se houver)
+  grossProfit: 35.00,    // Lucro bruto (revenue - cmv)
+  netProfit: 33.75,      // Lucro líquido (grossProfit - fee)
+  margin: "67.50",       // Margem de lucro em porcentagem
+  hasData: true          // Flag indicando que há dados
+}
+```
+
+### **Cores e Visual**
+
+- **Receita:** Verde (`#10b981`)
+- **CMV:** Amarelo/Laranja (`#f59e0b`)
+- **Taxa:** Vermelho (`#ef4444`)
+- **Lucro Positivo:** Verde (`#10b981`)
+- **Lucro Negativo:** Vermelho (`#ef4444`)
+
+### **Exemplos de Uso**
+
+```javascript
+// Carregar informações financeiras de um pedido
+const financialInfo = await getOrderFinancialInfo(orderId);
+
+if (financialInfo && financialInfo.hasData) {
+  console.log(`Receita: R$ ${financialInfo.revenue}`);
+  console.log(`CMV: R$ ${financialInfo.cmv}`);
+  console.log(`Lucro Líquido: R$ ${financialInfo.netProfit}`);
+  console.log(`Margem: ${financialInfo.margin}%`);
+}
+```
+
+### **Importante**
+
+- As informações financeiras são **somente leitura** no mobile (não podem ser editadas)
+- A exibição é **informativa** para o usuário ver a rentabilidade do pedido
+- O cálculo é feito no backend, o mobile apenas exibe os dados
+- Se o pedido não tiver movimentações financeiras (ex: pedido antigo antes da implementação), a seção não aparece
+- A taxa de pagamento pode não existir para todos os pedidos (depende do método de pagamento)
 
