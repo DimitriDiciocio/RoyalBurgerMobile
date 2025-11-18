@@ -131,6 +131,8 @@ export const BasketProvider = ({ children }) => {
                         quantity: itemQuantity,
                         total: finalTotal,
                         observacoes: item.notes || '',
+                        // ALTERAÇÃO: Preservar informação de promoção do item
+                        promotion: item.promotion || null,
                         // Converter extras de array para objeto {ingredientId: quantity}
                         selectedExtras: (item.extras || []).reduce((acc, extra) => {
                             const ingredientId = String(extra.ingredient_id || extra.id);
@@ -369,6 +371,8 @@ export const BasketProvider = ({ children }) => {
                             quantity: itemQuantity,
                             total: finalTotal,
                             observacoes: item.notes || '',
+                            // ALTERAÇÃO: Preservar informação de promoção do item
+                            promotion: item.promotion || null,
                             // Converter extras de array para objeto {ingredientId: quantity}
                             selectedExtras: (item.extras || []).reduce((acc, extra) => {
                                 const ingredientId = String(extra.ingredient_id || extra.id);

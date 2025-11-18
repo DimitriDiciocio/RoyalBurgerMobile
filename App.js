@@ -21,6 +21,7 @@ import Perfil from "./screens/perfil";
 import ClubeRoyal from "./screens/clubeRoyal";
 import HistoricoPontos from "./screens/historicoPontos";
 import Pedidos from "./screens/pedidos";
+import Acompanhar from "./screens/acompanhar";
 import Config from "./screens/config";
 import Cesta from "./screens/cesta";
 import Pagamento from "./screens/pagamento";
@@ -644,6 +645,10 @@ export default function App() {
                 <Stack.Screen   
                     name="Pedidos" 
                     component={Pedidos}
+                />
+                <Stack.Screen 
+                    name="Acompanhar" 
+                    component={Acompanhar}
                 />
                 <Stack.Screen 
                     name="Config" 

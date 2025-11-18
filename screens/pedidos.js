@@ -194,16 +194,15 @@ export default function Pedidos({ navigation }) {
   };
 
   const handleAcompanharPedido = (pedido) => {
-    // Mock: Por enquanto apenas mostra um alerta
-    console.log('Acompanhar pedido:', pedido.id);
-    alert(`Acompanhando pedido #${pedido.id}\n\nEm breve, você poderá acompanhar o status do seu pedido em tempo real!`);
-    // TODO: navigation.navigate('AcompanharPedido', { orderId: pedido.id });
+    // ALTERAÇÃO: Navegar para a página de acompanhar pedido
+    const orderId = pedido.id || pedido.order_id;
+    navigation.navigate('Acompanhar', { orderId });
   };
 
   const handleVerDetalhes = (pedido) => {
-    // TODO: Implementar navegação para tela de detalhes
-    console.log('Ver detalhes do pedido:', pedido.id);
-    // navigation.navigate('DetalhesPedido', { orderId: pedido.id });
+    // ALTERAÇÃO: Navegar para a página de acompanhar pedido
+    const orderId = pedido.id || pedido.order_id;
+    navigation.navigate('Acompanhar', { orderId });
   };
 
   const handleAdicionarCesta = (pedido) => {

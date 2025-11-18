@@ -41,28 +41,27 @@ export default function Cesta({ navigation }) {
         }
     };
 
-    // Calcular descontos de promoções
-    // TODO: Implementar lógica de promoções quando estiver disponível
-    // Por enquanto retorna 0
+    // ALTERAÇÃO: Calcular descontos de promoções - apenas soma os valores de desconto já definidos nas promoções
+    // Não faz cálculos matemáticos, apenas pega o valor de desconto da promoção e multiplica pela quantidade
     const calculatePromotionDiscounts = () => {
         try {
             let totalDiscount = 0;
             
-            // TODO: Quando o sistema de promoções estiver pronto, implementar:
-            // 1. Verificar cada item do carrinho se está em promoção
-            // 2. Calcular desconto baseado na promoção (percentual ou valor fixo)
-            // 3. Somar todos os descontos aplicados
-            
-            // Exemplo de como pode ser implementado no futuro:
-            // basketItems.forEach(item => {
-            //     if (item.promotion) {
-            //         if (item.promotion.type === 'percentage') {
-            //             totalDiscount += (item.total * item.promotion.value / 100);
-            //         } else if (item.promotion.type === 'fixed') {
-            //             totalDiscount += item.promotion.value;
-            //         }
-            //     }
-            // });
+            // Para cada item no carrinho, verificar se tem promoção e somar o desconto
+            basketItems.forEach(item => {
+                // Verificar se o item tem promoção (vem da API)
+                const promotion = item.promotion;
+                if (!promotion) return;
+                
+                // ALTERAÇÃO: Apenas pegar o valor de desconto já definido na promoção
+                // Se for desconto em valor fixo, multiplica pela quantidade (pois é desconto por unidade)
+                // Exemplo: produto com R$ 20,00 de desconto, quantidade 2 = R$ 40,00 de desconto total
+                if (promotion.discount_value && parseFloat(promotion.discount_value) > 0) {
+                    const discountValue = parseFloat(promotion.discount_value);
+                    const itemQuantity = parseFloat(item.quantity || 1);
+                    totalDiscount += discountValue * itemQuantity;
+                }
+            });
             
             return parseFloat(totalDiscount) || 0;
         } catch (error) {
@@ -202,6 +201,7 @@ export default function Cesta({ navigation }) {
         };
         checkAuth();
     }, []);
+
 
     // Log para monitorar mudanças no carrinho
     useEffect(() => {
@@ -583,7 +583,7 @@ export default function Cesta({ navigation }) {
                     <View style={styles.resumoItem}>
                         <Text style={styles.resumoLabel}>Descontos</Text>
                         <Text style={styles.resumoValor}>
-                            R$ {(parseFloat(calculatePromotionDiscounts()) || 0).toFixed(2).replace('.', ',')}
+                            - R$ {(parseFloat(calculatePromotionDiscounts()) || 0).toFixed(2).replace('.', ',')}
                         </Text>
                     </View>
 
@@ -591,16 +591,16 @@ export default function Cesta({ navigation }) {
                         <Text style={styles.resumoTotalLabel}>Total</Text>
                         <Text style={styles.resumoTotalValor}>
                             {(() => {
+                                // ALTERAÇÃO: basketTotal já vem com desconto aplicado (item_subtotal da API já tem desconto)
+                                // Não subtrair desconto novamente, apenas somar taxa de entrega
                                 const safeBasketTotal = parseFloat(basketTotal) || 0;
                                 const safeDeliveryFee = parseFloat(deliveryFee) || 0;
-                                const safeDiscounts = parseFloat(calculatePromotionDiscounts()) || 0;
-                                const total = safeBasketTotal + safeDeliveryFee - safeDiscounts;
+                                const total = safeBasketTotal + safeDeliveryFee;
                                 console.log('[Cesta] Resumo Total:', { 
                                     basketTotal, 
                                     safeBasketTotal, 
                                     deliveryFee, 
                                     safeDeliveryFee, 
-                                    discounts: safeDiscounts, 
                                     total 
                                 });
                                 return `R$ ${total.toFixed(2).replace('.', ',')}`;
@@ -619,23 +619,23 @@ export default function Cesta({ navigation }) {
                  <View style={styles.footer}>
                      <View style={styles.footerLeft}>
                          <Text style={styles.footerTotalLabel}>Total</Text>
-                         <Text style={styles.footerTotalValue}>
-                             {(() => {
-                                 const safeBasketTotal = parseFloat(basketTotal) || 0;
-                                 const safeDeliveryFee = parseFloat(deliveryFee) || 0;
-                                 const safeDiscounts = parseFloat(calculatePromotionDiscounts()) || 0;
-                                 const total = safeBasketTotal + safeDeliveryFee - safeDiscounts;
-                                 console.log('[Cesta] Footer Total:', { 
-                                     basketTotal, 
-                                     safeBasketTotal, 
-                                     deliveryFee, 
-                                     safeDeliveryFee, 
-                                     discounts: safeDiscounts, 
-                                     total 
-                                 });
-                                 return `R$ ${total.toFixed(2).replace('.', ',')}`;
-                             })()}
-                         </Text>
+                        <Text style={styles.footerTotalValue}>
+                            {(() => {
+                                // ALTERAÇÃO: basketTotal já vem com desconto aplicado (item_subtotal da API já tem desconto)
+                                // Não subtrair desconto novamente, apenas somar taxa de entrega
+                                const safeBasketTotal = parseFloat(basketTotal) || 0;
+                                const safeDeliveryFee = parseFloat(deliveryFee) || 0;
+                                const total = safeBasketTotal + safeDeliveryFee;
+                                console.log('[Cesta] Footer Total:', { 
+                                    basketTotal, 
+                                    safeBasketTotal, 
+                                    deliveryFee, 
+                                    safeDeliveryFee, 
+                                    total 
+                                });
+                                return `R$ ${total.toFixed(2).replace('.', ',')}`;
+                            })()}
+                        </Text>
                      </View>
                      <TouchableOpacity 
                          style={styles.continuarButton}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
 import { SvgXml } from 'react-native-svg';
+import { Entypo } from '@expo/vector-icons';
 import Header from '../components/Header';
 import EnderecosBottomSheet from '../components/EnderecosBottomSheet';
 import EditarEnderecoBottomSheet from '../components/EditarEnderecoBottomSheet';
@@ -49,6 +50,7 @@ export default function Pagamento({ navigation }) {
     const [loadingPoints, setLoadingPoints] = useState(false);
     const [enderecos, setEnderecos] = useState([]);
     const [enderecoSelecionado, setEnderecoSelecionado] = useState(null);
+    const [isPickup, setIsPickup] = useState(false); // ALTERAÇÃO: Controla se é retirada no balcão
     const [selectedPayment, setSelectedPayment] = useState(null);
     const [usePoints, setUsePoints] = useState(false);
     const [pointsAvailable, setPointsAvailable] = useState(0);
@@ -62,6 +64,8 @@ export default function Pagamento({ navigation }) {
     const [enderecoParaEditar, setEnderecoParaEditar] = useState(null);
     const [showTrocoBottomSheet, setShowTrocoBottomSheet] = useState(false);
     const [trocoValue, setTrocoValue] = useState('');
+    const [showCardTypeBottomSheet, setShowCardTypeBottomSheet] = useState(false);
+    const [cardType, setCardType] = useState(null); // 'credit' ou 'debit'
     const [showReviewBottomSheet, setShowReviewBottomSheet] = useState(false);
     const [isCreatingOrder, setIsCreatingOrder] = useState(false);
     const [redemptionRate, setRedemptionRate] = useState(0.01); // Taxa padrão até carregar das settings
@@ -178,7 +182,9 @@ export default function Pagamento({ navigation }) {
     const calculateFinalTotal = () => {
         const subtotal = calculateTotal();
         const discount = calculateAppliedDiscount(); // Usa desconto aplicado (só quando toggle está ativo)
-        return subtotal + deliveryFee - discount;
+        // ALTERAÇÃO: Se for pickup, não adiciona taxa de entrega
+        const fee = isPickup ? 0 : deliveryFee;
+        return subtotal + fee - discount;
     };
 
     const calculateEarnedPoints = () => {
@@ -211,12 +217,24 @@ export default function Pagamento({ navigation }) {
             const enderecosAtualizados = await getCustomerAddresses(user.id);
             setEnderecos(enderecosAtualizados);
             setEnderecoSelecionado(endereco);
+            setIsPickup(false); // ALTERAÇÃO: Não é pickup quando seleciona endereço
             setShowEnderecosBottomSheet(false);
         } catch (error) {
             console.error('Erro ao definir endereço padrão:', error);
             setEnderecoSelecionado(endereco);
+            setIsPickup(false); // ALTERAÇÃO: Não é pickup quando seleciona endereço
             setShowEnderecosBottomSheet(false);
         }
+    };
+
+    // ALTERAÇÃO: Handler para selecionar retirada no balcão
+    const handleSelectPickup = () => {
+        setEnderecoSelecionado(null);
+        setIsPickup(true);
+        // ALTERAÇÃO: Limpar valor do troco quando selecionar pickup
+        setTrocoValue('');
+        trocoValueRef.current = '';
+        setShowEnderecosBottomSheet(false);
     };
 
     const handleAddNewEndereco = () => {
@@ -309,9 +327,17 @@ export default function Pagamento({ navigation }) {
     const handlePaymentSelect = (payment) => {
         setSelectedPayment(payment);
         
-        // Mostrar bottom sheet de troco quando dinheiro for selecionado
-        if (payment === 'cash') {
+        // ALTERAÇÃO: Mostrar bottom sheet de tipo de cartão quando cartão for selecionado
+        if (payment === 'credit') {
+            setShowCardTypeBottomSheet(true);
+        }
+        // ALTERAÇÃO: Mostrar bottom sheet de troco apenas se não for pickup
+        else if (payment === 'cash' && !isPickup) {
             setShowTrocoBottomSheet(true);
+        }
+        // Se mudar de cartão para outro método, limpar tipo de cartão
+        else {
+            setCardType(null);
         }
     };
 
@@ -320,16 +346,23 @@ export default function Pagamento({ navigation }) {
     };
 
     const handleReviewOrder = async () => {
-        if (!enderecoSelecionado) {
-            alert('Selecione um endereço antes de continuar');
+        // ALTERAÇÃO: Validar endereço ou pickup
+        if (!isPickup && !enderecoSelecionado) {
+            alert('Selecione um endereço ou retirada no balcão antes de continuar');
             return;
         }
         if (!selectedPayment) {
             alert('Selecione uma forma de pagamento');
             return;
         }
-        // Validar se é pagamento em dinheiro e se o valor foi preenchido
-        if (selectedPayment === 'cash' && (!trocoValue.trim() || !isTrocoValueValid())) {
+        // ALTERAÇÃO: Validar se é pagamento em cartão e se o tipo foi selecionado
+        if (selectedPayment === 'credit' && !cardType) {
+            // Abrir o bottom sheet de tipo de cartão novamente
+            setShowCardTypeBottomSheet(true);
+            return;
+        }
+        // ALTERAÇÃO: Validar troco apenas se não for pickup
+        if (selectedPayment === 'cash' && !isPickup && (!trocoValue.trim() || !isTrocoValueValid())) {
             // Abrir o bottom sheet de troco novamente
             setShowTrocoBottomSheet(true);
             return;
@@ -356,13 +389,19 @@ export default function Pagamento({ navigation }) {
 
     const getPaymentMethodName = () => {
         if (selectedPayment === 'pix') return 'Pix';
-        if (selectedPayment === 'credit') return 'Cartão de crédito';
+        if (selectedPayment === 'credit') {
+            // ALTERAÇÃO: Mostrar tipo de cartão selecionado
+            if (cardType === 'credit') return 'Cartão de Crédito';
+            if (cardType === 'debit') return 'Cartão de Débito';
+            return 'Cartão';
+        }
         if (selectedPayment === 'cash') return 'Dinheiro';
         return '';
     };
 
     const getPaymentSubtitle = () => {
-        if (selectedPayment === 'cash' && trocoValue.trim()) {
+        // ALTERAÇÃO: Não mostrar troco se for pickup
+        if (selectedPayment === 'cash' && !isPickup && trocoValue.trim()) {
             return `Troco para R$${formatCurrency(trocoValue)}`;
         }
         return '';
@@ -461,6 +500,10 @@ export default function Pagamento({ navigation }) {
     };
 
     const formatEndereco = (endereco) => {
+        // ALTERAÇÃO: Se for pickup, mostrar texto de retirada
+        if (isPickup) {
+            return "Retirar no local\nBalcão - Retirada na loja";
+        }
         if (!endereco) return "Adicionar endereço";
         
         const parts = [];
@@ -481,11 +524,18 @@ export default function Pagamento({ navigation }) {
         return enderecoStr + (details.length > 0 ? `\n${details.join(' - ')}` : '');
     };
 
-    // Mapeia métodos de pagamento do mobile para a API
+    // ALTERAÇÃO: Mapeia métodos de pagamento do mobile para a API
+    // Agora diferencia entre crédito e débito baseado no cardType
     const mapPaymentMethodToAPI = (mobileMethod) => {
+        if (mobileMethod === 'credit') {
+            // Se é cartão, usar o tipo selecionado (credit ou debit)
+            if (cardType === 'credit') return 'credit';
+            if (cardType === 'debit') return 'debit';
+            // Fallback (não deveria acontecer se validação estiver correta)
+            return 'credit';
+        }
         const mapping = {
             'pix': 'pix',
-            'credit': 'credit_card',
             'cash': 'money'
         };
         return mapping[mobileMethod] || mobileMethod;
@@ -527,15 +577,23 @@ export default function Pagamento({ navigation }) {
     };
 
     const handleConfirmOrder = async () => {
-        if (!enderecoSelecionado) {
-            alert('Selecione um endereço antes de continuar');
+        // ALTERAÇÃO: Validar endereço ou pickup
+        if (!isPickup && !enderecoSelecionado) {
+            alert('Selecione um endereço ou retirada no balcão antes de continuar');
             return;
         }
         if (!selectedPayment) {
             alert('Selecione uma forma de pagamento');
             return;
         }
-        if (selectedPayment === 'cash' && (!trocoValue.trim() || !isTrocoValueValid())) {
+        // ALTERAÇÃO: Validar se é pagamento em cartão e se o tipo foi selecionado
+        if (selectedPayment === 'credit' && !cardType) {
+            alert('Por favor, selecione o tipo de cartão (crédito ou débito)');
+            setShowCardTypeBottomSheet(true);
+            return;
+        }
+        // ALTERAÇÃO: Validar troco apenas se não for pickup
+        if (selectedPayment === 'cash' && !isPickup && (!trocoValue.trim() || !isTrocoValueValid())) {
             alert('Por favor, informe o valor para troco');
             setShowTrocoBottomSheet(true);
             return;
@@ -687,19 +745,23 @@ export default function Pagamento({ navigation }) {
                 return apiItem;
             });
             
-            // Prepara dados do pedido
+            // ALTERAÇÃO: Prepara dados do pedido com order_type correto
             const orderData = {
                 use_cart: false, // Não usa carrinho da API, envia items diretamente
                 items: orderItems,
-                address_id: enderecoSelecionado.id,
                 payment_method: mapPaymentMethodToAPI(selectedPayment),
-                order_type: 'delivery', // Por padrão é delivery, pode ser configurável depois
+                order_type: isPickup ? 'pickup' : 'delivery', // ALTERAÇÃO: Define tipo baseado em isPickup
                 points_to_redeem: pointsToRedeem,
                 notes: '', // Pode adicionar campo de observações depois
             };
 
-            // Se for pagamento em dinheiro, adiciona amount_paid
-            if (selectedPayment === 'cash') {
+            // ALTERAÇÃO: Só adiciona address_id se não for pickup
+            if (!isPickup && enderecoSelecionado?.id) {
+                orderData.address_id = enderecoSelecionado.id;
+            }
+
+            // ALTERAÇÃO: Se for pagamento em dinheiro e não for pickup, adiciona amount_paid
+            if (selectedPayment === 'cash' && !isPickup) {
                 const amountPaid = convertTrocoValueToNumber();
                 if (amountPaid) {
                     orderData.amount_paid = amountPaid;
@@ -806,7 +868,8 @@ export default function Pagamento({ navigation }) {
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Endereços</Text>
-                        <Text style={styles.deliveryTime}>40 - 50 min</Text>
+                        {/* ALTERAÇÃO: Tempo reduzido se for pickup */}
+                        <Text style={styles.deliveryTime}>{isPickup ? '20 - 30 min' : '40 - 50 min'}</Text>
                     </View>
                     
                     <TouchableOpacity 
@@ -820,9 +883,16 @@ export default function Pagamento({ navigation }) {
                             height={16}
                         />
                         <View style={styles.addressInfo}>
-                            <Text style={styles.addressText}>
-                                {formatEndereco(enderecoSelecionado)}
-                            </Text>
+                            {isPickup ? (
+                                <>
+                                    <Text style={styles.addressText}>Retirar no local</Text>
+                                    <Text style={styles.addressSubtitle}>Balcão - Retirada na loja</Text>
+                                </>
+                            ) : (
+                                <Text style={styles.addressText}>
+                                    {formatEndereco(enderecoSelecionado)}
+                                </Text>
+                            )}
                         </View>
                         <SvgXml
                             xml={chevronDownSvg}
@@ -857,7 +927,17 @@ export default function Pagamento({ navigation }) {
                             onPress={() => handlePaymentSelect('credit')}
                             activeOpacity={0.7}
                         >
-                            <Text style={styles.paymentCardTitle}>Cartão de crédito</Text>
+                            <View>
+                                <Text style={[styles.paymentCardTitle, selectedPayment === 'credit' && styles.paymentCardTitleSelected]}>
+                                    Cartão
+                                </Text>
+                                {/* ALTERAÇÃO: Mostrar tipo de cartão selecionado */}
+                                {selectedPayment === 'credit' && cardType && (
+                                    <Text style={styles.paymentCardSubtitle}>
+                                        {cardType === 'credit' ? 'Crédito' : 'Débito'}
+                                    </Text>
+                                )}
+                            </View>
                             <View style={styles.paymentCardSpacer} />
                             <View style={styles.paymentCardIcon}>
                                 <SvgXml xml={getCreditCardSvg(selectedPayment === 'credit')} width={32} height={24} />
@@ -892,7 +972,8 @@ export default function Pagamento({ navigation }) {
                     <View style={styles.resumoItem}>
                         <Text style={styles.resumoLabel}>Taxa de entrega</Text>
                         <Text style={styles.resumoValue}>
-                            R$ {deliveryFee.toFixed(2).replace('.', ',')}
+                            {/* ALTERAÇÃO: Se for pickup, taxa é zero */}
+                            R$ {(isPickup ? 0 : deliveryFee).toFixed(2).replace('.', ',')}
                         </Text>
                     </View>
 
@@ -960,6 +1041,66 @@ export default function Pagamento({ navigation }) {
                  </View>
              )}
 
+            {/* ALTERAÇÃO: Bottom Sheet de Tipo de Cartão */}
+            <BottomSheet 
+                visible={showCardTypeBottomSheet} 
+                onClose={() => setShowCardTypeBottomSheet(false)}
+                heightPercentage={0.5}
+            >
+                <View style={styles.cardTypeBottomSheetContent}>
+                    <Text style={styles.cardTypeTitle}>Selecione o tipo de cartão</Text>
+                    <Text style={styles.cardTypeDescription}>
+                        Escolha se o pagamento será feito com cartão de crédito ou débito.
+                    </Text>
+                    
+                    <TouchableOpacity 
+                        style={[styles.cardTypeButton, cardType === 'credit' && styles.cardTypeButtonSelected]}
+                        onPress={() => {
+                            setCardType('credit');
+                            setShowCardTypeBottomSheet(false);
+                        }}
+                        activeOpacity={0.8}
+                    >
+                        <View style={styles.cardTypeButtonContent}>
+                            <View style={styles.cardTypeIcon}>
+                                <SvgXml xml={getCreditCardSvg(cardType === 'credit')} width={32} height={24} />
+                            </View>
+                            <View style={styles.cardTypeButtonText}>
+                                <Text style={[styles.cardTypeButtonTitle, cardType === 'credit' && styles.cardTypeButtonTitleSelected]}>
+                                    Cartão de Crédito
+                                </Text>
+                                <Text style={styles.cardTypeButtonSubtitle}>
+                                    Pagamento via cartão de crédito
+                                </Text>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        style={[styles.cardTypeButton, cardType === 'debit' && styles.cardTypeButtonSelected]}
+                        onPress={() => {
+                            setCardType('debit');
+                            setShowCardTypeBottomSheet(false);
+                        }}
+                        activeOpacity={0.8}
+                    >
+                        <View style={styles.cardTypeButtonContent}>
+                            <View style={styles.cardTypeIcon}>
+                                <SvgXml xml={getCreditCardSvg(cardType === 'debit')} width={32} height={24} />
+                            </View>
+                            <View style={styles.cardTypeButtonText}>
+                                <Text style={[styles.cardTypeButtonTitle, cardType === 'debit' && styles.cardTypeButtonTitleSelected]}>
+                                    Cartão de Débito
+                                </Text>
+                                <Text style={styles.cardTypeButtonSubtitle}>
+                                    Pagamento via cartão de débito
+                                </Text>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            </BottomSheet>
+
             {/* Bottom Sheet de Troco */}
             <BottomSheet 
                 visible={showTrocoBottomSheet} 
@@ -1014,6 +1155,8 @@ export default function Pagamento({ navigation }) {
                 onEdit={handleEditEndereco}
                 onSelect={handleSelectEndereco}
                 enderecoAtivo={enderecoSelecionado}
+                onSelectPickup={handleSelectPickup}
+                isPickupSelected={isPickup}
             />
 
             <EditarEnderecoBottomSheet
@@ -1043,20 +1186,28 @@ export default function Pagamento({ navigation }) {
                             <SvgXml xml={motoSvg} width={29} height={22} />
                         </View>
                         <View style={styles.reviewInfo}>
-                            <Text style={styles.reviewInfoTitle}>Entrega hoje</Text>
-                            <Text style={styles.reviewInfoSubtitle}>Hoje, 40 - 50 min</Text>
+                            <Text style={styles.reviewInfoTitle}>{isPickup ? 'Retirada hoje' : 'Entrega hoje'}</Text>
+                            {/* ALTERAÇÃO: Tempo reduzido se for pickup */}
+                            <Text style={styles.reviewInfoSubtitle}>Hoje, {isPickup ? '20 - 30 min' : '40 - 50 min'}</Text>
                         </View>
                     </View>
 
                     {/* Endereço */}
                     <View style={styles.reviewInfoCard}>
                         <View style={styles.reviewIcon}>
-                            <SvgXml xml={localizationSvg} width={16} height={24} />
+                            {/* ALTERAÇÃO: Usar ícone de loja se for pickup */}
+                            {isPickup ? (
+                                <Entypo name="shop" size={24} color="black" />
+                            ) : (
+                                <SvgXml xml={localizationSvg} width={16} height={24} />
+                            )}
                         </View>
                         <View style={styles.reviewInfo}>
-                            <Text style={styles.reviewInfoTitle}>{formatEndereco(enderecoSelecionado)}</Text>
+                            <Text style={styles.reviewInfoTitle}>
+                                {isPickup ? 'Retirar no local' : formatEndereco(enderecoSelecionado)}
+                            </Text>
                             <Text style={styles.reviewInfoSubtitle}>
-                                {enderecoSelecionado?.neighborhood || ''} {enderecoSelecionado?.complement ? `- ${enderecoSelecionado.complement}` : ''}
+                                {isPickup ? 'Balcão - Retirada na loja' : `${enderecoSelecionado?.neighborhood || ''} ${enderecoSelecionado?.complement ? `- ${enderecoSelecionado.complement}` : ''}`}
                             </Text>
                         </View>
                     </View>
@@ -1184,6 +1335,12 @@ const styles = StyleSheet.create({
         color: '#000000',
         marginRight: 8,
     },
+    addressSubtitle: {
+        fontSize: 14,
+        color: '#666666',
+        fontWeight: '400',
+        marginTop: 2,
+    },
     paymentCards: {
         marginTop: 12,
         flexDirection: 'row',
@@ -1206,6 +1363,11 @@ const styles = StyleSheet.create({
     },
     paymentCardTitleSelected: {
         fontWeight: 'bold',
+    },
+    paymentCardSubtitle: {
+        fontSize: 12,
+        color: '#666666',
+        marginTop: 2,
     },
     paymentCardSpacer: {
         flex: 1,
@@ -1464,6 +1626,59 @@ const styles = StyleSheet.create({
         color: '#3D1807',
         fontWeight: 'bold',
         textDecorationLine: 'underline',    
+    },
+    // ALTERAÇÃO: Estilos para Bottom Sheet de Tipo de Cartão
+    cardTypeBottomSheetContent: {
+        paddingTop: 20,
+        paddingBottom: 20,
+    },
+    cardTypeTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#000000',
+        marginBottom: 16,
+    },
+    cardTypeDescription: {
+        fontSize: 14,
+        color: '#525252',
+        marginBottom: 24,
+        lineHeight: 20,
+    },
+    cardTypeButton: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 8,
+        padding: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#E5E5E5',
+    },
+    cardTypeButtonSelected: {
+        borderWidth: 2,
+        borderColor: '#FFC700',
+        backgroundColor: '#FFFBF0',
+    },
+    cardTypeButtonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    cardTypeIcon: {
+        marginRight: 16,
+    },
+    cardTypeButtonText: {
+        flex: 1,
+    },
+    cardTypeButtonTitle: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#000000',
+        marginBottom: 4,
+    },
+    cardTypeButtonTitleSelected: {
+        fontWeight: 'bold',
+    },
+    cardTypeButtonSubtitle: {
+        fontSize: 14,
+        color: '#666666',
     },
 });
 

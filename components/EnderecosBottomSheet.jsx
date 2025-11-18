@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, StyleSheet, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { Entypo } from '@expo/vector-icons';
 import BottomSheet from './BottomSheet';
 import CardEndereco from './CardEndereco';
 
-export default function EnderecosBottomSheet({ visible, onClose, enderecos, onAddNew, onEdit, onSelect, enderecoAtivo }) {
+export default function EnderecosBottomSheet({ visible, onClose, enderecos, onAddNew, onEdit, onSelect, enderecoAtivo, onSelectPickup, isPickupSelected }) {
   const handleEditEndereco = (endereco) => {
     if (onEdit) {
       onEdit(endereco);
@@ -46,6 +47,12 @@ export default function EnderecosBottomSheet({ visible, onClose, enderecos, onAd
     return parts.length > 0 ? parts.join(' - ') : 'Bairro - Complemento';
   };
 
+  const handlePickupSelect = () => {
+    if (onSelectPickup) {
+      onSelectPickup();
+    }
+  };
+
   return (
     <BottomSheet visible={visible} onClose={onClose} heightPercentage={0.7}>
       <View style={styles.container}>
@@ -56,6 +63,20 @@ export default function EnderecosBottomSheet({ visible, onClose, enderecos, onAd
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
+          <TouchableOpacity 
+            style={[styles.pickupCard, isPickupSelected && styles.pickupCardActive]} 
+            onPress={handlePickupSelect}
+            activeOpacity={0.7}
+          >
+            <View style={styles.pickupIconContainer}>
+              <Entypo name="shop" size={24} color={isPickupSelected ? '#FFC700' : 'black'} />
+            </View>
+            <View style={styles.pickupTextContainer}>
+              <Text style={styles.pickupTitle}>Retirar no local</Text>
+              <Text style={styles.pickupSubtitle}>Balcão - Retirada na loja</Text>
+            </View>
+          </TouchableOpacity>
+
           {enderecos && enderecos.length > 0 ? (
             // Ordena endereços: ativo primeiro, depois os outros
             [...enderecos].sort((a, b) => {
@@ -131,5 +152,36 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 16,
     fontWeight: '600',
+  },
+  pickupCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  pickupCardActive: {
+    borderColor: '#FFC700',
+    borderWidth: 2,
+  },
+  pickupIconContainer: {
+    marginRight: 12,
+  },
+  pickupTextContainer: {
+    flex: 1,
+  },
+  pickupTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  pickupSubtitle: {
+    fontSize: 14,
+    color: '#666666',
+    fontWeight: '400',
   },
 });

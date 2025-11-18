@@ -662,7 +662,7 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                         </TouchableOpacity>
                         
                         <View style={styles.centerImageContainer}>
-                            {shouldShowInitialLoader ? (
+                            {shouldShowInitialLoader || loadingProduct ? (
                                 <ActivityIndicator size="large" color="#000" />
                             ) : productImageSource ? (
                                 <Image
@@ -670,17 +670,21 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                     style={styles.centerImage}
                                     resizeMode="contain"
                                 />
-                            ) : (
-                                <View style={styles.centerImage} />
-                            )}
+                            ) : null}
                         </View>
                     </View>
-                     <View style={styles.produtoContainer}>
-                         <Text style={styles.produtoTitle}>{productData?.name || produto?.name || produto?.title || 'Produto'}</Text>
-                         {!!(productData?.description || produto?.description) && (
-                             <Text style={styles.produtoDescription}>{productData?.description || produto?.description}</Text>
-                         )}
-                     </View>
+                     {loadingProduct ? (
+                         <View style={styles.produtoContainer}>
+                             <ActivityIndicator size="small" color="#000" />
+                         </View>
+                     ) : (productData || produto) ? (
+                         <View style={styles.produtoContainer}>
+                             <Text style={styles.produtoTitle}>{productData?.name || produto?.name || produto?.title}</Text>
+                             {!!(productData?.description || produto?.description) && (
+                                 <Text style={styles.produtoDescription}>{productData?.description || produto?.description}</Text>
+                             )}
+                         </View>
+                     ) : null}
                      
                      <View style={styles.divisionContainer}>
                          <Image 
@@ -690,12 +694,17 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                          />
                      </View>
                      
-                                                                 <View style={styles.customizeContainer}>
-                          <Text style={styles.produtoTitle}>Monte do seu jeito!</Text>
-                                                     {defaultIngredients && defaultIngredients.length > 0 ? (
-                               defaultIngredients.map((ing, index) => {
-                                   const displayName = ing.name || ing.nome || 'Ingrediente';
-                                   const ingredientId = ing.id || ing.ingredient_id || index;
+                     {loadingProduct ? (
+                         <View style={styles.customizeContainer}>
+                             <ActivityIndicator size="small" color="#000" />
+                         </View>
+                     ) : (
+                         <View style={styles.customizeContainer}>
+                             <Text style={styles.produtoTitle}>Monte do seu jeito!</Text>
+                             {defaultIngredients && defaultIngredients.length > 0 ? (
+                                 defaultIngredients.map((ing, index) => {
+                                     const displayName = ing.name || ing.nome;
+                                     const ingredientId = ing.id || ing.ingredient_id || index;
                                    // Buscar preço do ingrediente usando cache ou dados do ingrediente
                                    const extra = findIngredientPrice(ing, ingredientId);
                                    // Usa portions como quantidade inicial (padrão do produto)
@@ -723,28 +732,27 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                               }));
                                           }}
                                       />
-                                  );
-                              })
-                          ) : (
-                              null
-                          )}
-                          
-                                                     {/* Botão Adicionar Extras */}
-                           {extraIngredients && extraIngredients.length > 0 && (
-                               <TouchableOpacity 
-                                   style={styles.addExtrasButton}
-                                   onPress={handleOpenExtrasModal}
-                                   activeOpacity={0.8}
-                               >
-                                  {selectedExtrasCount > 0 && (
-                                      <View style={styles.extrasBadge}>
-                                          <Text style={styles.extrasBadgeText}>{selectedExtrasCount}</Text>
-                                      </View>
-                                  )}
-                                  <Text style={styles.addExtrasButtonText}>Adicionar extras</Text>
-                              </TouchableOpacity>
-                          )}
-                      </View>
+                                     );
+                                 })
+                             ) : null}
+                             
+                             {/* Botão Adicionar Extras */}
+                             {extraIngredients && extraIngredients.length > 0 && (
+                                 <TouchableOpacity 
+                                     style={styles.addExtrasButton}
+                                     onPress={handleOpenExtrasModal}
+                                     activeOpacity={0.8}
+                                 >
+                                    {selectedExtrasCount > 0 && (
+                                        <View style={styles.extrasBadge}>
+                                            <Text style={styles.extrasBadgeText}>{selectedExtrasCount}</Text>
+                                        </View>
+                                    )}
+                                    <Text style={styles.addExtrasButtonText}>Adicionar extras</Text>
+                                </TouchableOpacity>
+                             )}
+                         </View>
+                     )}
 
                      <Observacoes
                          value={observacoes}
@@ -1062,10 +1070,10 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                      style={styles.modalScrollView}
                                      contentContainerStyle={styles.modalScrollContent}
                                  >
-                                                                           {extraIngredients.map((ing, index) => {
-                                          const displayName = ing.name || ing.nome || 'Ingrediente';
-                                          // IMPORTANTE: Usar String() para garantir consistência nas chaves
-                                          const ingredientId = String(ing.id || ing.ingredient_id || `extra-${index}`);
+                                     {extraIngredients.map((ing, index) => {
+                                         const displayName = ing.name || ing.nome;
+                                         // IMPORTANTE: Usar String() para garantir consistência nas chaves
+                                         const ingredientId = String(ing.id || ing.ingredient_id || `extra-${index}`);
                                           // Buscar preço do ingrediente usando cache ou dados do ingrediente
                                           const extra = findIngredientPrice(ing, ingredientId);
                                           const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
