@@ -889,9 +889,9 @@ export default function Pagamento({ navigation }) {
                                     <Text style={styles.addressSubtitle}>Balcão - Retirada na loja</Text>
                                 </>
                             ) : (
-                                <Text style={styles.addressText}>
-                                    {formatEndereco(enderecoSelecionado)}
-                                </Text>
+                            <Text style={styles.addressText}>
+                                {formatEndereco(enderecoSelecionado)}
+                            </Text>
                             )}
                         </View>
                         <SvgXml
@@ -1199,7 +1199,7 @@ export default function Pagamento({ navigation }) {
                             {isPickup ? (
                                 <Entypo name="shop" size={24} color="black" />
                             ) : (
-                                <SvgXml xml={localizationSvg} width={16} height={24} />
+                            <SvgXml xml={localizationSvg} width={16} height={24} />
                             )}
                         </View>
                         <View style={styles.reviewInfo}>
