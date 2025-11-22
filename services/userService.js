@@ -74,6 +74,16 @@ export const logout = async () => {
     // Remove os dados do usuário do armazenamento local
     await AsyncStorage.removeItem("user_token");
     await AsyncStorage.removeItem("user_data");
+    
+    // ALTERAÇÃO: Limpa o cache do Header após logout
+    try {
+      const { clearHeaderUserCache } = require('../components/Header');
+      if (typeof clearHeaderUserCache === 'function') {
+        clearHeaderUserCache();
+      }
+    } catch (error) {
+      // Ignora erro se o módulo não estiver disponível
+    }
   }
 };
 

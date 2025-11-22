@@ -94,8 +94,6 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
             return null;
         }, [productData?.id, productData?.image_url, produto?.id, produto?.image_url, produto?.imageSource]);
 
-        const shouldShowInitialLoader = loadingProduct && !productImageSource;
-
         const fetchEnderecos = async (userId) => {
             try {
                 const enderecosData = await getCustomerAddresses(userId);
@@ -662,9 +660,7 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                         </TouchableOpacity>
                         
                         <View style={styles.centerImageContainer}>
-                            {shouldShowInitialLoader || loadingProduct ? (
-                                <ActivityIndicator size="large" color="#000" />
-                            ) : productImageSource ? (
+                            {productImageSource ? (
                                 <Image
                                     source={productImageSource}
                                     style={styles.centerImage}
@@ -673,11 +669,7 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                             ) : null}
                         </View>
                     </View>
-                     {loadingProduct ? (
-                         <View style={styles.produtoContainer}>
-                             <ActivityIndicator size="small" color="#000" />
-                         </View>
-                     ) : (productData || produto) ? (
+                     {(productData || produto) ? (
                          <View style={styles.produtoContainer}>
                              <Text style={styles.produtoTitle}>{productData?.name || produto?.name || produto?.title}</Text>
                              {!!(productData?.description || produto?.description) && (
@@ -694,13 +686,8 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                          />
                      </View>
                      
-                     {loadingProduct ? (
-                         <View style={styles.customizeContainer}>
-                             <ActivityIndicator size="small" color="#000" />
-                         </View>
-                     ) : (
-                         <View style={styles.customizeContainer}>
-                             <Text style={styles.produtoTitle}>Monte do seu jeito!</Text>
+                     <View style={styles.customizeContainer}>
+                         <Text style={styles.produtoTitle}>Monte do seu jeito!</Text>
                              {defaultIngredients && defaultIngredients.length > 0 ? (
                                  defaultIngredients.map((ing, index) => {
                                      const displayName = ing.name || ing.nome;
@@ -752,7 +739,6 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                 </TouchableOpacity>
                              )}
                          </View>
-                     )}
 
                      <Observacoes
                          value={observacoes}

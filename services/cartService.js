@@ -271,8 +271,12 @@ export const updateCartItem = async (cartItemId, updates = {}) => {
       }));
     }
     
+    // ALTERAÇÃO: Sempre enviar notes, mesmo que vazio, para garantir que observações sejam atualizadas
     if (updates.notes !== undefined) {
-      payload.notes = String(updates.notes).slice(0, 500);
+      payload.notes = String(updates.notes || '').slice(0, 500);
+    } else if (updates.observacoes !== undefined) {
+      // Fallback para observacoes caso notes não seja fornecido
+      payload.notes = String(updates.observacoes || '').slice(0, 500);
     }
     
     if (updates.baseModifications !== undefined && updates.baseModifications.length > 0) {

@@ -54,6 +54,7 @@ export default function Pagamento({ navigation }) {
     const [selectedPayment, setSelectedPayment] = useState(null);
     const [usePoints, setUsePoints] = useState(false);
     const [pointsAvailable, setPointsAvailable] = useState(0);
+    const [isLoyaltyActive, setIsLoyaltyActive] = useState(false); // ALTERAÇÃO: Controla se o Clube Royal está ativo
     const [deliveryFee, setDeliveryFee] = useState(0);
     const [loyaltyRates, setLoyaltyRates] = useState({
         gain_rate: 0.1, // valor padrão: 1 ponto vale 0.1 reais (10 centavos)
@@ -115,6 +116,12 @@ export default function Pagamento({ navigation }) {
                                     loyaltyData?.loyalty_points?.toString() || 
                                     '0';
                             setPointsAvailable(parseInt(points));
+                            
+                            // ALTERAÇÃO: Verifica se o Clube Royal está ativo
+                            // O programa só está ativo se houver uma propriedade explícita is_active = true
+                            // Não considera apenas ter pontos, pois pode ter pontos sem ter ativado o programa
+                            const hasActiveFlag = loyaltyData?.is_active === true || loyaltyData?.active === true;
+                            setIsLoyaltyActive(hasActiveFlag);
                         } catch (error) {
                             console.log('Erro ao buscar pontos:', error);
                             points = user.points || '0';
@@ -125,6 +132,8 @@ export default function Pagamento({ navigation }) {
                     } else {
                         points = user?.points || '0';
                         setPointsAvailable(parseInt(user?.points || '0'));
+                        // ALTERAÇÃO: Se não for customer, não está ativo
+                        setIsLoyaltyActive(false);
                     }
                     
                     const normalized = user ? {
@@ -191,8 +200,12 @@ export default function Pagamento({ navigation }) {
         // gain_rate é quanto vale 1 ponto em reais (ex: 0.1 = 10 centavos por ponto)
         // Para calcular pontos ganhos: valor gasto / valor de cada ponto
         // Ex: R$ 10,00 / R$ 0,10 = 100 pontos
+        // ALTERAÇÃO: Taxa de entrega NÃO conta para pontos, apenas o subtotal (com desconto se aplicado)
         if (loyaltyRates.gain_rate <= 0) return 0;
-        return Math.floor(calculateFinalTotal() / loyaltyRates.gain_rate);
+        const subtotal = calculateTotal();
+        const discount = calculateAppliedDiscount(); // Desconto aplicado (só quando toggle está ativo)
+        const totalForPoints = subtotal - discount; // Subtotal menos desconto, SEM taxa de entrega
+        return Math.floor(totalForPoints / loyaltyRates.gain_rate);
     };
 
     const handleBack = () => {
@@ -977,14 +990,18 @@ export default function Pagamento({ navigation }) {
                         </Text>
                     </View>
 
-                    <View style={styles.resumoItem}>
-                        <Text style={styles.resumoLabel}>Descontos</Text>
-                        <Text style={styles.resumoValue}>
-                            R$ {calculateDiscountPoints().toFixed(2).replace('.', ',')}
-                        </Text>
-                    </View>
+                    {/* ALTERAÇÃO: Só mostra desconto se o Clube Royal estiver ativo */}
+                    {isLoyaltyActive && (
+                        <View style={styles.resumoItem}>
+                            <Text style={styles.resumoLabel}>Descontos</Text>
+                            <Text style={styles.resumoValue}>
+                                R$ {calculateDiscountPoints().toFixed(2).replace('.', ',')}
+                            </Text>
+                        </View>
+                    )}
 
-                    {/* Usar Pontos Royal */}
+                    {/* ALTERAÇÃO: Usar Pontos Royal - só mostra se o Clube Royal estiver ativo */}
+                    {isLoyaltyActive && (
                     <View style={styles.pointsSection}>
                         <View style={styles.pointsHeader}>
                             <Text style={styles.pointsTitle}>Usar pontos Royal</Text>
@@ -1006,6 +1023,7 @@ export default function Pagamento({ navigation }) {
                             <Toggle value={usePoints} onValueChange={handleTogglePoints} />
                         </View>
                     </View>
+                    )}
 
                     <View style={styles.resumoItem}>
                         <Text style={styles.resumoTotalLabel}>Total</Text>

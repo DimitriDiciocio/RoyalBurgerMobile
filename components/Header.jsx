@@ -7,7 +7,8 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import EnderecosBottomSheet from './EnderecosBottomSheet';
 import EditarEnderecoBottomSheet from './EditarEnderecoBottomSheet';
 import { setDefaultAddress, getCustomerAddresses, addCustomerAddress, updateCustomerAddress, removeCustomerAddress } from '../services/customerService';
-import { getStoredUserData } from '../services/userService';
+import { getStoredUserData, isAuthenticated } from '../services/userService';
+import { getLoyaltyBalance } from '../services/customerService';
 
 const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M5.29385 9.29365C4.90322 9.68428 4.90322 10.3187 5.29385 10.7093L11.2938 16.7093C11.6845 17.0999 12.3188 17.0999 12.7095 16.7093C13.1001 16.3187 13.1001 15.6843 12.7095 15.2937L7.41572 9.9999L12.7063 4.70615C13.097 4.31553 13.097 3.68115 12.7063 3.29053C12.3157 2.8999 11.6813 2.8999 11.2907 3.29053L5.29072 9.29053L5.29385 9.29365Z" fill="black"/>
@@ -27,6 +28,31 @@ const crownSvg = `<svg width="15" height="15" viewBox="0 0 15 15" fill="none" xm
 <path d="M8.08594 3.54375C8.30156 3.37266 8.4375 3.10781 8.4375 2.8125C8.4375 2.29453 8.01797 1.875 7.5 1.875C6.98203 1.875 6.5625 2.29453 6.5625 2.8125C6.5625 3.10781 6.70078 3.37266 6.91406 3.54375L5.31094 6.06562C5.07656 6.43359 4.57734 6.525 4.22812 6.2625L2.83359 5.21953C2.93906 5.06953 3 4.88438 3 4.6875C3 4.16953 2.58047 3.75 2.0625 3.75C1.54453 3.75 1.125 4.16953 1.125 4.6875C1.125 5.19844 1.53516 5.61562 2.04375 5.625L2.80781 10.7227C2.91797 11.4563 3.54844 12 4.29141 12H10.7086C11.4516 12 12.082 11.4563 12.1922 10.7227L12.9562 5.625C13.4648 5.61562 13.875 5.19844 13.875 4.6875C13.875 4.16953 13.4555 3.75 12.9375 3.75C12.4195 3.75 12 4.16953 12 4.6875C12 4.88438 12.0609 5.06953 12.1664 5.21953L10.7742 6.26484C10.425 6.52734 9.92578 6.43594 9.69141 6.06797L8.08594 3.54375Z" fill="#FFC700"/>
 </svg>`;
 
+// ALTERAÇÃO: Cache em memória para dados do usuário no Header
+// Evita recarregar os dados toda vez que o componente é montado
+let userInfoCache = null;
+let cacheTimestamp = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+
+// ALTERAÇÃO: Cache em memória para endereços e endereço ativo
+let enderecosCache = null;
+let enderecoAtivoCache = null;
+let enderecosCacheTimestamp = null;
+
+// Função para limpar o cache (útil após logout)
+export const clearHeaderUserCache = () => {
+    userInfoCache = null;
+    cacheTimestamp = null;
+    enderecosCache = null;
+    enderecoAtivoCache = null;
+    enderecosCacheTimestamp = null;
+};
+
+// ALTERAÇÃO: Função para obter o cache do usuário (compartilhado com outras telas)
+export const getHeaderUserCache = () => {
+    return userInfoCache;
+};
+
 export default function Header({
                                    navigation,
                                    type = 'home',
@@ -43,7 +69,10 @@ export default function Header({
     const [showEnderecosBottomSheet, setShowEnderecosBottomSheet] = useState(false);
     const [showEditarEndereco, setShowEditarEndereco] = useState(false);
     const [enderecoSelecionado, setEnderecoSelecionado] = useState(null);
-    const [enderecoAtivo, setEnderecoAtivo] = useState(null);
+    const [enderecoAtivo, setEnderecoAtivo] = useState(enderecoAtivoCache);
+    const [cachedUserInfo, setCachedUserInfo] = useState(userInfo || userInfoCache);
+    const [cachedEnderecos, setCachedEnderecos] = useState(enderecos.length > 0 ? enderecos : enderecosCache);
+    const [isLoadingEnderecos, setIsLoadingEnderecos] = useState(false);
 
     // Função para formatar o endereço para exibição
     const formatEndereco = (endereco) => {
@@ -60,37 +89,263 @@ export default function Header({
         return parts.length > 0 ? parts.join(', ') : "Adicionar endereço";
     };
 
-    // Define o endereço ativo quando os endereços mudarem
+    // ALTERAÇÃO: Função auxiliar para determinar endereço ativo a partir de uma lista
+    const determineEnderecoAtivo = (enderecosList) => {
+        if (!enderecosList || enderecosList.length === 0) {
+            return null;
+        }
+
+        // Primeiro, procura por um endereço marcado como padrão
+        const enderecoPadrao = enderecosList.find(e => e.is_default === true || e.isDefault === true);
+        
+        if (enderecoPadrao) {
+            return enderecoPadrao;
+        }
+
+        // Se não há endereço padrão, usa o mais recente
+        const enderecosOrdenados = [...enderecosList].sort((a, b) => 
+            new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0)
+        );
+        return enderecosOrdenados[0];
+    };
+
+    // ALTERAÇÃO: Define o endereço ativo quando os endereços mudarem (prop ou cache)
     useEffect(() => {
-        if (enderecos && enderecos.length > 0) {
-            // Primeiro, procura por um endereço marcado como padrão
-            const enderecoPadrao = enderecos.find(e => e.is_default === true || e.isDefault === true);
+        const enderecosToUse = enderecos.length > 0 ? enderecos : cachedEnderecos;
+        
+        if (enderecosToUse && enderecosToUse.length > 0) {
+            const novoEnderecoAtivo = determineEnderecoAtivo(enderecosToUse);
             
-            if (enderecoPadrao) {
-                // Se encontrou um endereço padrão, usa ele
-                setEnderecoAtivo(enderecoPadrao);
-                if (onEnderecoAtivoChange) {
-                    onEnderecoAtivoChange(enderecoPadrao);
-                }
-            } else if (!enderecoAtivo) {
-                // Se não há endereço padrão e não há endereço ativo definido, usa o mais recente
-                const enderecosOrdenados = [...enderecos].sort((a, b) => 
-                    new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0)
-                );
-                const enderecoMaisRecente = enderecosOrdenados[0];
-                setEnderecoAtivo(enderecoMaisRecente);
+            // Se endereços foram passados como prop, atualiza o cache
+            if (enderecos.length > 0) {
+                enderecosCache = enderecos;
+                enderecosCacheTimestamp = Date.now();
+                setCachedEnderecos(enderecos);
+            }
+            
+            // Atualiza endereço ativo apenas se mudou
+            if (novoEnderecoAtivo) {
+                const enderecoAtivoId = enderecoAtivo?.id;
+                const novoEnderecoAtivoId = novoEnderecoAtivo.id;
                 
-                if (onEnderecoAtivoChange) {
-                    onEnderecoAtivoChange(enderecoMaisRecente);
+                if (!enderecoAtivoId || enderecoAtivoId !== novoEnderecoAtivoId) {
+                    setEnderecoAtivo(novoEnderecoAtivo);
+                    enderecoAtivoCache = novoEnderecoAtivo;
+                    
+                    if (onEnderecoAtivoChange) {
+                        onEnderecoAtivoChange(novoEnderecoAtivo);
+                    }
                 }
             }
-        } else {
-            setEnderecoAtivo(null);
-            if (onEnderecoAtivoChange) {
-                onEnderecoAtivoChange(null);
+        } else if (!enderecosToUse || enderecosToUse.length === 0) {
+            // Só atualiza se realmente não houver endereço ativo
+            if (enderecoAtivo) {
+                setEnderecoAtivo(null);
+                enderecoAtivoCache = null;
+                if (onEnderecoAtivoChange) {
+                    onEnderecoAtivoChange(null);
+                }
             }
         }
-    }, [enderecos]);
+    }, [enderecos.length, cachedEnderecos?.length, enderecoAtivo?.id]);
+
+    // ALTERAÇÃO: Carrega dados do usuário do cache ou do storage automaticamente quando necessário
+    useEffect(() => {
+        const loadUserInfo = async () => {
+            // Se type não é 'logged', não precisa carregar
+            if (type !== 'logged') {
+                return;
+            }
+
+            // ALTERAÇÃO: Se userInfo foi passado como prop, atualiza o cache mas continua carregando para manter sincronizado
+            if (userInfo) {
+                userInfoCache = userInfo;
+                cacheTimestamp = Date.now();
+                setCachedUserInfo(userInfo);
+                // Continua para verificar se precisa atualizar (ex: pontos podem ter mudado)
+            }
+
+            // ALTERAÇÃO: Verifica se o cache ainda é válido
+            const now = Date.now();
+            const cacheValid = userInfoCache && cacheTimestamp && (now - cacheTimestamp) < CACHE_DURATION;
+            
+            // Se tem cache válido e não foi passado userInfo como prop, usa o cache
+            if (cacheValid && !userInfo) {
+                setCachedUserInfo(userInfoCache);
+                return;
+            }
+
+            // ALTERAÇÃO: Se não tem cache válido ou userInfo foi passado, carrega/atualiza do storage
+            try {
+                const authenticated = await isAuthenticated();
+                if (!authenticated) {
+                    userInfoCache = null;
+                    cacheTimestamp = null;
+                    setCachedUserInfo(null);
+                    return;
+                }
+
+                const user = await getStoredUserData();
+                if (user?.id) {
+                    // Busca pontos de fidelidade (sempre atualiza para garantir sincronização)
+                    let points = "0";
+                    try {
+                        const balance = await getLoyaltyBalance(user.id);
+                        points = (balance?.current_balance || 0).toString();
+                    } catch (error) {
+                        // Se falhar, usa pontos do cache ou do userInfo passado
+                        if (userInfo?.points) {
+                            points = userInfo.points;
+                        } else if (userInfoCache?.points) {
+                            points = userInfoCache.points;
+                        }
+                    }
+
+                    const normalized = {
+                        name: userInfo?.name || user.full_name || user.name || userInfoCache?.name || undefined,
+                        points: points,
+                        address: user.address || userInfo?.address || userInfoCache?.address || undefined,
+                        avatar: undefined,
+                    };
+
+                    // Atualiza cache
+                    userInfoCache = normalized;
+                    cacheTimestamp = Date.now();
+                    setCachedUserInfo(normalized);
+                } else {
+                    userInfoCache = null;
+                    cacheTimestamp = null;
+                    setCachedUserInfo(null);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar dados do usuário:', error);
+                // Em caso de erro, usa cache ou userInfo passado como fallback
+                if (userInfo) {
+                    setCachedUserInfo(userInfo);
+                } else if (userInfoCache) {
+                    setCachedUserInfo(userInfoCache);
+                } else {
+                    setCachedUserInfo(null);
+                }
+            }
+        };
+
+        loadUserInfo();
+    }, [type, userInfo]);
+
+    // ALTERAÇÃO: Carrega endereços do cache ou da API automaticamente quando necessário
+    useEffect(() => {
+        const loadEnderecos = async () => {
+            // Se type não é 'logged', não precisa carregar
+            if (type !== 'logged') {
+                return;
+            }
+
+            // ALTERAÇÃO: Se enderecos foram passados como prop, atualiza o cache mas continua para manter sincronizado
+            if (enderecos && enderecos.length > 0) {
+                enderecosCache = enderecos;
+                enderecosCacheTimestamp = Date.now();
+                setCachedEnderecos(enderecos);
+                
+                // Determina e atualiza endereço ativo
+                const novoEnderecoAtivo = determineEnderecoAtivo(enderecos);
+                if (novoEnderecoAtivo) {
+                    setEnderecoAtivo(novoEnderecoAtivo);
+                    enderecoAtivoCache = novoEnderecoAtivo;
+                }
+                // Continua para verificar se precisa atualizar do servidor (cache pode estar desatualizado)
+            }
+
+            // ALTERAÇÃO: Verifica se o cache ainda é válido
+            const now = Date.now();
+            const enderecosCacheValid = enderecosCache && enderecosCacheTimestamp && (now - enderecosCacheTimestamp) < CACHE_DURATION;
+            
+            // Se tem cache válido e não foram passados enderecos como prop, usa o cache
+            if (enderecosCacheValid && (!enderecos || enderecos.length === 0)) {
+                setCachedEnderecos(enderecosCache);
+                
+                // Restaura endereço ativo do cache se disponível
+                if (enderecoAtivoCache) {
+                    setEnderecoAtivo(enderecoAtivoCache);
+                } else {
+                    // Determina endereço ativo a partir do cache
+                    const novoEnderecoAtivo = determineEnderecoAtivo(enderecosCache);
+                    if (novoEnderecoAtivo) {
+                        setEnderecoAtivo(novoEnderecoAtivo);
+                        enderecoAtivoCache = novoEnderecoAtivo;
+                    }
+                }
+                return;
+            }
+
+            // ALTERAÇÃO: Se não tem cache válido ou enderecos foram passados, carrega/atualiza da API
+            try {
+                setIsLoadingEnderecos(true);
+                const authenticated = await isAuthenticated();
+                if (!authenticated) {
+                    enderecosCache = null;
+                    enderecoAtivoCache = null;
+                    enderecosCacheTimestamp = null;
+                    setCachedEnderecos(null);
+                    setEnderecoAtivo(null);
+                    return;
+                }
+
+                const user = await getStoredUserData();
+                if (user?.id) {
+                    const enderecosData = await getCustomerAddresses(user.id);
+                    const enderecosList = enderecosData || [];
+                    
+                    // ALTERAÇÃO: Se enderecos foram passados como prop, mescla com dados da API (prioriza API)
+                    const enderecosToUse = enderecosList.length > 0 ? enderecosList : (enderecos || []);
+                    
+                    // Atualiza cache
+                    enderecosCache = enderecosToUse;
+                    enderecosCacheTimestamp = Date.now();
+                    setCachedEnderecos(enderecosToUse);
+                    
+                    // Determina e atualiza endereço ativo
+                    const novoEnderecoAtivo = determineEnderecoAtivo(enderecosToUse);
+                    if (novoEnderecoAtivo) {
+                        setEnderecoAtivo(novoEnderecoAtivo);
+                        enderecoAtivoCache = novoEnderecoAtivo;
+                        
+                        if (onEnderecoAtivoChange) {
+                            onEnderecoAtivoChange(novoEnderecoAtivo);
+                        }
+                    } else {
+                        setEnderecoAtivo(null);
+                        enderecoAtivoCache = null;
+                        if (onEnderecoAtivoChange) {
+                            onEnderecoAtivoChange(null);
+                        }
+                    }
+                } else {
+                    enderecosCache = null;
+                    enderecoAtivoCache = null;
+                    enderecosCacheTimestamp = null;
+                    setCachedEnderecos(null);
+                    setEnderecoAtivo(null);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar endereços:', error);
+                // Em caso de erro, usa cache ou enderecos passados como fallback
+                if (enderecos && enderecos.length > 0) {
+                    setCachedEnderecos(enderecos);
+                } else if (enderecosCache) {
+                    setCachedEnderecos(enderecosCache);
+                } else {
+                    setCachedEnderecos(null);
+                }
+                setEnderecoAtivo(null);
+            } finally {
+                setIsLoadingEnderecos(false);
+            }
+        };
+
+        loadEnderecos();
+    }, [type, enderecos]);
+
     const handlePress = () => {
         if (navigation) {
             navigation.navigate('Login');
@@ -105,6 +360,9 @@ export default function Header({
                 await setDefaultAddress(user.id, endereco.id);
             }
             
+            // ALTERAÇÃO: Atualiza o cache
+            enderecoAtivoCache = endereco;
+            
             // Atualiza o estado local
             setEnderecoAtivo(endereco);
             if (onEnderecoAtivoChange) {
@@ -113,6 +371,7 @@ export default function Header({
         } catch (error) {
             console.error('Erro ao definir endereço padrão:', error);
             // Mesmo com erro, atualiza o estado local para melhor UX
+            enderecoAtivoCache = endereco;
             setEnderecoAtivo(endereco);
             if (onEnderecoAtivoChange) {
                 onEnderecoAtivoChange(endereco);
@@ -165,6 +424,12 @@ export default function Header({
                             // Define como padrão via API
                             await setDefaultAddress(user.id, enderecoMaisRecente.id);
                             
+                            // ALTERAÇÃO: Atualiza o cache
+                            enderecosCache = enderecosAtualizados;
+                            enderecoAtivoCache = enderecoMaisRecente;
+                            enderecosCacheTimestamp = Date.now();
+                            setCachedEnderecos(enderecosAtualizados);
+                            
                             // Atualiza o estado local imediatamente
                             setEnderecoAtivo(enderecoMaisRecente);
                             
@@ -184,6 +449,19 @@ export default function Header({
             } else {
                 // Para edição, apenas atualiza a lista
                 const enderecosAtualizados = await getCustomerAddresses(user.id);
+                
+                // ALTERAÇÃO: Atualiza o cache
+                enderecosCache = enderecosAtualizados;
+                enderecosCacheTimestamp = Date.now();
+                setCachedEnderecos(enderecosAtualizados);
+                
+                // Atualiza endereço ativo se necessário
+                const novoEnderecoAtivo = determineEnderecoAtivo(enderecosAtualizados);
+                if (novoEnderecoAtivo) {
+                    enderecoAtivoCache = novoEnderecoAtivo;
+                    setEnderecoAtivo(novoEnderecoAtivo);
+                }
+                
                 if (onEnderecoAtivoChange) {
                     onEnderecoAtivoChange({ type: 'refresh', enderecos: enderecosAtualizados });
                 }
@@ -206,6 +484,22 @@ export default function Header({
 
             // Atualizar lista de endereços
             const enderecosAtualizados = await getCustomerAddresses(user.id);
+            
+            // ALTERAÇÃO: Atualiza o cache
+            enderecosCache = enderecosAtualizados;
+            enderecosCacheTimestamp = Date.now();
+            setCachedEnderecos(enderecosAtualizados);
+            
+            // Atualiza endereço ativo se necessário
+            const novoEnderecoAtivo = determineEnderecoAtivo(enderecosAtualizados);
+            if (novoEnderecoAtivo) {
+                enderecoAtivoCache = novoEnderecoAtivo;
+                setEnderecoAtivo(novoEnderecoAtivo);
+            } else {
+                enderecoAtivoCache = null;
+                setEnderecoAtivo(null);
+            }
+            
             if (onEnderecoAtivoChange) {
                 onEnderecoAtivoChange({ type: 'refresh', enderecos: enderecosAtualizados });
             }
@@ -251,6 +545,9 @@ export default function Header({
         setShowEditarEndereco(true);
     };
 
+    // ALTERAÇÃO: Usa userInfo da prop se disponível, senão usa o cache
+    const effectiveUserInfo = userInfo || cachedUserInfo;
+
     // Renderizar conteúdo baseado no tipo
     const renderContent = () => {
         switch (type) {
@@ -284,7 +581,7 @@ export default function Header({
                         <View style={styles.userInfo}>
                             <View style={styles.userTexts}>
                                 <Text style={styles.userName}>
-                                    {"Olá, " + (userInfo?.name || "Usuário")}
+                                    {effectiveUserInfo?.name ? "Olá, " + effectiveUserInfo.name : ""}
                                 </Text>
                                 <TouchableOpacity 
                                     style={styles.userAddressRow}
@@ -324,13 +621,9 @@ export default function Header({
                                 height={20}
                                 style={styles.crownIcon}
                             />
-                            {loadingPoints ? (
-                                <ActivityIndicator size="small" color="#FFC700" style={styles.pointsLoading} />
-                            ) : (
-                                <Text style={styles.pointsText}>
-                                    {userInfo?.points || "0"} pontos
-                                </Text>
-                            )}
+                            <Text style={styles.pointsText}>
+                                {effectiveUserInfo?.points || "0"} pontos
+                            </Text>
                         </TouchableOpacity>
                         {rightButton && rightButton}
                     </View>
@@ -363,7 +656,7 @@ export default function Header({
             <EnderecosBottomSheet
                 visible={showEnderecosBottomSheet}
                 onClose={handleCloseEnderecosBottomSheet}
-                enderecos={enderecos}
+                enderecos={enderecos.length > 0 ? enderecos : cachedEnderecos || []}
                 onAddNew={handleAddNewEndereco}
                 onEdit={handleEditEndereco}
                 onSelect={handleSelectEndereco}
@@ -379,7 +672,7 @@ export default function Header({
                 endereco={enderecoSelecionado}
                 onSave={handleSaveEndereco}
                 onDelete={handleDeleteEndereco}
-                enderecos={enderecos}
+                enderecos={enderecos.length > 0 ? enderecos : cachedEnderecos || []}
             />
         </>
     );

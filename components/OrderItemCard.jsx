@@ -1,8 +1,46 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, Image } from 'react-native';
 import api from '../services/api';
+import { getAllIngredients } from '../services/ingredientService';
 
 export default function OrderItemCard({ item }) {
+  // ALTERAÇÃO: Cache de ingredientes para buscar preços dos extras
+  const [ingredientsCache, setIngredientsCache] = useState(null);
+
+  // ALTERAÇÃO: Carregar cache de ingredientes ao montar o componente
+  useEffect(() => {
+    const loadIngredientsCache = async () => {
+      if (ingredientsCache) return;
+      try {
+        const response = await getAllIngredients({ page_size: 1000 });
+        let ingredientsList = [];
+        if (Array.isArray(response)) {
+          ingredientsList = response;
+        } else if (response && response.items && Array.isArray(response.items)) {
+          ingredientsList = response.items;
+        }
+        
+        if (ingredientsList.length > 0) {
+          const cache = {};
+          ingredientsList.forEach(ingredient => {
+            if (ingredient && ingredient.id != null) {
+              const id = String(ingredient.id);
+              cache[id] = {
+                additional_price: parseFloat(ingredient.additional_price) || 0,
+                price: parseFloat(ingredient.price) || 0,
+                name: ingredient.name || ''
+              };
+            }
+          });
+          setIngredientsCache(cache);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar cache de ingredientes:', error);
+      }
+    };
+    loadIngredientsCache();
+  }, []);
+
   const formatCurrency = (value) => {
     try {
       const numValue = parseFloat(value) || 0;
@@ -49,6 +87,19 @@ export default function OrderItemCard({ item }) {
 
   // Obter extras e modificações
   const getExtras = () => {
+    // ALTERAÇÃO: Se selectedExtras é um objeto, converter para array
+    if (item?.selectedExtras && typeof item.selectedExtras === 'object' && !Array.isArray(item.selectedExtras)) {
+      // Converter objeto {ingredientId: quantity} para array
+      return Object.entries(item.selectedExtras)
+        .filter(([_, qty]) => qty > 0)
+        .map(([ingredientId, qty]) => ({
+          ingredient_id: Number(ingredientId),
+          id: Number(ingredientId),
+          quantity: Number(qty),
+          qty: Number(qty)
+        }));
+    }
+    // Se já é array, retornar direto
     return item?.extras || item?.additional_items || item?.selectedExtras || [];
   };
 
@@ -56,8 +107,20 @@ export default function OrderItemCard({ item }) {
     return item?.base_modifications || item?.modifications || [];
   };
 
-  // Buscar preço do ingrediente (mesma lógica do produto.js)
+  // ALTERAÇÃO: Buscar preço do ingrediente (melhorada com cache)
   const findIngredientPrice = (ingredientData, ingredientId) => {
+    // Primeiro tentar cache se tiver ID
+    if (ingredientId && ingredientsCache) {
+      const id = String(ingredientId);
+      const cached = ingredientsCache[id];
+      if (cached && cached.additional_price > 0) {
+        return cached.additional_price;
+      }
+      if (cached && cached.price > 0) {
+        return cached.price;
+      }
+    }
+
     // Tentar nos dados do ingrediente (mesma ordem do produto.js)
     const priceCandidates = [
       ingredientData?.additional_price,
@@ -83,38 +146,123 @@ export default function OrderItemCard({ item }) {
     return 0;
   };
 
-  // Calcular preço total do item (produto + adicionais)
+  // ALTERAÇÃO: Calcular preço total do item (produto + adicionais)
+  // Sempre calcula incluindo adicionais, mesmo se item_subtotal vier da API
   const calculateItemTotal = () => {
-    // item_subtotal já vem da API com produto + adicionais calculados
-    if (item?.item_subtotal !== undefined) {
-      return parseFloat(item.item_subtotal) || 0;
-    }
-    
-    // Se não tiver item_subtotal, calcular manualmente
-    const unitPrice = parseFloat(item?.unit_price || item?.price || 0);
+    // Começar com o preço base do produto
+    const unitPrice = parseFloat(item?.unit_price || item?.price || item?.product?.price || 0);
     const quantity = parseInt(item?.quantity || 1, 10);
     let baseTotal = unitPrice * quantity;
     
-    // Somar preços dos extras
+    // ALTERAÇÃO: Sempre somar preços dos extras (adicionais)
     const extras = getExtras();
-    if (Array.isArray(extras) && extras.length > 0) {
-      extras.forEach(extra => {
-        const extraQuantity = parseInt(extra.quantity || extra.qty || 1, 10);
-        const extraPrice = parseFloat(extra.price || extra.ingredient_price || 0);
-        baseTotal += extraPrice * extraQuantity;
-      });
+    let hasExtras = false;
+    let extrasTotal = 0;
+    
+    // ALTERAÇÃO: Melhorar validação de extras - verificar se é array válido e não vazio
+    const isValidExtrasArray = Array.isArray(extras) && extras.length > 0;
+    const hasSelectedExtras = item?.selectedExtras && typeof item.selectedExtras === 'object' && Object.keys(item.selectedExtras).length > 0;
+    
+    if (isValidExtrasArray || hasSelectedExtras) {
+      // Se tem selectedExtras como objeto, já foi convertido em getExtras()
+      const extrasToProcess = isValidExtrasArray ? extras : getExtras();
+      
+      if (Array.isArray(extrasToProcess) && extrasToProcess.length > 0) {
+        extrasToProcess.forEach(extra => {
+          const extraQuantity = parseInt(extra.quantity || extra.qty || 1, 10);
+          const ingredientId = extra.ingredient_id || extra.id;
+          
+          // ALTERAÇÃO: Validar se tem quantidade válida
+          if (extraQuantity <= 0 || !ingredientId) {
+            return; // Pula extras inválidos
+          }
+          
+          // Buscar preço usando a mesma função que busca preço de ingrediente (com cache)
+          let extraPrice = findIngredientPrice(extra, ingredientId);
+          
+          // ALTERAÇÃO: Se não encontrou, tentar campos específicos de itens de pedido
+          if (extraPrice === 0) {
+            const priceCandidates = [
+              extra.price,
+              extra.unit_price,
+              extra.item_price,
+              extra.extra_price,
+              extra.additional_price,
+              extra.total_price ? parseFloat(extra.total_price) / extraQuantity : null,
+            ];
+            
+            for (const candidate of priceCandidates) {
+              if (candidate !== undefined && candidate !== null) {
+                const priceNum = parseFloat(candidate);
+                if (!isNaN(priceNum) && priceNum >= 0) {
+                  extraPrice = priceNum;
+                  break;
+                }
+              }
+            }
+          }
+          
+          // ALTERAÇÃO: Se ainda não encontrou preço mas tem ingredient_id, tentar buscar do cache
+          if (extraPrice === 0 && ingredientId && ingredientsCache) {
+            const cached = ingredientsCache[String(ingredientId)];
+            if (cached) {
+              extraPrice = cached.additional_price || cached.price || 0;
+            }
+          }
+          
+          // ALTERAÇÃO: Somar mesmo se preço for 0 (pode ser extra gratuito), mas marcar como tendo extras
+          if (extraQuantity > 0) {
+            hasExtras = true;
+            const extraTotal = extraPrice * extraQuantity;
+            extrasTotal += extraTotal;
+            baseTotal += extraTotal;
+          }
+        });
+      }
     }
     
-    // Somar preços das modificações positivas (adições)
+    // ALTERAÇÃO: Sempre somar preços das modificações positivas (adições)
     const modifications = getModifications();
+    let hasModifications = false;
     if (Array.isArray(modifications) && modifications.length > 0) {
       modifications.forEach(mod => {
         const delta = parseFloat(mod.delta || 0);
         if (delta > 0) {
-          const modPrice = parseFloat(mod.price || mod.ingredient_price || 0);
-          baseTotal += modPrice * Math.abs(delta);
+          // Buscar preço usando a mesma função que busca preço de ingrediente
+          const modPrice = findIngredientPrice(mod, mod.ingredient_id || mod.id);
+          if (modPrice > 0) {
+            hasModifications = true;
+            baseTotal += modPrice * Math.abs(delta);
+          }
         }
       });
+    }
+    
+    // ALTERAÇÃO: Se houver extras ou modificações, sempre usar o valor calculado
+    // Se não houver, usar o item.total se disponível, senão o item_subtotal da API
+    if (hasExtras || hasModifications) {
+      // Se calculou extras/modificações, sempre usar o calculado
+      return baseTotal;
+    }
+    
+    // Se não houver extras/modificações, usar o total do item se disponível
+    if (item?.total !== undefined && item?.total !== null) {
+      const itemTotal = parseFloat(item.total);
+      if (!isNaN(itemTotal) && itemTotal > 0) {
+        return itemTotal;
+      }
+    }
+    
+    // Se não houver total do item, usar o total da API se disponível, senão o subtotal
+    const apiTotal = parseFloat(item?.total_price || item?.item_total || 0);
+    const apiSubtotal = parseFloat(item?.item_subtotal || item?.subtotal || 0);
+    
+    if (apiTotal > 0) {
+      return apiTotal;
+    }
+    
+    if (apiSubtotal > 0) {
+      return apiSubtotal;
     }
     
     return baseTotal;
@@ -166,8 +314,31 @@ export default function OrderItemCard({ item }) {
               const name = extra.ingredient_name || extra.name || extra.title || 'Extra';
               const ingredientId = extra.ingredient_id || extra.id;
               
-              // Buscar preço usando função centralizada (mesma lógica do produto.js)
-              const unitPrice = findIngredientPrice(extra, ingredientId);
+              // ALTERAÇÃO: Buscar preço usando função centralizada e também tentar campos específicos do pedido
+              let unitPrice = findIngredientPrice(extra, ingredientId);
+              
+              // Se não encontrou, tentar campos específicos de itens de pedido
+              if (unitPrice === 0) {
+                const priceCandidates = [
+                  extra.price,
+                  extra.unit_price,
+                  extra.item_price,
+                  extra.extra_price,
+                  extra.additional_price,
+                  extra.total_price ? parseFloat(extra.total_price) / quantity : null,
+                ];
+                
+                for (const candidate of priceCandidates) {
+                  if (candidate !== undefined && candidate !== null) {
+                    const priceNum = parseFloat(candidate);
+                    if (!isNaN(priceNum) && priceNum >= 0) {
+                      unitPrice = priceNum;
+                      break;
+                    }
+                  }
+                }
+              }
+              
               const totalPrice = unitPrice * quantity;
               
               return (
@@ -179,7 +350,7 @@ export default function OrderItemCard({ item }) {
                     <Text style={styles.modificationName}>{name}</Text>
                   </View>
                   <Text style={styles.modificationPrice}>
-                    XX
+                    {totalPrice > 0 ? `+${formatCurrency(totalPrice)}` : formatCurrency(0)}
                   </Text>
                 </View>
               );
@@ -212,11 +383,20 @@ export default function OrderItemCard({ item }) {
                 </View>
               );
             })}
+            
+            {/* ALTERAÇÃO: Observações embaixo das modificações, caso houver */}
+            {(item?.notes || item?.observacoes) && (item.notes?.trim() || item.observacoes?.trim()) && (
+              <View style={styles.observationsSection}>
+                <Text style={styles.observationsText}>
+                  <Text style={styles.observationsLabel}>Obs:</Text> {item.notes || item.observacoes}
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
-        {/* Observações */}
-        {(item?.notes || item?.observacoes) && (item.notes?.trim() || item.observacoes?.trim()) && (
+        {/* Observações - só aparece se não houver modificações */}
+        {!hasExtrasOrMods && (item?.notes || item?.observacoes) && (item.notes?.trim() || item.observacoes?.trim()) && (
           <View style={styles.observationsSection}>
             <Text style={styles.observationsText}>
               <Text style={styles.observationsLabel}>Obs:</Text> {item.notes || item.observacoes}

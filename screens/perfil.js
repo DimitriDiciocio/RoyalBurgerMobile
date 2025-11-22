@@ -27,6 +27,7 @@ import MenuNavigation from "../components/MenuNavigation";
 import DadosContaBottomSheet from "../components/DadosContaBottomSheet";
 import EnderecosBottomSheet from "../components/EnderecosBottomSheet";
 import EditarEnderecoBottomSheet from "../components/EditarEnderecoBottomSheet";
+import { getHeaderUserCache } from "../components/Header";
 
 // SVGs dos ícones
 const lupaSvg = `<svg width="25" height="25" viewBox="0 0 25 25" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -92,11 +93,15 @@ export default function Perfil({ navigation }) {
             user = await getStoredUserData();
           }
 
+          // ALTERAÇÃO: Usa o cache do Header se disponível, senão usa dados do usuário
+          const cachedUserInfo = getHeaderUserCache();
+          const userName = cachedUserInfo?.name || user?.full_name || user?.name || undefined;
+          
           // Mantém todos os dados do usuário
           const normalized = user
             ? {
                 ...user, // Mantém todos os campos do usuário
-                name: user.full_name || user.name || "Usuário",
+                name: userName,
                 points: user.points || "0",
                 address: user.address || undefined,
                 avatar: undefined,
@@ -318,7 +323,7 @@ export default function Perfil({ navigation }) {
   };
 
   const capitalizeName = (name) => {
-    if (!name) return "Usuário";
+    if (!name) return "";
     return name
       .toLowerCase()
       .split(" ")
@@ -463,10 +468,14 @@ export default function Perfil({ navigation }) {
                   user = await getStoredUserData();
                 }
 
+                // ALTERAÇÃO: Usa o cache do Header se disponível, senão usa dados do usuário
+                const cachedUserInfo = getHeaderUserCache();
+                const userName = cachedUserInfo?.name || user?.full_name || user?.name || undefined;
+                
                 const normalized = user
                   ? {
                       ...user,
-                      name: user.full_name || user.name || "Usuário",
+                      name: userName,
                       points: user.points || "0",
                       address: user.address || undefined,
                       avatar: undefined,

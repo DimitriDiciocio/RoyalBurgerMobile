@@ -9,6 +9,7 @@ import {
     getGuestCartId
 } from '../services/cartService';
 import { isAuthenticated } from '../services/userService';
+import { getAllIngredients } from '../services/ingredientService';
 import api from '../services/api';
 
 const BasketContext = createContext();
@@ -27,11 +28,90 @@ export const BasketProvider = ({ children }) => {
     const [loading, setLoading] = useState(false);
     const [cartId, setCartId] = useState(null);
     const [isAuthenticatedUser, setIsAuthenticatedUser] = useState(false);
+    // ALTERAÇÃO: Cache de ingredientes para buscar preços dos extras
+    const [ingredientsCache, setIngredientsCache] = useState(null);
+
+    // ALTERAÇÃO: Carregar cache de ingredientes
+    const loadIngredientsCache = useCallback(async () => {
+        // Verificar se já tem cache no estado atual
+        if (ingredientsCache) return ingredientsCache;
+        try {
+            const response = await getAllIngredients({ page_size: 1000 });
+            let ingredientsList = [];
+            if (Array.isArray(response)) {
+                ingredientsList = response;
+            } else if (response && response.items && Array.isArray(response.items)) {
+                ingredientsList = response.items;
+            }
+            
+            if (ingredientsList.length > 0) {
+                const cache = {};
+                ingredientsList.forEach(ingredient => {
+                    if (ingredient && ingredient.id != null) {
+                        const id = String(ingredient.id);
+                        cache[id] = {
+                            additional_price: parseFloat(ingredient.additional_price) || 0,
+                            price: parseFloat(ingredient.price) || 0,
+                            name: ingredient.name || ''
+                        };
+                    }
+                });
+                setIngredientsCache(cache);
+                return cache;
+            }
+            return {};
+        } catch (error) {
+            console.error('Erro ao carregar cache de ingredientes:', error);
+            return {};
+        }
+    }, []);
+
+    // ALTERAÇÃO: Função para buscar preço do ingrediente (melhorada com cache)
+    const findIngredientPrice = useCallback((ingredientData, ingredientId) => {
+        // Primeiro tentar cache se tiver ID
+        if (ingredientId && ingredientsCache) {
+            const id = String(ingredientId);
+            const cached = ingredientsCache[id];
+            if (cached && cached.additional_price > 0) {
+                return cached.additional_price;
+            }
+            if (cached && cached.price > 0) {
+                return cached.price;
+            }
+        }
+
+        // Tentar nos dados do ingrediente
+        const priceCandidates = [
+            ingredientData?.additional_price,
+            ingredientData?.extra_price,
+            ingredientData?.preco_extra,
+            ingredientData?.valor_extra,
+            ingredientData?.price,
+            ingredientData?.ingredient_price,
+            ingredientData?.unit_price,
+            ingredientData?.preco,
+            ingredientData?.valor
+        ];
+
+        for (const candidate of priceCandidates) {
+            if (candidate !== undefined && candidate !== null) {
+                const priceNum = parseFloat(candidate);
+                if (!isNaN(priceNum) && priceNum >= 0) {
+                    return priceNum;
+                }
+            }
+        }
+
+        return 0;
+    }, [ingredientsCache]);
 
     // Carregar carrinho da API ao inicializar
     const loadCart = useCallback(async () => {
         try {
             setLoading(true);
+            // ALTERAÇÃO: Carregar cache de ingredientes antes de processar itens
+            await loadIngredientsCache();
+            
             console.log('[BasketContext] Carregando carrinho...');
             
             const result = await getCart();
@@ -98,27 +178,89 @@ export const BasketProvider = ({ children }) => {
                     const itemQuantity = item.quantity || 1;
                     const basePrice = productPrice * itemQuantity;
 
-                    // Calcular preço dos extras
-                    const extrasPrice = (item.extras || []).reduce((sum, extra) => {
-                        const extraPrice = parseFloat(extra.unit_price || extra.ingredient_price || extra.price || 0);
-                        const extraQuantity = parseInt(extra.quantity || 0, 10);
-                        return sum + (extraPrice * extraQuantity);
-                    }, 0);
+                        // ALTERAÇÃO: Calcular preço dos extras (buscar preço de várias fontes possíveis + cache)
+                        const extrasPrice = (item.extras || []).reduce((sum, extra) => {
+                            const ingredientId = extra.ingredient_id || extra.id;
+                            // ALTERAÇÃO: Usar função melhorada que busca no cache
+                            let extraPrice = findIngredientPrice(extra, ingredientId);
+                            
+                            // Se não encontrou no cache, tentar campos específicos
+                            if (extraPrice === 0) {
+                                const priceCandidates = [
+                                    extra.unit_price,
+                                    extra.ingredient_price,
+                                    extra.price,
+                                    extra.additional_price,
+                                    extra.extra_price,
+                                    extra.total_price ? parseFloat(extra.total_price) / parseInt(extra.quantity || 1, 10) : null
+                                ];
+                                
+                                for (const candidate of priceCandidates) {
+                                    if (candidate !== undefined && candidate !== null) {
+                                        const priceNum = parseFloat(candidate);
+                                        if (!isNaN(priceNum) && priceNum >= 0) {
+                                            extraPrice = priceNum;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            const extraQuantity = parseInt(extra.quantity || 0, 10);
+                            return sum + (extraPrice * extraQuantity);
+                        }, 0);
 
-                    // Calcular preço das modificações base
+                    // ALTERAÇÃO: Calcular preço das modificações base (buscar preço de várias fontes possíveis + cache)
+                    // IMPORTANTE: Apenas modificações positivas (adições) alteram o preço
+                    // Modificações negativas (remoções) não alteram o preço
                     const baseModsPrice = (item.base_modifications || []).reduce((sum, mod) => {
-                        const modPrice = parseFloat(mod.unit_price || mod.ingredient_price || mod.price || mod.additionalPrice || 0);
-                        const modDelta = Math.abs(parseInt(mod.delta || 0, 10));
+                        const delta = parseFloat(mod.delta || 0);
+                        
+                        // ALTERAÇÃO: Apenas processar se delta for positivo (adição)
+                        // Remoções (delta negativo) não alteram o preço
+                        if (delta <= 0) {
+                            return sum;
+                        }
+                        
+                        const ingredientId = mod.ingredient_id || mod.id;
+                        // ALTERAÇÃO: Usar função melhorada que busca no cache
+                        let modPrice = findIngredientPrice(mod, ingredientId);
+                        
+                        // Se não encontrou no cache, tentar campos específicos
+                        if (modPrice === 0) {
+                            const priceCandidates = [
+                                mod.unit_price,
+                                mod.ingredient_price,
+                                mod.price,
+                                mod.additionalPrice,
+                                mod.additional_price,
+                                mod.extra_price
+                            ];
+                            
+                            for (const candidate of priceCandidates) {
+                                if (candidate !== undefined && candidate !== null) {
+                                    const priceNum = parseFloat(candidate);
+                                    if (!isNaN(priceNum) && priceNum >= 0) {
+                                        modPrice = priceNum;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // ALTERAÇÃO: Usar delta positivo (já validado acima)
+                        const modDelta = parseInt(delta, 10);
                         return sum + (modPrice * modDelta);
                     }, 0);
 
                     // Total do item = preço base + extras + modificações
                     const itemTotal = basePrice + extrasPrice + baseModsPrice;
 
-                    // Usa item_subtotal da API se disponível e maior que 0, senão usa cálculo
-                    const finalTotal = parseFloat(item.item_subtotal || 0) > 0 
-                        ? parseFloat(item.item_subtotal) 
-                        : itemTotal;
+                    // ALTERAÇÃO: Priorizar item_subtotal da API se for válido e maior que 0
+                    // Se item_subtotal for 0 ou inválido, usar o cálculo manual
+                    // Isso evita somar extras que já estão incluídos no subtotal da API
+                    const apiSubtotal = parseFloat(item.item_subtotal || 0);
+                    const finalTotal = (apiSubtotal > 0) ? apiSubtotal : itemTotal;
 
                     return {
                         id: item.id, // ID do item no carrinho
@@ -130,7 +272,8 @@ export const BasketProvider = ({ children }) => {
                         price: productPrice,
                         quantity: itemQuantity,
                         total: finalTotal,
-                        observacoes: item.notes || '',
+                        // ALTERAÇÃO: Mapear notes da API para observacoes, verificando múltiplos campos
+                        observacoes: (item.notes || item.observacoes || '').trim(),
                         // ALTERAÇÃO: Preservar informação de promoção do item
                         promotion: item.promotion || null,
                         // Converter extras de array para objeto {ingredientId: quantity}
@@ -243,6 +386,8 @@ export const BasketProvider = ({ children }) => {
     }) => {
         try {
             setLoading(true);
+            // ALTERAÇÃO: Carregar cache de ingredientes antes de processar
+            await loadIngredientsCache();
             
             // Se extras já foram validados e fornecidos, usa eles
             // Caso contrário, converte selectedExtras para formato da API
@@ -277,11 +422,22 @@ export const BasketProvider = ({ children }) => {
                 extrasProvided: !!extras
             });
             
+            // ALTERAÇÃO: Garantir que observações sejam sempre enviadas (mesmo que vazias)
+            const notesToSend = String(observacoes || '').trim();
+            
+            console.log('[BasketContext] Adicionando item com observações:', {
+                productId,
+                quantity,
+                notes: notesToSend,
+                notesLength: notesToSend.length,
+                hasNotes: notesToSend.length > 0
+            });
+            
             const result = await addItemToCartAPI({
                 productId,
                 quantity,
                 extras: finalExtras,
-                notes: observacoes,
+                notes: notesToSend,
                 baseModifications: modifications
             });
             
@@ -338,27 +494,89 @@ export const BasketProvider = ({ children }) => {
                         const itemQuantity = item.quantity || 1;
                         const basePrice = productPrice * itemQuantity;
 
-                        // Calcular preço dos extras
+                        // ALTERAÇÃO: Calcular preço dos extras (buscar preço de várias fontes possíveis + cache)
                         const extrasPrice = (item.extras || []).reduce((sum, extra) => {
-                            const extraPrice = parseFloat(extra.unit_price || extra.ingredient_price || extra.price || 0);
+                            const ingredientId = extra.ingredient_id || extra.id;
+                            // ALTERAÇÃO: Usar função melhorada que busca no cache
+                            let extraPrice = findIngredientPrice(extra, ingredientId);
+                            
+                            // Se não encontrou no cache, tentar campos específicos
+                            if (extraPrice === 0) {
+                                const priceCandidates = [
+                                    extra.unit_price,
+                                    extra.ingredient_price,
+                                    extra.price,
+                                    extra.additional_price,
+                                    extra.extra_price,
+                                    extra.total_price ? parseFloat(extra.total_price) / parseInt(extra.quantity || 1, 10) : null
+                                ];
+                                
+                                for (const candidate of priceCandidates) {
+                                    if (candidate !== undefined && candidate !== null) {
+                                        const priceNum = parseFloat(candidate);
+                                        if (!isNaN(priceNum) && priceNum >= 0) {
+                                            extraPrice = priceNum;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            
                             const extraQuantity = parseInt(extra.quantity || 0, 10);
                             return sum + (extraPrice * extraQuantity);
                         }, 0);
 
-                        // Calcular preço das modificações base
-                        const baseModsPrice = (item.base_modifications || []).reduce((sum, mod) => {
-                            const modPrice = parseFloat(mod.unit_price || mod.ingredient_price || mod.price || mod.additionalPrice || 0);
-                            const modDelta = Math.abs(parseInt(mod.delta || 0, 10));
-                            return sum + (modPrice * modDelta);
-                        }, 0);
+                    // ALTERAÇÃO: Calcular preço das modificações base (buscar preço de várias fontes possíveis + cache)
+                    // IMPORTANTE: Apenas modificações positivas (adições) alteram o preço
+                    // Modificações negativas (remoções) não alteram o preço
+                    const baseModsPrice = (item.base_modifications || []).reduce((sum, mod) => {
+                        const delta = parseFloat(mod.delta || 0);
+                        
+                        // ALTERAÇÃO: Apenas processar se delta for positivo (adição)
+                        // Remoções (delta negativo) não alteram o preço
+                        if (delta <= 0) {
+                            return sum;
+                        }
+                        
+                        const ingredientId = mod.ingredient_id || mod.id;
+                        // ALTERAÇÃO: Usar função melhorada que busca no cache
+                        let modPrice = findIngredientPrice(mod, ingredientId);
+                        
+                        // Se não encontrou no cache, tentar campos específicos
+                        if (modPrice === 0) {
+                            const priceCandidates = [
+                                mod.unit_price,
+                                mod.ingredient_price,
+                                mod.price,
+                                mod.additionalPrice,
+                                mod.additional_price,
+                                mod.extra_price
+                            ];
+                            
+                            for (const candidate of priceCandidates) {
+                                if (candidate !== undefined && candidate !== null) {
+                                    const priceNum = parseFloat(candidate);
+                                    if (!isNaN(priceNum) && priceNum >= 0) {
+                                        modPrice = priceNum;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // ALTERAÇÃO: Usar delta positivo (já validado acima)
+                        const modDelta = parseInt(delta, 10);
+                        return sum + (modPrice * modDelta);
+                    }, 0);
 
-                        // Total do item = preço base + extras + modificações
-                        const itemTotal = basePrice + extrasPrice + baseModsPrice;
+                    // Total do item = preço base + extras + modificações
+                    const itemTotal = basePrice + extrasPrice + baseModsPrice;
 
-                        // Usa item_subtotal da API se disponível e maior que 0, senão usa cálculo
-                        const finalTotal = parseFloat(item.item_subtotal || 0) > 0 
-                            ? parseFloat(item.item_subtotal) 
-                            : itemTotal;
+                        // ALTERAÇÃO: Sempre usar o maior entre o calculado e o item_subtotal da API
+                        // Isso garante que se a API já calculou corretamente, usa o valor da API
+                        // Mas se o calculado for maior (incluindo adicionais), usa o calculado
+                        const apiSubtotal = parseFloat(item.item_subtotal || 0);
+                        const finalTotal = Math.max(itemTotal, apiSubtotal);
 
                         return {
                             id: item.id,
@@ -481,10 +699,21 @@ export const BasketProvider = ({ children }) => {
                     }));
             }
             
+            // ALTERAÇÃO: Garantir que observações sejam sempre enviadas (mesmo que vazias)
+            const notesToUpdate = String(updates.observacoes || updates.notes || '').trim();
+            
+            console.log('[BasketContext] Atualizando item com observações:', {
+                cartItemId,
+                quantity: updates.quantity,
+                notes: notesToUpdate,
+                notesLength: notesToUpdate.length,
+                hasNotes: notesToUpdate.length > 0
+            });
+            
             const result = await updateCartItemAPI(cartItemId, {
                 quantity: updates.quantity,
                 extras: extras,
-                notes: updates.observacoes || updates.notes,
+                notes: notesToUpdate,
                 baseModifications: updates.baseModifications || updates.modifications
             });
             

@@ -127,6 +127,8 @@ Garantir que o RoyalBurgerMobile siga **exatamente** o mesmo fluxo de pedido do 
 | **Atualizar Item** | ✅ Implementado | `services/cartService.js` | Atualiza quantidade, extras, notas |
 | **Remover Item** | ✅ Implementado | `services/cartService.js` | Remove item do carrinho |
 | **Tela de Cesta** | ✅ Implementado | `screens/cesta.js` | Exibe itens e totais |
+| **Cálculo de Preços com Extras** | ✅ Corrigido | `contexts/BasketContext.js`, `screens/acompanhar.js` | Extras são somados corretamente, remoções não alteram preço |
+| **Observações** | ✅ Corrigido | `components/itensCesta.jsx`, `services/cartService.js`, `contexts/BasketContext.js` | Observações aparecem e são preservadas corretamente |
 | **Tela de Pagamento** | ✅ Implementado | `screens/pagamento.js` | Formulário de checkout |
 | **Criar Pedido** | ✅ Implementado | `services/orderService.js` | Cria pedido via API |
 | **Validação de Carrinho** | ✅ Parcial | `services/cartService.js` | `validateCartForOrder` existe, mas não valida estoque preventivamente |
@@ -3839,7 +3841,228 @@ const fetchFinancialInfo = async () => {
 
 **Data:** 2025-01-27  
 **Autor:** Sistema de Integração  
-**Versão:** 1.6 (Atualizado com Integração com Sistema de Fluxo de Caixa)
+**Versão:** 1.7 (Atualizado com Correções de Cálculo de Preços e Observações)
+
+---
+
+## 🔧 **ETAPA 9: CORREÇÕES DE CÁLCULO E OBSERVAÇÕES**
+
+### **9.1 Correção do Cálculo de Preços com Extras**
+
+**Problema Identificado:**
+- Extras não estavam sendo somados corretamente no subtotal em `acompanhar.js`
+- Remoções de ingredientes (delta negativo) estavam sendo somadas ao preço incorretamente
+- `item_subtotal` da API não estava sendo priorizado quando válido
+
+**Solução Implementada:**
+
+#### **9.1.1 `screens/acompanhar.js`**
+- ✅ Adicionado cache de ingredientes (`ingredientsCache`) para buscar preços
+- ✅ Implementada função `findIngredientPrice()` que usa cache e múltiplos campos de preço
+- ✅ Cálculo do subtotal agora sempre soma extras e modificações positivas manualmente
+- ✅ Prioriza `item_subtotal` da API apenas se for maior que o calculado
+
+**Código:**
+```javascript
+// ALTERAÇÃO: Cache de ingredientes para buscar preços
+const [ingredientsCache, setIngredientsCache] = useState(null);
+
+// ALTERAÇÃO: Função para buscar preço do ingrediente (com cache)
+const findIngredientPrice = (ingredientData, ingredientId) => {
+  // Primeiro tentar cache se tiver ID
+  if (ingredientId && ingredientsCache) {
+    const id = String(ingredientId);
+    const cached = ingredientsCache[id];
+    if (cached && cached.additional_price > 0) {
+      return cached.additional_price;
+    }
+    // ... tenta múltiplos campos de preço
+  }
+  return 0;
+};
+
+// ALTERAÇÃO: Calcular subtotal sempre somando extras e modificações
+const subtotal = order.items.reduce((sum, item) => {
+  const unitPrice = parseFloat(item.unit_price || item.price || item.product?.price || 0);
+  const quantity = parseInt(item.quantity || 1, 10);
+  let itemTotal = unitPrice * quantity;
+  
+  // Sempre somar extras usando findIngredientPrice
+  if (item.extras && Array.isArray(item.extras) && item.extras.length > 0) {
+    item.extras.forEach(extra => {
+      const extraPrice = findIngredientPrice(extra, extra.ingredient_id);
+      const extraQuantity = parseInt(extra.quantity || extra.qty || 1, 10);
+      if (extraPrice > 0 && extraQuantity > 0) {
+        itemTotal += extraPrice * extraQuantity;
+      }
+    });
+  }
+  
+  // Sempre somar modificações positivas
+  if (item.base_modifications && Array.isArray(item.base_modifications)) {
+    item.base_modifications.forEach(mod => {
+      const delta = parseFloat(mod.delta || 0);
+      if (delta > 0) {
+        const modPrice = findIngredientPrice(mod, mod.ingredient_id);
+        if (modPrice > 0) {
+          itemTotal += modPrice * Math.abs(delta);
+        }
+      }
+    });
+  }
+  
+  // Priorizar item_subtotal da API se for válido e maior
+  const apiSubtotal = parseFloat(item.item_subtotal || item.subtotal || 0);
+  if (apiSubtotal > itemTotal) {
+    itemTotal = apiSubtotal;
+  }
+  
+  return sum + itemTotal;
+}, 0);
+```
+
+#### **9.1.2 `contexts/BasketContext.js`**
+- ✅ Modificações base negativas (remoções) não alteram o preço
+- ✅ Apenas modificações positivas (adições) são somadas ao preço
+- ✅ Prioriza `item_subtotal` da API quando válido e maior que 0
+
+**Código:**
+```javascript
+// ALTERAÇÃO: Calcular preço das modificações base
+// IMPORTANTE: Apenas modificações positivas (adições) alteram o preço
+// Modificações negativas (remoções) não alteram o preço
+const baseModsPrice = (item.base_modifications || []).reduce((sum, mod) => {
+  const delta = parseFloat(mod.delta || 0);
+  
+  // ALTERAÇÃO: Apenas processar se delta for positivo (adição)
+  // Remoções (delta negativo) não alteram o preço
+  if (delta <= 0) {
+    return sum;
+  }
+  
+  // ... buscar preço e somar
+  const modDelta = parseInt(delta, 10);
+  return sum + (modPrice * modDelta);
+}, 0);
+
+// ALTERAÇÃO: Priorizar item_subtotal da API se for válido e maior que 0
+// Se item_subtotal for 0 ou inválido, usar o cálculo manual
+const apiSubtotal = parseFloat(item.item_subtotal || 0);
+const finalTotal = (apiSubtotal > 0) ? apiSubtotal : itemTotal;
+```
+
+### **9.2 Correção de Observações**
+
+**Problema Identificado:**
+- Observações não estavam aparecendo em alguns componentes
+- Inconsistência entre `notes` (API) e `observacoes` (frontend)
+- Observações não eram preservadas ao editar itens
+
+**Solução Implementada:**
+
+#### **9.2.1 `components/itensCesta.jsx`**
+- ✅ Verifica tanto `item.observacoes` quanto `item.notes` como fallback
+- ✅ Exibe observações mesmo se vierem como `notes` da API
+
+**Código:**
+```javascript
+// ALTERAÇÃO: Seção de Observações - verificar tanto notes quanto observacoes
+{(item.observacoes || item.notes) && (item.observacoes?.trim() || item.notes?.trim()) && (
+  <View style={styles.observationsSection}>
+    <Text style={styles.observationsText}>
+      <Text style={styles.observationsLabel}>Obs:</Text> {item.observacoes || item.notes}
+    </Text>
+  </View>
+)}
+```
+
+#### **9.2.2 `services/cartService.js`**
+- ✅ Aceita `updates.notes` e `updates.observacoes` como fallback
+- ✅ Garante que observações sejam sempre enviadas, mesmo que vazias
+
+**Código:**
+```javascript
+// ALTERAÇÃO: Sempre enviar notes, mesmo que vazio, para garantir que observações sejam atualizadas
+if (updates.notes !== undefined) {
+  payload.notes = String(updates.notes || '').slice(0, 500);
+} else if (updates.observacoes !== undefined) {
+  // Fallback para observacoes caso notes não seja fornecido
+  payload.notes = String(updates.observacoes || '').slice(0, 500);
+}
+```
+
+#### **9.2.3 `contexts/BasketContext.js`**
+- ✅ Logs de debug para rastrear envio de observações
+- ✅ Garante que observações sejam sempre enviadas (mesmo que vazias)
+- ✅ Mapeia `item.notes` e `item.observacoes` ao carregar carrinho
+
+**Código:**
+```javascript
+// ALTERAÇÃO: Garantir que observações sejam sempre enviadas (mesmo que vazias)
+const notesToSend = String(observacoes || '').trim();
+
+console.log('[BasketContext] Adicionando item com observações:', {
+  productId,
+  quantity,
+  notes: notesToSend,
+  notesLength: notesToSend.length,
+  hasNotes: notesToSend.length > 0
+});
+
+// ... ao carregar carrinho
+observacoes: (item.notes || item.observacoes || '').trim(),
+```
+
+#### **9.2.4 `screens/produtoEditar.js`**
+- ✅ Verifica `editItem.observacoes` e `editItem.notes` ao carregar item
+- ✅ Logs de debug para rastrear carregamento
+
+**Código:**
+```javascript
+// ALTERAÇÃO: Verificar tanto observacoes quanto notes ao carregar item
+const initialObservacoes = (editItem.observacoes || editItem.notes || '').trim();
+
+console.log('[ProdutoEditar] Carregando observações do item:', {
+  observacoes: editItem.observacoes,
+  notes: editItem.notes,
+  initialObservacoes: initialObservacoes
+});
+```
+
+#### **9.2.5 `screens/cesta.js`**
+- ✅ Verifica `item.observacoes` e `item.notes` ao passar para edição
+- ✅ Preserva ambos os campos para garantir compatibilidade
+
+**Código:**
+```javascript
+// ALTERAÇÃO: Verificar tanto observacoes quanto notes ao passar para edição
+const itemObservacoes = (item.observacoes || item.notes || '').trim();
+
+navigation.navigate('ProdutoEditar', {
+  editItem: {
+    // ...
+    observacoes: itemObservacoes,
+    notes: item.notes || item.observacoes || '', // Preservar notes também
+  }
+});
+```
+
+### **9.3 Checklist de Implementação**
+
+- [x] ✅ Corrigir cálculo de subtotal em `acompanhar.js` para incluir extras
+- [x] ✅ Adicionar cache de ingredientes em `acompanhar.js`
+- [x] ✅ Implementar função `findIngredientPrice()` com cache
+- [x] ✅ Corrigir cálculo de modificações base (apenas positivas alteram preço)
+- [x] ✅ Priorizar `item_subtotal` da API quando válido
+- [x] ✅ Corrigir exibição de observações em `itensCesta.jsx`
+- [x] ✅ Melhorar envio de observações em `cartService.js`
+- [x] ✅ Adicionar logs de debug para observações em `BasketContext.js`
+- [x] ✅ Corrigir carregamento de observações em `produtoEditar.js`
+- [x] ✅ Corrigir passagem de observações em `cesta.js`
+- [ ] ⚠️ Testar que extras são somados corretamente no subtotal
+- [ ] ⚠️ Testar que remoções não alteram o preço
+- [ ] ⚠️ Testar que observações aparecem em todos os lugares
+- [ ] ⚠️ Testar que observações são preservadas ao editar itens
 
 ---
 

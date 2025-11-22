@@ -600,9 +600,16 @@ import api from '../services/api';
         useEffect(() => {
             if (editItem) {
                 const initialQuantity = editItem.quantity || 1;
-                const initialObservacoes = editItem.observacoes || '';
+                // ALTERAÇÃO: Verificar tanto observacoes quanto notes ao carregar item
+                const initialObservacoes = (editItem.observacoes || editItem.notes || '').trim();
                 const initialSelectedExtras = editItem.selectedExtras || {};
                 const initialDefaultQuantities = editItem.defaultIngredientsQuantities || {};
+                
+                console.log('[ProdutoEditar] Carregando observações do item:', {
+                    observacoes: editItem.observacoes,
+                    notes: editItem.notes,
+                    initialObservacoes: initialObservacoes
+                });
                 
                 setQuantity(initialQuantity);
                 setObservacoes(initialObservacoes);

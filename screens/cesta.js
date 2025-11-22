@@ -282,13 +282,17 @@ export default function Cesta({ navigation }) {
             }
         }
         
+        // ALTERAÇÃO: Verificar tanto observacoes quanto notes ao passar para edição
+        const itemObservacoes = (item.observacoes || item.notes || '').trim();
+        
         navigation.navigate('ProdutoEditar', {
             productId: item.originalProductId || item.productId,
             editItem: {
                 id: item.id,
                 cartItemId: item.cartItemId || item.id, // ID do item no carrinho
                 quantity: item.quantity,
-                observacoes: item.observacoes || '',
+                observacoes: itemObservacoes,
+                notes: item.notes || item.observacoes || '', // Preservar notes também
                 selectedExtras: selectedExtrasForEdit,
                 defaultIngredientsQuantities: item.defaultIngredientsQuantities || {},
                 modifications: item.modifications || []

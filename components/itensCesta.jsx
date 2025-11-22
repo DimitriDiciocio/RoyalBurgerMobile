@@ -147,11 +147,11 @@ export default function ItensCesta({
                 </View>
             )}
 
-            {/* Seção de Observações */}
-            {item.observacoes && item.observacoes.trim().length > 0 && (
+            {/* ALTERAÇÃO: Seção de Observações - verificar tanto notes quanto observacoes */}
+            {(item.observacoes || item.notes) && (item.observacoes?.trim() || item.notes?.trim()) && (
                 <View style={styles.observationsSection}>
                     <Text style={styles.observationsText}>
-                        <Text style={styles.observationsLabel}>Obs:</Text> {item.observacoes}
+                        <Text style={styles.observationsLabel}>Obs:</Text> {item.observacoes || item.notes}
                     </Text>
                 </View>
             )}
