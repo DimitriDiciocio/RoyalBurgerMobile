@@ -61,7 +61,11 @@ function HomeScreen({ navigation }) {
             const enderecoPadrao = enderecosData?.find(e => e.is_default || e.isDefault);
             setEnderecoAtivo(enderecoPadrao || null);
         } catch (error) {
-            console.error('Erro ao buscar endereços:', error);
+            // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+            const isDev = __DEV__;
+            if (isDev) {
+                console.error('Erro ao buscar endereços:', error);
+            }
             setEnderecos([]);
             setEnderecoAtivo(null);
         }
@@ -109,9 +113,7 @@ function HomeScreen({ navigation }) {
                     if (user && user.role === 'customer' && user.id) {
                         setLoadingPoints(true);
                         try {
-                            console.log('Buscando pontos para cliente ID:', user.id);
                             const loyaltyData = await getLoyaltyBalance(user.id);
-                            console.log('Dados de fidelidade recebidos:', loyaltyData);
                             
                             // Tenta diferentes estruturas de dados que a API pode retornar
                             points = loyaltyData?.current_balance?.toString() || 
@@ -121,9 +123,12 @@ function HomeScreen({ navigation }) {
                                     loyaltyData?.loyalty_points?.toString() || 
                                     '0';
                             
-                            console.log('Pontos extraídos:', points);
                         } catch (error) {
-                            console.log('Erro ao buscar pontos:', error);
+                            // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+                            const isDev = __DEV__;
+                            if (isDev) {
+                                console.log('Erro ao buscar pontos:', error);
+                            }
                             // Fallback para pontos salvos localmente
                             points = user.points || '0';
                         } finally {
@@ -148,7 +153,6 @@ function HomeScreen({ navigation }) {
                     
                     // Se o usuário acabou de fazer login (estava deslogado antes), recarrega o carrinho
                     if (!wasLoggedIn) {
-                        console.log('[HomeScreen] Usuário fez login, recarregando carrinho...');
                         await loadCart();
                     }
                 } else {
@@ -157,7 +161,11 @@ function HomeScreen({ navigation }) {
                     setEnderecoAtivo(null);
                 }
             } catch (e) {
-                console.log('Erro ao verificar autenticação:', e);
+                // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+                const isDev = __DEV__;
+                if (isDev) {
+                    console.log('Erro ao verificar autenticação:', e);
+                }
                 setLoggedIn(false);
                 setUserInfo(null);
                 setEnderecos([]);
@@ -373,7 +381,6 @@ function HomeScreen({ navigation }) {
                 
                 // Carregar produtos mais pedidos
                 try {
-                    console.log('[App.js] Carregando produtos mais pedidos...');
                     // ALTERAÇÃO: Filtrar produtos indisponíveis na API
                     const allProductsResponse = await getAllProducts({ 
                         page_size: 1000,
@@ -423,7 +430,11 @@ function HomeScreen({ navigation }) {
                     
                     setMostOrderedData(formattedProducts);
                 } catch (error) {
-                    console.log('Erro ao carregar produtos mais pedidos:', error);
+                    // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+                    const isDev = __DEV__;
+                    if (isDev) {
+                        console.log('Erro ao carregar produtos mais pedidos:', error);
+                    }
                     setMostOrderedData([]);
                 }
                 
@@ -436,7 +447,11 @@ function HomeScreen({ navigation }) {
                 setPromotionsData(promotionsData.products);
                 setPromoLongestExpiry(promotionsData.longestExpiry);
             } catch (error) {
-                console.log('Erro ao carregar seções da home:', error);
+                // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+                const isDev = __DEV__;
+                if (isDev) {
+                    console.log('Erro ao carregar seções da home:', error);
+                }
             } finally {
                 setLoadingSections(false);
             }
@@ -457,7 +472,6 @@ function HomeScreen({ navigation }) {
     };
 
     const handlePromoExpire = () => {
-        console.log('Promoção expirou!');
         // ALTERAÇÃO: Recarrega promoções quando uma expira
         const reloadPromotions = async () => {
             try {
@@ -467,7 +481,11 @@ function HomeScreen({ navigation }) {
             } catch (error) {
                 const isDev = __DEV__;
                 if (isDev) {
-                    console.error('Erro ao recarregar promoções:', error);
+                    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                    const isDev = __DEV__;
+                    if (isDev) {
+                        console.error('Erro ao recarregar promoções:', error);
+                    }
                 }
             }
         };
@@ -480,7 +498,11 @@ function HomeScreen({ navigation }) {
             setLoggedIn(false);
             setUserInfo(null);
         } catch (error) {
-            console.error('Erro ao fazer logout:', error);
+            // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+            const isDev = __DEV__;
+            if (isDev) {
+                console.error('Erro ao fazer logout:', error);
+            }
         }
     };
 

@@ -9,9 +9,48 @@
 
 import api from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { isAuthenticated } from './userService';
+import { isAuthenticated, getStoredUserData } from './userService';
 
 const GUEST_CART_ID_KEY = 'guest_cart_id';
+
+/**
+ * Verifica se o usuário pode adicionar itens ao carrinho
+ * ALTERAÇÃO: Apenas clientes e atendentes podem adicionar itens ao carrinho
+ * @returns {Promise<Object>} { allowed: boolean, message?: string }
+ */
+const canUserAddToCart = async () => {
+  const isAuth = await isAuthenticated();
+  
+  // Se não estiver logado, permite (usuário convidado pode adicionar)
+  if (!isAuth) {
+    return { allowed: true };
+  }
+  
+  // Se estiver logado, verifica o role
+  const user = await getStoredUserData();
+  if (!user) {
+    return { 
+      allowed: false, 
+      message: 'Não foi possível verificar suas permissões. Faça login novamente.' 
+    };
+  }
+  
+  // Verifica diferentes campos possíveis para o tipo/role do usuário
+  const userRole = (user.role || user.profile || user.type || user.user_type || 'customer').toLowerCase();
+  
+  // Permite apenas clientes e atendentes
+  const allowedRoles = ['cliente', 'customer', 'atendente', 'attendant'];
+  const isAllowed = allowedRoles.includes(userRole);
+  
+  if (!isAllowed) {
+    return { 
+      allowed: false, 
+      message: 'Apenas clientes e atendentes podem adicionar itens à cesta.' 
+    };
+  }
+  
+  return { allowed: true };
+};
 
 /**
  * Obtém o ID do carrinho de convidado do AsyncStorage
@@ -21,7 +60,11 @@ export const getGuestCartId = async () => {
   try {
     return await AsyncStorage.getItem(GUEST_CART_ID_KEY);
   } catch (error) {
-    console.error('Erro ao obter guest_cart_id:', error);
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao obter guest_cart_id:', error);
+    }
     return null;
   }
 };
@@ -34,7 +77,11 @@ export const saveGuestCartId = async (cartId) => {
   try {
     await AsyncStorage.setItem(GUEST_CART_ID_KEY, String(cartId));
   } catch (error) {
-    console.error('Erro ao salvar guest_cart_id:', error);
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao salvar guest_cart_id:', error);
+    }
   }
 };
 
@@ -45,7 +92,11 @@ export const removeGuestCartId = async () => {
   try {
     await AsyncStorage.removeItem(GUEST_CART_ID_KEY);
   } catch (error) {
-    console.error('Erro ao remover guest_cart_id:', error);
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao remover guest_cart_id:', error);
+    }
   }
 };
 
@@ -105,7 +156,11 @@ export const getCart = async () => {
       };
     }
   } catch (error) {
-    console.error('Erro ao buscar carrinho:', error);
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao buscar carrinho:', error);
+    }
     
     // Se erro 404, limpa cart_id inválido
     if (error.response?.status === 404) {
@@ -140,12 +195,21 @@ export const addItemToCart = async ({
   baseModifications = []
 }) => {
   try {
+    // ALTERAÇÃO: Validar se o usuário pode adicionar itens ao carrinho
+    const permissionCheck = await canUserAddToCart();
+    if (!permissionCheck.allowed) {
+      return {
+        success: false,
+        error: permissionCheck.message || 'Você não tem permissão para adicionar itens à cesta.',
+        errorType: 'PERMISSION_DENIED',
+        cartId: null
+      };
+    }
+    
     // Verificar autenticação
     const authenticated = await isAuthenticated();
-    console.log('[CartService] Status de autenticação:', authenticated);
     
     const guestCartId = authenticated ? null : await getGuestCartId();
-    console.log('[CartService] Guest Cart ID:', guestCartId || 'não existe (será criado)');
     
     // Normalizar extras para garantir formato correto
     const normalizedExtras = Array.isArray(extras) 
@@ -186,37 +250,15 @@ export const addItemToCart = async ({
       payload.guest_cart_id = Number(guestCartId);
     }
     
-    console.log('[CartService] Adicionando item ao carrinho:', {
-      authenticated,
-      guestCartId,
-      hasGuestCartId: !!guestCartId,
-      payload: { 
-        product_id: payload.product_id,
-        quantity: payload.quantity,
-        extras_count: payload.extras.length,
-        extras: payload.extras, // Log completo dos extras
-        base_modifications_count: payload.base_modifications?.length || 0,
-        base_modifications: payload.base_modifications, // Log completo das modificações
-        guest_cart_id: payload.guest_cart_id || 'não enviado (será criado pela API)'
-      }
-    });
-    
     // A API usa verify_jwt_in_request(optional=True), então aceita requisições sem token
     // Se não autenticado e não tiver guest_cart_id, a API criará automaticamente um carrinho
     // O interceptor do api.js só adiciona token se existir, então está OK
     const response = await api.post('/cart/items', payload);
     
-    console.log('[CartService] Resposta da API:', {
-      cart_id: response.data?.cart_id,
-      is_authenticated: response.data?.is_authenticated,
-      has_cart: !!response.data?.cart
-    });
-    
     // IMPORTANTE: Salva cart_id no AsyncStorage se não logado
     // A API sempre retorna cart_id, mesmo quando cria um novo carrinho
     if (!authenticated && response.data?.cart_id) {
       await saveGuestCartId(response.data.cart_id);
-      console.log('[CartService] Cart ID salvo:', response.data.cart_id);
     }
     
     return {
@@ -226,14 +268,32 @@ export const addItemToCart = async ({
       isAuthenticated: response.data.is_authenticated || authenticated
     };
   } catch (error) {
-    console.error('[CartService] Erro ao adicionar item ao carrinho:', error);
-    console.error('[CartService] Detalhes do erro:', {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    });
-    
+    // ALTERAÇÃO: Tratamento específico para erros de estoque
     const errorMessage = error.response?.data?.error || error.message;
+    const errorPayload = error.response?.data;
+    
+    // Detectar erros de estoque
+    if (error.response?.status === 400 || error.response?.status === 422) {
+      const isStockError = errorMessage.includes('Estoque insuficiente') ||
+                          errorMessage.includes('insuficiente') ||
+                          errorMessage.includes('INSUFFICIENT_STOCK') ||
+                          errorPayload?.error_type === 'INSUFFICIENT_STOCK';
+      
+      if (isStockError) {
+        return {
+          success: false,
+          error: errorMessage,
+          errorType: 'INSUFFICIENT_STOCK',
+          cartId: null
+        };
+      }
+    }
+    
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('[CartService] Erro ao adicionar item ao carrinho:', error);
+    }
     
     return {
       success: false,
@@ -255,6 +315,16 @@ export const addItemToCart = async ({
  */
 export const updateCartItem = async (cartItemId, updates = {}) => {
   try {
+    // ALTERAÇÃO: Validar se o usuário pode atualizar itens no carrinho
+    const permissionCheck = await canUserAddToCart();
+    if (!permissionCheck.allowed) {
+      return {
+        success: false,
+        error: permissionCheck.message || 'Você não tem permissão para atualizar itens na cesta.',
+        errorType: 'PERMISSION_DENIED'
+      };
+    }
+    
     const authenticated = await isAuthenticated();
     const guestCartId = authenticated ? null : await getGuestCartId();
     
@@ -300,11 +370,33 @@ export const updateCartItem = async (cartItemId, updates = {}) => {
       isAuthenticated: response.data.is_authenticated || authenticated
     };
   } catch (error) {
-    console.error('Erro ao atualizar item do carrinho:', error);
+    // ALTERAÇÃO: Tratamento específico para erros de estoque
+    const errorMessage = error.response?.data?.error || error.message;
+    
+    if (error.response?.status === 400 || error.response?.status === 422) {
+      const isStockError = errorMessage.includes('Estoque insuficiente') ||
+                          errorMessage.includes('insuficiente') ||
+                          errorMessage.includes('INSUFFICIENT_STOCK') ||
+                          error.response?.data?.error_type === 'INSUFFICIENT_STOCK';
+      
+      if (isStockError) {
+        return {
+          success: false,
+          error: errorMessage,
+          errorType: 'INSUFFICIENT_STOCK'
+        };
+      }
+    }
+    
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao atualizar item do carrinho:', error);
+    }
     
     return {
       success: false,
-      error: error.response?.data?.error || error.message
+      error: errorMessage
     };
   }
 };
@@ -337,7 +429,11 @@ export const removeCartItem = async (cartItemId) => {
       isAuthenticated: response.data.is_authenticated || authenticated
     };
   } catch (error) {
-    console.error('Erro ao remover item do carrinho:', error);
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao remover item do carrinho:', error);
+    }
     
     return {
       success: false,
@@ -369,7 +465,11 @@ export const clearCart = async () => {
       };
     }
   } catch (error) {
-    console.error('Erro ao limpar carrinho:', error);
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao limpar carrinho:', error);
+    }
     
     return {
       success: false,
@@ -398,7 +498,11 @@ export const claimGuestCart = async (guestCartId) => {
       cartId: response.data.cart_id
     };
   } catch (error) {
-    console.error('Erro ao reivindicar carrinho:', error);
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao reivindicar carrinho:', error);
+    }
     
     return {
       success: false,
@@ -446,7 +550,11 @@ export const validateCartForOrder = async (cartId = null) => {
       };
     }
   } catch (error) {
-    console.error('Erro ao validar carrinho:', error);
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao validar carrinho:', error);
+    }
     
     return {
       success: false,
@@ -454,6 +562,91 @@ export const validateCartForOrder = async (cartId = null) => {
       alerts: [error.response?.data?.error || 'Erro ao validar carrinho'],
       error: error.response?.data?.error || error.message
     };
+  }
+};
+
+/**
+ * Valida estoque de todos os itens da cesta antes do checkout
+ * ALTERAÇÃO: Validação preventiva de estoque no frontend
+ * @returns {Promise<Object>} Resultado da validação { valid: boolean, items?: Array }
+ */
+export const validateStockBeforeCheckout = async () => {
+  try {
+    // Buscar carrinho atual
+    const cartResult = await getCart();
+    const items = cartResult?.data?.cart?.items || cartResult?.data?.items || [];
+    
+    if (items.length === 0) {
+      return { valid: true };
+    }
+    
+    // ALTERAÇÃO: Importar simulateProductCapacity dinamicamente
+    const { simulateProductCapacity } = require('./productService');
+    
+    // Validar estoque de cada item
+    const validationPromises = items.map(async (item) => {
+      try {
+        // Preparar extras no formato esperado pela API
+        const extras = (item.extras || []).map(extra => ({
+          ingredient_id: extra.ingredient_id || extra.id,
+          quantity: extra.quantity || 1
+        })).filter(extra => extra.ingredient_id && extra.quantity > 0);
+        
+        // Preparar base_modifications no formato esperado pela API
+        const baseModifications = (item.base_modifications || []).map(bm => ({
+          ingredient_id: bm.ingredient_id || bm.id,
+          delta: bm.delta || 0
+        })).filter(bm => bm.ingredient_id && bm.delta !== 0);
+        
+        const capacityData = await simulateProductCapacity(
+          item.product_id,
+          extras,
+          item.quantity,
+          baseModifications
+        );
+        
+        if (!capacityData.is_available || capacityData.max_quantity < item.quantity) {
+          return {
+            valid: false,
+            cartItemId: item.id,
+            product: item.product?.name || `Produto #${item.product_id}`,
+            message: capacityData.limiting_ingredient?.message || 
+                    'Estoque insuficiente',
+            maxQuantity: capacityData.max_quantity || 0
+          };
+        }
+        
+        return { valid: true };
+      } catch (error) {
+        // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+        const isDev = __DEV__;
+        if (isDev) {
+          console.error('Erro ao validar estoque do item:', error);
+        }
+        // Em caso de erro, permitir (backend validará)
+        return { valid: true };
+      }
+    });
+    
+    const results = await Promise.all(validationPromises);
+    const invalidItems = results.filter(r => !r.valid);
+    
+    if (invalidItems.length > 0) {
+      return {
+        valid: false,
+        items: invalidItems
+      };
+    }
+    
+    return { valid: true };
+  } catch (error) {
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error('Erro ao validar estoque:', error);
+    }
+    // Em caso de erro, permitir (backend validará no checkout)
+    return { valid: true };
   }
 };
 

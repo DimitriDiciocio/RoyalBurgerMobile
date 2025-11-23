@@ -1602,7 +1602,7 @@ const handleUpdateItem = async (cartItemId, updates) => {
       }
     }
   } catch (error) {
-    // ALTERAÇÃO: Removido console.error em produção
+    // ALTERAÇÃO: Removido console.error em produção  
     const isDev = __DEV__;
     if (isDev) {
       console.error('Erro ao atualizar item:', error);

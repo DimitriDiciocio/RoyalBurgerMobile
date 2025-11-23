@@ -1,5 +1,5 @@
     import React, {useState, useRef, useEffect, useMemo} from 'react';
-import {StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Animated, ActivityIndicator, Keyboard, Modal, Alert} from 'react-native';
+import {StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Animated, ActivityIndicator, Keyboard, Modal} from 'react-native';
     import { SvgXml } from 'react-native-svg';
     import { useIsFocused } from '@react-navigation/native';
     import Header from "../components/Header";
@@ -9,10 +9,12 @@ import {StyleSheet, View, Text, TextInput, TouchableOpacity, Image, ScrollView, 
     import MenuNavigation from "../components/MenuNavigation";
     import Observacoes from "../components/Observacoes";
     import QuantidadePrecoBar from "../components/QuantidadePrecoBar";
+import CustomAlert from '../components/CustomAlert';
+import { getFriendlyErrorMessage } from '../utils/alertHelper';
 import { isAuthenticated, getStoredUserData } from '../services/userService';
 import { getCustomerAddresses, getLoyaltyBalance } from '../services/customerService';
 import { getMenuProduct } from '../services/menuService';
-import { getProductIngredients, getProductById, checkProductAvailability } from '../services/productService';
+import { getProductIngredients, getProductById, checkProductAvailability, simulateProductCapacity } from '../services/productService';
 import { getAllIngredients } from '../services/ingredientService';
 import { getPromotionByProductId } from '../services/promotionService';
 import { useBasket } from '../contexts/BasketContext';
@@ -33,7 +35,11 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
         });
         return response.data;
     } catch (error) {
-        console.error("Erro ao verificar disponibilidade:", error);
+        // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+        const isDev = __DEV__;
+        if (isDev) {
+            console.error("Erro ao verificar disponibilidade:", error);
+        }
         return {
             status: 'unknown',
             message: error.response?.data?.error || 'Erro ao verificar disponibilidade',
@@ -71,6 +77,18 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
         const [tempSelectedExtras, setTempSelectedExtras] = useState({}); // Estado temporário para a modal
         const [ingredientsCache, setIngredientsCache] = useState(null); // Cache de ingredientes da API
         const [defaultIngredientsQuantities, setDefaultIngredientsQuantities] = useState({}); // {ingredientId: quantity}
+        // ALTERAÇÃO: Adicionar estados para validação de capacidade
+        const [productMaxQuantity, setProductMaxQuantity] = useState(99);
+        const [isUpdatingCapacity, setIsUpdatingCapacity] = useState(false);
+        const [capacityData, setCapacityData] = useState(null);
+        const [stockLimitMessage, setStockLimitMessage] = useState(null);
+        const capacityUpdateTimeoutRef = useRef(null); // ALTERAÇÃO: Ref para timeout do debounce
+        // ALTERAÇÃO: Estados para CustomAlert
+        const [alertVisible, setAlertVisible] = useState(false);
+        const [alertType, setAlertType] = useState('info');
+        const [alertTitle, setAlertTitle] = useState('');
+        const [alertMessage, setAlertMessage] = useState('');
+        const [alertButtons, setAlertButtons] = useState([]);
         const { addToBasket, updateBasketItem, removeFromBasket, basketItems, basketTotal, basketItemCount } = useBasket();
 
         const productImageSource = useMemo(() => {
@@ -102,7 +120,11 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                 const enderecoPadrao = enderecosData?.find(e => e.is_default || e.isDefault);
                 setEnderecoAtivo(enderecoPadrao || null);
             } catch (error) {
-                console.error('Erro ao buscar endereços:', error);
+                // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                const isDev = __DEV__;
+                if (isDev) {
+                    console.error('Erro ao buscar endereços:', error);
+                }
                 setEnderecos([]);
                 setEnderecoAtivo(null);
             }
@@ -116,7 +138,11 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                 setLoyaltyBalance(points);
                 return points;
             } catch (error) {
-                console.error('Erro ao buscar pontos:', error);
+                // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                const isDev = __DEV__;
+                if (isDev) {
+                    console.error('Erro ao buscar pontos:', error);
+                }
                 setLoyaltyBalance(0);
                 return 0;
             } finally {
@@ -158,7 +184,11 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                 }
                 return {};
             } catch (error) {
-                console.error('Erro ao carregar cache de ingredientes:', error);
+                // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                const isDev = __DEV__;
+                if (isDev) {
+                    console.error('Erro ao carregar cache de ingredientes:', error);
+                }
                 return {};
             }
         };
@@ -345,7 +375,11 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                 }
                                 if (!isCancelled) setProductIngredients(ingredientsList);
                             } catch (e) {
-                                console.error('Erro ao buscar ingredientes:', e);
+                                // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                                const isDev = __DEV__;
+                                if (isDev) {
+                                    console.error('Erro ao buscar ingredientes:', e);
+                                }
                                 if (!isCancelled) setProductIngredients([]);
                             }
                         } else {
@@ -423,7 +457,11 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                         setProductIngredients(finalData.ingredients);
                     }
                 } catch (error) {
-                    console.error('Erro ao atualizar dados do produto:', error);
+                    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                    const isDev = __DEV__;
+                    if (isDev) {
+                        console.error('Erro ao atualizar dados do produto:', error);
+                    }
                 }
             }
         };
@@ -477,6 +515,14 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
             }
         }, [editItem]);
 
+        // ALTERAÇÃO: Handler para mudanças de quantidade com validação
+        const handleQuantityChange = (newQuantity) => {
+            const delta = newQuantity - quantity;
+            setQuantity(newQuantity);
+            // ALTERAÇÃO: Atualizar capacidade quando quantidade muda
+            debouncedUpdateProductCapacity(delta > 0); // Mostrar mensagem apenas ao aumentar
+        };
+
         // Atualizar ingredientes quando a quantidade do produto mudar
         // A API recalcula max_quantity automaticamente, então precisamos buscar novamente
         useEffect(() => {
@@ -485,6 +531,21 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                 refreshProductData();
             }
         }, [quantity]);
+
+        // ALTERAÇÃO: Inicializar capacidade quando produto e ingredientes estiverem carregados
+        useEffect(() => {
+            if ((productData?.id || produto?.id) && productIngredients.length > 0) {
+                // Inicializar capacidade sem mostrar mensagem
+                updateProductCapacity(false, false);
+            }
+        }, [productData?.id, produto?.id, productIngredients.length]);
+
+        // ALTERAÇÃO: Atualizar capacidade quando selectedExtras ou defaultIngredientsQuantities mudarem
+        useEffect(() => {
+            if ((productData?.id || produto?.id) && productIngredients.length > 0) {
+                debouncedUpdateProductCapacity(false);
+            }
+        }, [selectedExtras, defaultIngredientsQuantities]);
         
         // Validar e ajustar extras quando os ingredientes forem atualizados
         useEffect(() => {
@@ -592,6 +653,149 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
             setExtrasModalVisible(true);
         };
 
+        // ALTERAÇÃO: Função para atualizar capacidade quando extras/quantidade mudam
+        const updateProductCapacity = async (showMessage = false, immediate = false) => {
+            if (!productData?.id && !produto?.id) return null;
+            
+            const productId = productData?.id || produto?.id;
+            
+            // ALTERAÇÃO: Se já está atualizando e não é imediato, aguardar debounce
+            if (isUpdatingCapacity && !immediate) {
+                return null;
+            }
+            
+            try {
+                setIsUpdatingCapacity(true);
+                
+                // ALTERAÇÃO: Preparar extras no formato esperado pela API
+                // Filtrar apenas extras com quantidade > 0 para evitar enviar extras removidos
+                const extras = Object.entries(selectedExtras || {})
+                    .filter(([ingredientId, qty]) => {
+                        const id = Number(ingredientId);
+                        const quantity = Number(qty);
+                        // ALTERAÇÃO: Garantir que quantity seja > 0 (não incluir extras removidos)
+                        return !isNaN(id) && id > 0 && !isNaN(quantity) && quantity > 0;
+                    })
+                    .map(([ingredientId, qty]) => ({
+                        ingredient_id: Number(ingredientId),
+                        quantity: Number(qty)
+                    }));
+                
+                // Preparar base_modifications no formato esperado pela API
+                // ALTERAÇÃO: Calcular defaultIngredients dentro da função para garantir acesso
+                const defaultIngredientsLocal = productIngredients.filter((ing) => {
+                    const portions = parseFloat(ing.portions || 0) || 0;
+                    const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+                    const maxQty = ing.max_quantity || ing.maxQuantity;
+                    if (portions <= 0) return false;
+                    if (maxQty !== null && maxQty !== undefined) {
+                        const maxQtyNum = parseInt(maxQty, 10);
+                        if (minQty === maxQtyNum) return false;
+                    }
+                    return true;
+                });
+                
+                // ALTERAÇÃO: Preparar base_modifications filtrando deltas zero corretamente
+                const baseModifications = [];
+                Object.entries(defaultIngredientsQuantities || {}).forEach(([ingredientId, data]) => {
+                    const id = Number(ingredientId);
+                    if (isNaN(id) || id <= 0) return;
+                    
+                    // Encontrar o ingrediente para calcular delta correto
+                    const ing = defaultIngredientsLocal.find(ing => 
+                        Number(ing.id || ing.ingredient_id) === id
+                    );
+                    
+                    if (!ing) return;
+                    
+                    const defaultPortions = parseFloat(ing.portions || 0) || 0;
+                    let currentQty = 0;
+                    
+                    // ALTERAÇÃO: Calcular currentQty baseado no tipo de data
+                    if (typeof data === 'number') {
+                        currentQty = data;
+                    } else if (data && typeof data === 'object') {
+                        // Se for objeto, usar current se existir, senão calcular de delta
+                        if (data.current !== undefined) {
+                            currentQty = parseFloat(data.current || 0);
+                        } else if (data.delta !== undefined) {
+                            currentQty = defaultPortions + parseFloat(data.delta || 0);
+                        } else {
+                            currentQty = defaultPortions;
+                        }
+                    } else {
+                        currentQty = parseFloat(data || 0);
+                    }
+                    
+                    // Calcular delta
+                    const delta = currentQty - defaultPortions;
+                    
+                    // ALTERAÇÃO: Apenas incluir se delta for diferente de zero
+                    if (!isNaN(delta) && delta !== 0) {
+                        baseModifications.push({
+                            ingredient_id: id,
+                            delta: delta
+                        });
+                    }
+                });
+                
+                const capacityResult = await simulateProductCapacity(
+                    productId,
+                    extras,
+                    quantity,
+                    baseModifications
+                );
+                
+                const maxQuantity = capacityResult?.max_quantity ?? 99;
+                setProductMaxQuantity(maxQuantity);
+                setCapacityData(capacityResult);
+                
+                // Atualizar limites na UI
+                updateQuantityLimits(maxQuantity, capacityResult);
+                
+                // Exibir mensagem de limite se houver e showMessage=true
+                if (showMessage && capacityResult?.limiting_ingredient) {
+                    setStockLimitMessage(capacityResult.limiting_ingredient.message);
+                } else {
+                    setStockLimitMessage(null);
+                }
+                
+                return capacityResult;
+            } catch (error) {
+                // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                const isDev = __DEV__;
+                if (isDev) {
+                    console.error('Erro ao atualizar capacidade:', error);
+                }
+                return null;
+            } finally {
+                setIsUpdatingCapacity(false);
+            }
+        };
+
+        // ALTERAÇÃO: Função para atualizar limites de quantidade na UI
+        const updateQuantityLimits = (maxQuantity, capacityData) => {
+            // Se maxQuantity for 0 ou null, ainda permitir aumentar para permitir alternar
+            // A validação será feita quando tentar adicionar ao carrinho
+            if (maxQuantity > 0 && quantity >= maxQuantity) {
+                // Desabilitar botão de aumentar quantidade
+                // (implementar desabilitação visual do botão)
+            } else {
+                // Habilitar botão de aumentar quantidade
+            }
+        };
+
+        // ALTERAÇÃO: Versão com debounce para chamadas não críticas
+        const debouncedUpdateProductCapacity = (showMessage = false) => {
+            if (capacityUpdateTimeoutRef.current) {
+                clearTimeout(capacityUpdateTimeoutRef.current);
+            }
+            
+            capacityUpdateTimeoutRef.current = setTimeout(() => {
+                updateProductCapacity(showMessage, false);
+            }, 500); // Aguardar 500ms após última mudança
+        };
+
         const handleExtraQuantityChange = (ingredientId, quantity) => {
             // Alterar apenas o estado temporário
             // IMPORTANTE: Garantir que ingredientId seja string para consistência
@@ -615,6 +819,8 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
             });
             setSelectedExtras(savedExtras);
             setExtrasModalVisible(false);
+            // ALTERAÇÃO: Atualizar capacidade quando extras mudam
+            debouncedUpdateProductCapacity(false);
         };
 
         const handleCancelExtras = () => {
@@ -687,7 +893,25 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                      </View>
                      
                      <View style={styles.customizeContainer}>
-                         <Text style={styles.produtoTitle}>Monte do seu jeito!</Text>
+                         <View style={styles.customizeHeader}>
+                             <Text style={styles.produtoTitle}>Monte do seu jeito!</Text>
+                             {/* ALTERAÇÃO: Adicionar indicador de loading durante validação */}
+                             {isUpdatingCapacity && (
+                                 <ActivityIndicator 
+                                     size="small" 
+                                     color="#666" 
+                                     style={styles.capacityLoadingIndicator}
+                                 />
+                             )}
+                         </View>
+                         {/* ALTERAÇÃO: Exibir mensagem de limite de estoque */}
+                         {stockLimitMessage && (
+                             <View style={styles.stockLimitMessage}>
+                                 <Text style={styles.stockLimitMessageText}>
+                                     ⚠️ {stockLimitMessage}
+                                 </Text>
+                             </View>
+                         )}
                              {defaultIngredients && defaultIngredients.length > 0 ? (
                                  defaultIngredients.map((ing, index) => {
                                      const displayName = ing.name || ing.nome;
@@ -717,6 +941,8 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                                   ...prev,
                                                   [ingredientId]: newQuantity
                                               }));
+                                              // ALTERAÇÃO: Atualizar capacidade quando modificações mudam
+                                              debouncedUpdateProductCapacity(false);
                                           }}
                                       />
                                      );
@@ -751,7 +977,7 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                          unitPrice={finalProductPrice} // ALTERAÇÃO: usa preço final com desconto se houver promoção
                          initialQuantity={quantity}
                          additionalTotal={totalAdditionalPrice}
-                         onQuantityChange={setQuantity}
+                         onQuantityChange={handleQuantityChange} // ALTERAÇÃO: usar handler com validação
                          onAddPress={({ quantity, total }) => {
                              // TODO: integrar ao carrinho quando disponível
                          }}
@@ -806,8 +1032,9 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                  }
                              });
                              
-                             // Converter defaultIngredientsQuantities para baseModifications
+                             // ALTERAÇÃO: Converter defaultIngredientsQuantities para baseModifications
                              // baseModifications representa mudanças em relação à receita padrão
+                             // IMPORTANTE: Filtrar apenas deltas diferentes de zero para evitar erro da API
                              const baseModifications = [];
                              Object.entries(defaultIngredientsQuantities).forEach(([ingredientId, currentQty]) => {
                                  const ing = defaultIngredients.find(ing => 
@@ -815,8 +1042,22 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                  );
                                  if (ing) {
                                      const minQty = parseFloat(ing.portions || 0) || 0;
-                                     const delta = currentQty - minQty; // Diferença em relação ao padrão
-                                     if (delta !== 0) {
+                                     
+                                     // ALTERAÇÃO: Calcular currentQty corretamente baseado no tipo
+                                     let currentQtyNum = 0;
+                                     if (typeof currentQty === 'number') {
+                                         currentQtyNum = currentQty;
+                                     } else if (currentQty && typeof currentQty === 'object') {
+                                         // Se for objeto, usar current se existir
+                                         currentQtyNum = parseFloat(currentQty.current || currentQty || 0);
+                                     } else {
+                                         currentQtyNum = parseFloat(currentQty || 0);
+                                     }
+                                     
+                                     const delta = currentQtyNum - minQty; // Diferença em relação ao padrão
+                                     
+                                     // ALTERAÇÃO: Apenas incluir se delta for diferente de zero (evita erro "delta deve ser um número diferente de zero")
+                                     if (!isNaN(delta) && delta !== 0) {
                                          baseModifications.push({
                                              ingredient_id: Number(ingredientId),
                                              delta: delta
@@ -895,108 +1136,104 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                     extras: extrasArray
                                 });
                                 
-                                if (result.success) {
-                                    // Navegar para home após sucesso
-                                    navigation.navigate('Home');
-                                } else {
-                                    // Mostrar erro se falhou
-                                    Alert.alert(
-                                        'Erro',
-                                        result.error || 'Não foi possível adicionar o item à cesta',
-                                        [{ text: 'OK' }]
-                                    );
-                                }
+                                return result; // ALTERAÇÃO: Retornar resultado para tratamento externo
                             };
                              
-                             // VALIDAÇÃO PREVENTIVA: Verificar disponibilidade antes de adicionar
+                             // ALTERAÇÃO: Validação preventiva usando simulateProductCapacity
                              const productId = productData?.id || produto?.id;
                              if (productId) {
                                  try {
-                                     const availability = await safeCheckProductAvailability(productId, quantity);
+                                     // ALTERAÇÃO: Validar capacidade antes de adicionar
+                                     const capacityResult = await updateProductCapacity(false, true); // Imediato para validação crítica
                                      
-                                    if (availability.status === 'unavailable') {
-                                        // Log de diagnóstico: detalha quais ingredientes estão bloqueando
-                                        try {
-                                            const ingredients = Array.isArray(availability.ingredients) ? availability.ingredients : [];
-                                            const unavailable = ingredients.filter((ing) => {
-                                                if (!ing) return false;
-                                                // Alguns backends retornam Decimals como strings; normaliza para número quando possível
-                                                const current = typeof ing.current_stock === 'string' ? parseFloat(ing.current_stock) : ing.current_stock;
-                                                const required = typeof ing.required === 'string' ? parseFloat(ing.required) : ing.required;
-                                                return ing.is_available === false || (typeof current === 'number' && typeof required === 'number' && current < required);
-                                            }).map((ing) => {
-                                                const current = typeof ing.current_stock === 'string' ? parseFloat(ing.current_stock) : ing.current_stock;
-                                                const required = typeof ing.required === 'string' ? parseFloat(ing.required) : ing.required;
-                                                return {
-                                                    ingredient_id: ing.ingredient_id,
-                                                    name: ing.name,
-                                                    is_available: !!ing.is_available,
-                                                    current_stock: current,
-                                                    required: required,
-                                                    stock_unit: ing.stock_unit,
-                                                    reason: ing.reason || (typeof current === 'number' && typeof required === 'number' && current < required ? 'estoque insuficiente' : undefined)
-                                                };
-                                            });
-
-                                            const diag = {
-                                                productId,
-                                                productName: (productData?.name || produto?.name || produto?.title || 'Produto'),
-                                                quantity,
-                                                unavailable_count: unavailable.length,
-                                                unavailable_ingredients: unavailable
-                                            };
-                                            // ALTERAÇÃO: log detalhado de indisponibilidade removido para reduzir ruído
-                                        } catch (logErr) {
-                                            // ALTERAÇÃO: fallback de log removido para reduzir ruído
+                                    if (capacityResult && capacityResult.max_quantity < quantity) {
+                                        // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+                                        setAlertType('warning');
+                                        setAlertTitle('Estoque Insuficiente');
+                                        setAlertMessage(`Quantidade solicitada (${quantity}) excede o disponível (${capacityResult.max_quantity}). Ajuste a quantidade ou remova alguns extras.`);
+                                        setAlertButtons([{ text: 'OK' }]);
+                                        setAlertVisible(true);
+                                        return;
+                                    }
+                                    
+                                    if (capacityResult && !capacityResult.is_available) {
+                                        // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+                                        setAlertType('delete');
+                                        setAlertTitle('Produto Indisponível');
+                                        setAlertMessage(capacityResult.limiting_ingredient?.message || 'Produto temporariamente indisponível. Tente novamente mais tarde.');
+                                        setAlertButtons([{ text: 'OK' }]);
+                                        setAlertVisible(true);
+                                        return;
+                                    }
+                                 } catch (capacityError) {
+                                     // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                                     const isDev = __DEV__;
+                                     if (isDev) {
+                                         console.error('Erro ao verificar capacidade:', capacityError);
+                                     }
+                                    // ALTERAÇÃO: Se falhar a verificação, permite continuar mas mostra aviso com CustomAlert
+                                    setAlertType('warning');
+                                    setAlertTitle('Atenção');
+                                    setAlertMessage('Não foi possível verificar a disponibilidade completa. O item será adicionado, mas pode não estar disponível no momento da finalização do pedido.');
+                                    setAlertButtons([
+                                        { text: 'Cancelar', style: 'cancel' },
+                                        { 
+                                            text: 'Continuar', 
+                                            onPress: addItemToCart
                                         }
-                                         Alert.alert(
-                                             'Produto Indisponível',
-                                             availability.message || 'Este produto não está disponível no momento devido a falta de estoque.',
-                                             [{ text: 'OK' }]
-                                         );
-                                         return; // Não adiciona ao carrinho
-                                     }
-                                     
-                                     // Se status é 'unknown', permite continuar mas mostra aviso
-                                     if (availability.status === 'unknown') {
-                                         Alert.alert(
-                                             'Atenção',
-                                             'Não foi possível verificar a disponibilidade completa. O item será adicionado, mas pode não estar disponível no momento da finalização do pedido.',
-                                             [
-                                                 { text: 'Cancelar', style: 'cancel' },
-                                                 { 
-                                                     text: 'Continuar', 
-                                                     onPress: addItemToCart
-                                                 }
-                                             ]
-                                         );
-                                         return;
-                                     }
-                                 } catch (availabilityError) {
-                                     // Se falhar a verificação, permite continuar mas mostra aviso
-                                     console.error('Erro ao verificar disponibilidade:', availabilityError);
-                                     Alert.alert(
-                                         'Atenção',
-                                         'Não foi possível verificar a disponibilidade. O item será adicionado, mas pode não estar disponível no momento da finalização do pedido.',
-                                         [
-                                             { text: 'Cancelar', style: 'cancel' },
-                                             { 
-                                                 text: 'Continuar', 
-                                                 onPress: addItemToCart
-                                             }
-                                         ]
-                                     );
-                                     return;
+                                    ]);
+                                    setAlertVisible(true);
+                                    return;
                                  }
                              }
                              
-                             // Adiciona à cesta via API (só chega aqui se disponibilidade estiver OK)
-                             await addItemToCart();
+                             // Adiciona à cesta via API (só chega aqui se capacidade estiver OK)
+                             const result = await addItemToCart();
+                             
+                             if (result.success) {
+                                 // Navegar para home após sucesso
+                                 navigation.navigate('Home');
+                             } else {
+                                // ALTERAÇÃO: Tratamento específico para erro de estoque com CustomAlert
+                                if (result.errorType === 'INSUFFICIENT_STOCK') {
+                                    setAlertType('warning');
+                                    setAlertTitle('Estoque Insuficiente');
+                                    setAlertMessage(getFriendlyErrorMessage(result.error || 'Estoque insuficiente'));
+                                    setAlertButtons([{ text: 'OK' }]);
+                                    setAlertVisible(true);
+                                    // Atualizar capacidade para refletir mudanças
+                                    await updateProductCapacity(false, true);
+                                } else {
+                                    setAlertType('delete');
+                                    setAlertTitle('Erro');
+                                    setAlertMessage(getFriendlyErrorMessage(result.error || 'Erro ao adicionar à cesta'));
+                                    setAlertButtons([{ text: 'OK' }]);
+                                    setAlertVisible(true);
+                                }
+                             }
                          }}
                          style={{ marginBottom: 24 }}
                      />
-                     </ScrollView>
-                     
+                    </ScrollView>
+                    
+                    {/* ALTERAÇÃO: Indicador de loading durante validação de capacidade */}
+                    {isUpdatingCapacity && (
+                        <View style={styles.loadingOverlay}>
+                            <ActivityIndicator size="small" color="#FFC700" />
+                            <Text style={styles.loadingText}>Validando estoque...</Text>
+                        </View>
+                    )}
+                    
+                    {/* ALTERAÇÃO: CustomAlert para substituir Alert.alert */}
+                    <CustomAlert
+                        visible={alertVisible}
+                        type={alertType}
+                        title={alertTitle}
+                        message={alertMessage}
+                        buttons={alertButtons}
+                        onClose={() => setAlertVisible(false)}
+                    />
+                    
                     {!loggedIn && !keyboardVisible && basketItems.length === 0 && (
                         <View style={styles.fixedButtonContainer}>
                             <LoginButton navigation={navigation} />
@@ -1228,6 +1465,28 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
         customizeContainer: {
             margin: 20,
             marginTop: 10,
+        },
+        customizeHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 8,
+        },
+        // ALTERAÇÃO: Estilos para validação de capacidade
+        capacityLoadingIndicator: {
+            marginLeft: 8,
+        },
+        stockLimitMessage: {
+            backgroundColor: '#fff3cd',
+            borderColor: '#ffc107',
+            borderWidth: 1,
+            borderRadius: 4,
+            padding: 12,
+            marginVertical: 8,
+        },
+        stockLimitMessageText: {
+            fontSize: 14,
+            color: '#856404',
         },
         scrollView: {
             flex: 1,

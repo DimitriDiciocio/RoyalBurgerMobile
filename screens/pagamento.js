@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { Entypo } from '@expo/vector-icons';
 import Header from '../components/Header';
@@ -7,9 +7,12 @@ import EnderecosBottomSheet from '../components/EnderecosBottomSheet';
 import EditarEnderecoBottomSheet from '../components/EditarEnderecoBottomSheet';
 import BottomSheet from '../components/BottomSheet';
 import Toggle from '../components/Toggle';
+import CustomAlert from '../components/CustomAlert';
+import { getFriendlyErrorMessage } from '../utils/alertHelper';
 import { isAuthenticated, getStoredUserData, getPublicSettings, validateCartForOrder } from '../services';
 import { getLoyaltyBalance, getCustomerAddresses, setDefaultAddress, addCustomerAddress, updateCustomerAddress, removeCustomerAddress } from '../services/customerService';
 import { createOrder } from '../services/orderService';
+import { validateStockBeforeCheckout, removeCartItem } from '../services/cartService';
 import { useBasket } from '../contexts/BasketContext';
 
 const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -72,6 +75,12 @@ export default function Pagamento({ navigation }) {
     const [redemptionRate, setRedemptionRate] = useState(0.01); // Taxa padrão até carregar das settings
     const trocoValueRef = useRef('');
     const { basketItems, clearBasket, loadCart } = useBasket();
+    // ALTERAÇÃO: Estados para CustomAlert
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertType, setAlertType] = useState('info');
+    const [alertTitle, setAlertTitle] = useState('');
+    const [alertMessage, setAlertMessage] = useState('');
+    const [alertButtons, setAlertButtons] = useState([]);
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -94,7 +103,11 @@ export default function Pagamento({ navigation }) {
                         setRedemptionRate(0.01);
                     }
                 } catch (error) {
-                    console.log('Erro ao buscar configurações públicas:', error);
+                    // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+                    const isDev = __DEV__;
+                    if (isDev) {
+                        console.log('Erro ao buscar configurações públicas:', error);
+                    }
                     setDeliveryFee(0);
                     setRedemptionRate(0.01); // Fallback
                 }
@@ -123,7 +136,11 @@ export default function Pagamento({ navigation }) {
                             const hasActiveFlag = loyaltyData?.is_active === true || loyaltyData?.active === true;
                             setIsLoyaltyActive(hasActiveFlag);
                         } catch (error) {
-                            console.log('Erro ao buscar pontos:', error);
+                            // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+                            const isDev = __DEV__;
+                            if (isDev) {
+                                console.log('Erro ao buscar pontos:', error);
+                            }
                             points = user.points || '0';
                             setPointsAvailable(parseInt(user.points || '0'));
                         } finally {
@@ -153,14 +170,22 @@ export default function Pagamento({ navigation }) {
                             const enderecoPadrao = enderecosData?.find(e => e.is_default || e.isDefault);
                             setEnderecoSelecionado(enderecoPadrao || null);
                         } catch (error) {
-                            console.log('Erro ao buscar endereços:', error);
+                            // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+                            const isDev = __DEV__;
+                            if (isDev) {
+                                console.log('Erro ao buscar endereços:', error);
+                            }
                         }
                     }
                 } else {
                     setUserInfo(null);
                 }
             } catch (e) {
-                console.log('Erro ao verificar autenticação:', e);
+                // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+                const isDev = __DEV__;
+                if (isDev) {
+                    console.log('Erro ao verificar autenticação:', e);
+                }
                 setLoggedIn(false);
                 setUserInfo(null);
             }
@@ -232,9 +257,13 @@ export default function Pagamento({ navigation }) {
             setEnderecoSelecionado(endereco);
             setIsPickup(false); // ALTERAÇÃO: Não é pickup quando seleciona endereço
             setShowEnderecosBottomSheet(false);
-        } catch (error) {
-            console.error('Erro ao definir endereço padrão:', error);
-            setEnderecoSelecionado(endereco);
+            } catch (error) {
+                // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                const isDev = __DEV__;
+                if (isDev) {
+                    console.error('Erro ao definir endereço padrão:', error);
+                }
+                setEnderecoSelecionado(endereco);
             setIsPickup(false); // ALTERAÇÃO: Não é pickup quando seleciona endereço
             setShowEnderecosBottomSheet(false);
         }
@@ -303,9 +332,13 @@ export default function Pagamento({ navigation }) {
                             setEnderecoSelecionado(enderecoMaisRecente);
                             setEnderecos(enderecosAtualizados);
                         }
-                    } catch (error) {
-                        console.error('Erro ao definir endereço como padrão:', error);
-                    }
+                        } catch (error) {
+                            // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                            const isDev = __DEV__;
+                            if (isDev) {
+                                console.error('Erro ao definir endereço como padrão:', error);
+                            }
+                        }
                 }, 500);
             } else {
                 const enderecosAtualizados = await getCustomerAddresses(user.id);
@@ -315,8 +348,17 @@ export default function Pagamento({ navigation }) {
             setShowEditarEndereco(false);
             setShowEnderecosBottomSheet(true);
         } catch (error) {
-            console.error("Erro ao salvar endereço:", error);
-            alert("Erro ao salvar endereço. Tente novamente.");
+            // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+            const isDev = __DEV__;
+            if (isDev) {
+                console.error("Erro ao salvar endereço:", error);
+            }
+            // ALTERAÇÃO: Usar CustomAlert ao invés de alert
+            setAlertType('delete');
+            setAlertTitle('Erro');
+            setAlertMessage('Erro ao salvar endereço. Tente novamente.');
+            setAlertButtons([{ text: 'OK' }]);
+            setAlertVisible(true);
         }
     };
 
@@ -332,8 +374,17 @@ export default function Pagamento({ navigation }) {
             setShowEditarEndereco(false);
             setShowEnderecosBottomSheet(true);
         } catch (error) {
-            console.error("Erro ao deletar endereço:", error);
-            alert("Erro ao deletar endereço. Tente novamente.");
+            // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+            const isDev = __DEV__;
+            if (isDev) {
+                console.error("Erro ao deletar endereço:", error);
+            }
+            // ALTERAÇÃO: Usar CustomAlert ao invés de alert
+            setAlertType('delete');
+            setAlertTitle('Erro');
+            setAlertMessage('Erro ao deletar endereço. Tente novamente.');
+            setAlertButtons([{ text: 'OK' }]);
+            setAlertVisible(true);
         }
     };
 
@@ -359,13 +410,21 @@ export default function Pagamento({ navigation }) {
     };
 
     const handleReviewOrder = async () => {
-        // ALTERAÇÃO: Validar endereço ou pickup
+        // ALTERAÇÃO: Validar endereço ou pickup com CustomAlert
         if (!isPickup && !enderecoSelecionado) {
-            alert('Selecione um endereço ou retirada no balcão antes de continuar');
+            setAlertType('warning');
+            setAlertTitle('Atenção');
+            setAlertMessage('Selecione um endereço ou retirada no balcão antes de continuar');
+            setAlertButtons([{ text: 'OK' }]);
+            setAlertVisible(true);
             return;
         }
         if (!selectedPayment) {
-            alert('Selecione uma forma de pagamento');
+            setAlertType('warning');
+            setAlertTitle('Atenção');
+            setAlertMessage('Selecione uma forma de pagamento');
+            setAlertButtons([{ text: 'OK' }]);
+            setAlertVisible(true);
             return;
         }
         // ALTERAÇÃO: Validar se é pagamento em cartão e se o tipo foi selecionado
@@ -388,12 +447,21 @@ export default function Pagamento({ navigation }) {
                 const alertsText = Array.isArray(validation?.alerts) && validation.alerts.length > 0
                     ? validation.alerts.join('\\n')
                     : 'Seu carrinho possui itens indisponíveis ou com estoque insuficiente.';
-                alert(alertsText);
+                // ALTERAÇÃO: Usar CustomAlert ao invés de alert
+                setAlertType('warning');
+                setAlertTitle('Carrinho Inválido');
+                setAlertMessage(alertsText);
+                setAlertButtons([{ text: 'OK' }]);
+                setAlertVisible(true);
                 return;
             }
         } catch (e) {
-            // Em falha de validação, não bloquear, mas informar o usuário
-            alert('Não foi possível validar o carrinho no momento. Tente novamente.');
+            // ALTERAÇÃO: Em falha de validação, não bloquear, mas informar o usuário com CustomAlert
+            setAlertType('delete');
+            setAlertTitle('Erro de Validação');
+            setAlertMessage('Não foi possível validar o carrinho no momento. Tente novamente.');
+            setAlertButtons([{ text: 'OK' }]);
+            setAlertVisible(true);
             return;
         }
         // Abrir bottom sheet de revisão
@@ -616,36 +684,143 @@ export default function Pagamento({ navigation }) {
             return;
         }
 
+        // ALTERAÇÃO: Revalidar estoque antes de finalizar pedido
+        setIsCreatingOrder(true);
+        
+        try {
+            const stockValidation = await validateStockBeforeCheckout();
+            
+            if (!stockValidation.valid) {
+                setIsCreatingOrder(false);
+                
+                const messages = stockValidation.items.map(item => 
+                    `${item.product}: ${item.message}`
+                ).join('\n');
+                
+                // ALTERAÇÃO: Oferecer opção de remover itens sem estoque com CustomAlert
+                setAlertType('warning');
+                setAlertTitle('Estoque Insuficiente');
+                setAlertMessage(`Os seguintes itens não têm estoque suficiente:\n\n${messages}\n\nDeseja remover esses itens e continuar?`);
+                setAlertButtons([
+                    {
+                        text: 'Cancelar',
+                        style: 'cancel'
+                    },
+                    {
+                        text: 'Remover e Continuar',
+                        onPress: async () => {
+                                // Remover itens sem estoque do carrinho
+                                let removedCount = 0;
+                                for (const invalidItem of stockValidation.items) {
+                                    if (invalidItem.cartItemId) {
+                                        try {
+                                            const removeResult = await removeCartItem(invalidItem.cartItemId);
+                                            if (removeResult.success) {
+                                                removedCount++;
+                                            }
+                                        } catch (error) {
+                                            // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                                            const isDev = __DEV__;
+                                            if (isDev) {
+                                                console.error('Erro ao remover item do carrinho:', error);
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                if (removedCount > 0) {
+                                    // Recarregar cesta
+                                    await loadCart();
+                                    
+                                    // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+                                    setAlertType('success');
+                                    setAlertTitle('Itens Removidos');
+                                    setAlertMessage(`${removedCount} ${removedCount === 1 ? 'item foi removido' : 'itens foram removidos'} da sua cesta.`);
+                                    setAlertButtons([
+                                        {
+                                            text: 'OK',
+                                            onPress: async () => {
+                                                // Recarregar novamente para garantir estado atualizado
+                                                await loadCart();
+                                                
+                                                // Aguardar um pouco para garantir que o estado foi atualizado
+                                                setTimeout(() => {
+                                                    // Verificar se ainda há itens na cesta
+                                                    // O loadCart atualiza o contexto, então basketItems será atualizado
+                                                    if (basketItems.length === 0) {
+                                                        setAlertType('info');
+                                                        setAlertTitle('Cesta Vazia');
+                                                        setAlertMessage('Sua cesta está vazia após remover itens sem estoque.');
+                                                        setAlertButtons([{ text: 'OK', onPress: () => navigation.navigate('Cesta') }]);
+                                                        setAlertVisible(true);
+                                                    } else {
+                                                        // Tentar novamente após remover itens
+                                                        handleConfirmOrder();
+                                                    }
+                                                }, 300);
+                                            }
+                                        }
+                                    ]);
+                                    setAlertVisible(true);
+                                } else {
+                                    // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+                                    setAlertType('delete');
+                                    setAlertTitle('Erro');
+                                    setAlertMessage('Não foi possível remover os itens. Por favor, remova manualmente e tente novamente.');
+                                    setAlertButtons([{ text: 'OK' }]);
+                                    setAlertVisible(true);
+                                }
+                            }
+                        }
+                    ]);
+                setAlertVisible(true);
+                return;
+            }
+        } catch (validationError) {
+            // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+            const isDev = __DEV__;
+            if (isDev) {
+                console.error('Erro ao validar estoque:', validationError);
+            }
+            // Em caso de erro na validação, continuar (backend validará)
+        }
+
         // Validação final do carrinho antes de criar o pedido
         try {
             const validation = await validateCartForOrder();
             const isValid = validation?.success && (validation.is_valid !== false) && (!(validation.alerts) || validation.alerts.length === 0);
             if (!isValid) {
+                setIsCreatingOrder(false);
                 const alertsText = Array.isArray(validation?.alerts) && validation.alerts.length > 0
                     ? validation.alerts.join('\n')
                     : 'Seu carrinho possui itens indisponíveis ou com estoque insuficiente.';
-                Alert.alert(
-                    'Carrinho Inválido',
-                    alertsText,
-                    [{ text: 'OK', onPress: () => {
+                // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+                setAlertType('warning');
+                setAlertTitle('Carrinho Inválido');
+                setAlertMessage(alertsText);
+                setAlertButtons([{ 
+                    text: 'OK', 
+                    onPress: () => {
                         // Recarrega carrinho e volta para cesta
                         loadCart();
                         navigation.navigate('Cesta');
-                    }}]
-                );
+                    }
+                }]);
+                setAlertVisible(true);
                 return;
             }
         } catch (e) {
-            Alert.alert(
-                'Erro de Validação',
-                'Não foi possível validar o carrinho no momento. Tente novamente.',
-                [{ text: 'OK' }]
-            );
+            setIsCreatingOrder(false);
+            // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+            setAlertType('delete');
+            setAlertTitle('Erro de Validação');
+            setAlertMessage('Não foi possível validar o carrinho no momento. Tente novamente.');
+            setAlertButtons([{ text: 'OK' }]);
+            setAlertVisible(true);
             return;
         }
 
         try {
-            setIsCreatingOrder(true);
             
             // Calcula pontos a resgatar (usa estado já carregado)
             const pointsToRedeem = calculatePointsToRedeem();
@@ -801,7 +976,11 @@ export default function Pagamento({ navigation }) {
             });
 
         } catch (error) {
-            console.error('Erro ao criar pedido:', error);
+            // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+            const isDev = __DEV__;
+            if (isDev) {
+                console.error('Erro ao criar pedido:', error);
+            }
             
             let errorMessage = 'Erro ao criar pedido. Tente novamente.';
             
@@ -828,7 +1007,12 @@ export default function Pagamento({ navigation }) {
                 errorMessage = error.message;
             }
 
-            alert(errorMessage);
+            // ALTERAÇÃO: Usar CustomAlert ao invés de alert
+            setAlertType('delete');
+            setAlertTitle('Erro');
+            setAlertMessage(getFriendlyErrorMessage(errorMessage));
+            setAlertButtons([{ text: 'OK' }]);
+            setAlertVisible(true);
         } finally {
             setIsCreatingOrder(false);
         }
@@ -1267,6 +1451,16 @@ export default function Pagamento({ navigation }) {
                     </TouchableOpacity>
                 </View>
             </BottomSheet>
+            
+            {/* ALTERAÇÃO: CustomAlert para substituir Alert.alert */}
+            <CustomAlert
+                visible={alertVisible}
+                type={alertType}
+                title={alertTitle}
+                message={alertMessage}
+                buttons={alertButtons}
+                onClose={() => setAlertVisible(false)}
+            />
         </View>
     );
 }

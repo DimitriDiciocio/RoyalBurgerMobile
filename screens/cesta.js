@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import Header from '../components/Header';
+import CustomAlert from '../components/CustomAlert';
+import { getFriendlyErrorMessage } from '../utils/alertHelper';
 import { isAuthenticated, getStoredUserData } from '../services';
 import { getLoyaltyBalance, getCustomerAddresses } from '../services/customerService';
 import { useBasket } from '../contexts/BasketContext';
@@ -25,6 +27,12 @@ export default function Cesta({ navigation }) {
         gain_rate: 0.1, // valor padrão: 1 ponto vale 0.1 reais (10 centavos)
     });
     const { basketItems, removeFromBasket, updateBasketItem, clearBasket, addToBasket, basketTotal, loadCart } = useBasket();
+    // ALTERAÇÃO: Estados para CustomAlert
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertType, setAlertType] = useState('info');
+    const [alertTitle, setAlertTitle] = useState('');
+    const [alertMessage, setAlertMessage] = useState('');
+    const [alertButtons, setAlertButtons] = useState([]);
     
     // Calcular total real dos itens da cesta (já inclui adicionais pois usa item.total)
     const calculateTotal = () => {
@@ -33,10 +41,13 @@ export default function Cesta({ navigation }) {
                 const itemTotal = item.total || (parseFloat(item.price || 0) * parseFloat(item.quantity || 0));
                 return total + (parseFloat(itemTotal) || 0);
             }, 0);
-            console.log('[Cesta] calculateTotal:', { total, basketItemsCount: basketItems.length });
             return total;
         } catch (error) {
-            console.error('[Cesta] Erro em calculateTotal:', error);
+            // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+            const isDev = __DEV__;
+            if (isDev) {
+                console.error('[Cesta] Erro em calculateTotal:', error);
+            }
             return 0;
         }
     };
@@ -65,7 +76,11 @@ export default function Cesta({ navigation }) {
             
             return parseFloat(totalDiscount) || 0;
         } catch (error) {
-            console.error('[Cesta] Erro em calculatePromotionDiscounts:', error);
+            // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+            const isDev = __DEV__;
+            if (isDev) {
+                console.error('[Cesta] Erro em calculatePromotionDiscounts:', error);
+            }
             return 0;
         }
     };
@@ -90,7 +105,11 @@ export default function Cesta({ navigation }) {
             const enderecoPadrao = enderecosData?.find(e => e.is_default || e.isDefault);
             setEnderecoAtivo(enderecoPadrao || null);
         } catch (error) {
-            console.error('Erro ao buscar endereços:', error);
+            // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+            const isDev = __DEV__;
+            if (isDev) {
+                console.error('Erro ao buscar endereços:', error);
+            }
             setEnderecos([]);
             setEnderecoAtivo(null);
         }
@@ -129,12 +148,7 @@ export default function Cesta({ navigation }) {
                 // Buscar configurações públicas (taxa de entrega e taxas de conversão)
                 try {
                     const publicSettings = await getPublicSettings();
-                    console.log('[Cesta] Public settings recebidas:', publicSettings);
                     const fee = parseFloat(publicSettings?.delivery_fee || 0);
-                    console.log('[Cesta] Delivery fee calculado:', { 
-                        raw: publicSettings?.delivery_fee, 
-                        parsed: fee 
-                    });
                     setDeliveryFee(fee);
                     
                     if (publicSettings?.loyalty_rates) {
@@ -143,7 +157,11 @@ export default function Cesta({ navigation }) {
                         });
                     }
                 } catch (error) {
-                    console.log('Erro ao buscar configurações públicas:', error);
+                    // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+                    const isDev = __DEV__;
+                    if (isDev) {
+                        console.log('Erro ao buscar configurações públicas:', error);
+                    }
                     setDeliveryFee(0);
                 }
 
@@ -165,7 +183,11 @@ export default function Cesta({ navigation }) {
                                     loyaltyData?.loyalty_points?.toString() || 
                                     '0';
                         } catch (error) {
-                            console.log('Erro ao buscar pontos:', error);
+                            // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+                            const isDev = __DEV__;
+                            if (isDev) {
+                                console.log('Erro ao buscar pontos:', error);
+                            }
                             points = user.points || '0';
                         } finally {
                             setLoadingPoints(false);
@@ -190,7 +212,11 @@ export default function Cesta({ navigation }) {
                     setEnderecoAtivo(null);
                 }
             } catch (e) {
-                console.log('Erro ao verificar autenticação:', e);
+                // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+                const isDev = __DEV__;
+                if (isDev) {
+                    console.log('Erro ao verificar autenticação:', e);
+                }
                 setLoggedIn(false);
                 setUserInfo(null);
                 setEnderecos([]);
@@ -203,24 +229,27 @@ export default function Cesta({ navigation }) {
     }, []);
 
 
-    // Log para monitorar mudanças no carrinho
+    // ALTERAÇÃO: Log para monitorar mudanças no carrinho (apenas em dev)
     useEffect(() => {
-        console.log('[Cesta] Estado do carrinho atualizado:', {
-            basketItemsCount: basketItems?.length || 0,
-            basketTotal: basketTotal,
-            basketTotalType: typeof basketTotal,
-            basketTotalIsNaN: isNaN(basketTotal),
-            basketItems: basketItems?.map(item => ({
-                id: item.id,
-                cartItemId: item.cartItemId,
-                price: item.price,
-                priceType: typeof item.price,
-                quantity: item.quantity,
-                quantityType: typeof item.quantity,
-                total: item.total,
-                totalType: typeof item.total
-            }))
-        });
+        const isDev = __DEV__;
+        if (isDev) {
+            console.log('[Cesta] Estado do carrinho atualizado:', {
+                basketItemsCount: basketItems?.length || 0,
+                basketTotal: basketTotal,
+                basketTotalType: typeof basketTotal,
+                basketTotalIsNaN: isNaN(basketTotal),
+                basketItems: basketItems?.map(item => ({
+                    id: item.id,
+                    cartItemId: item.cartItemId,
+                    price: item.price,
+                    priceType: typeof item.price,
+                    quantity: item.quantity,
+                    quantityType: typeof item.quantity,
+                    total: item.total,
+                    totalType: typeof item.total
+                }))
+            });
+        }
     }, [basketItems, basketTotal]);
 
     const handleBack = () => {
@@ -229,38 +258,39 @@ export default function Cesta({ navigation }) {
 
     const handleLimpar = async () => {
         if (basketItems.length === 0) {
-            Alert.alert(
-                'Cesta vazia',
-                'Não há itens na cesta para limpar.',
-                [{ text: 'OK' }]
-            );
+            // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+            setAlertType('info');
+            setAlertTitle('Cesta vazia');
+            setAlertMessage('Não há itens na cesta para limpar.');
+            setAlertButtons([{ text: 'OK' }]);
+            setAlertVisible(true);
             return;
         }
 
-        Alert.alert(
-            'Limpar cesta',
-            'Tem certeza que deseja remover todos os itens da cesta?',
-            [
-                {
-                    text: 'Cancelar',
-                    style: 'cancel',
+        // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+        setAlertType('delete');
+        setAlertTitle('Limpar cesta');
+        setAlertMessage('Tem certeza que deseja remover todos os itens da cesta?');
+        setAlertButtons([
+            {
+                text: 'Cancelar',
+                style: 'cancel',
+            },
+            {
+                text: 'Limpar',
+                onPress: async () => {
+                    const result = await clearBasket();
+                    if (!result.success) {
+                        setAlertType('delete');
+                        setAlertTitle('Erro');
+                        setAlertMessage(getFriendlyErrorMessage(result.error || 'Não foi possível limpar a cesta'));
+                        setAlertButtons([{ text: 'OK' }]);
+                        setAlertVisible(true);
+                    }
                 },
-                {
-                    text: 'Limpar',
-                    style: 'destructive',
-                    onPress: async () => {
-                        const result = await clearBasket();
-                        if (!result.success) {
-                            Alert.alert(
-                                'Erro',
-                                result.error || 'Não foi possível limpar a cesta',
-                                [{ text: 'OK' }]
-                            );
-                        }
-                    },
-                },
-            ]
-        );
+            },
+        ]);
+        setAlertVisible(true);
     };
 
     const handleEditItem = (item) => {
@@ -306,11 +336,12 @@ export default function Cesta({ navigation }) {
         if (cartItemId) {
             const result = await removeFromBasket(cartItemId);
             if (!result.success) {
-                Alert.alert(
-                    'Erro',
-                    result.error || 'Não foi possível remover o item',
-                    [{ text: 'OK' }]
-                );
+                // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+                setAlertType('delete');
+                setAlertTitle('Erro');
+                setAlertMessage(getFriendlyErrorMessage(result.error || 'Não foi possível remover o item'));
+                setAlertButtons([{ text: 'OK' }]);
+                setAlertVisible(true);
             }
         }
     };
@@ -359,11 +390,20 @@ export default function Cesta({ navigation }) {
             });
             
             if (!result.success) {
-                Alert.alert(
-                    'Erro',
-                    result.error || 'Não foi possível atualizar a quantidade',
-                    [{ text: 'OK' }]
-                );
+                // ALTERAÇÃO: Tratamento específico para erro de estoque com CustomAlert
+                if (result.errorType === 'INSUFFICIENT_STOCK') {
+                    setAlertType('warning');
+                    setAlertTitle('Estoque Insuficiente');
+                    setAlertMessage(getFriendlyErrorMessage(result.error || 'Estoque insuficiente para esta quantidade.'));
+                    setAlertButtons([{ text: 'OK' }]);
+                    setAlertVisible(true);
+                } else {
+                    setAlertType('delete');
+                    setAlertTitle('Erro');
+                    setAlertMessage(getFriendlyErrorMessage(result.error || 'Não foi possível atualizar a quantidade'));
+                    setAlertButtons([{ text: 'OK' }]);
+                    setAlertVisible(true);
+                }
                 return;
             }
 
@@ -375,11 +415,12 @@ export default function Cesta({ navigation }) {
                     const alertsText = Array.isArray(validation?.alerts) && validation.alerts.length > 0
                         ? validation.alerts.join('\\n')
                         : 'Alguns itens estão indisponíveis ou com estoque insuficiente.';
-                    Alert.alert(
-                        'Carrinho inválido',
-                        alertsText,
-                        [{ text: 'OK' }]
-                    );
+                    // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+                    setAlertType('warning');
+                    setAlertTitle('Carrinho inválido');
+                    setAlertMessage(alertsText);
+                    setAlertButtons([{ text: 'OK' }]);
+                    setAlertVisible(true);
                     // Recarrega carrinho para refletir estado consistente
                     await loadCart();
                 }
@@ -600,13 +641,6 @@ export default function Cesta({ navigation }) {
                                 const safeBasketTotal = parseFloat(basketTotal) || 0;
                                 const safeDeliveryFee = parseFloat(deliveryFee) || 0;
                                 const total = safeBasketTotal + safeDeliveryFee;
-                                console.log('[Cesta] Resumo Total:', { 
-                                    basketTotal, 
-                                    safeBasketTotal, 
-                                    deliveryFee, 
-                                    safeDeliveryFee, 
-                                    total 
-                                });
                                 return `R$ ${total.toFixed(2).replace('.', ',')}`;
                             })()}
                         </Text>
@@ -630,13 +664,6 @@ export default function Cesta({ navigation }) {
                                 const safeBasketTotal = parseFloat(basketTotal) || 0;
                                 const safeDeliveryFee = parseFloat(deliveryFee) || 0;
                                 const total = safeBasketTotal + safeDeliveryFee;
-                                console.log('[Cesta] Footer Total:', { 
-                                    basketTotal, 
-                                    safeBasketTotal, 
-                                    deliveryFee, 
-                                    safeDeliveryFee, 
-                                    total 
-                                });
                                 return `R$ ${total.toFixed(2).replace('.', ',')}`;
                             })()}
                         </Text>
@@ -659,6 +686,16 @@ export default function Cesta({ navigation }) {
                      </TouchableOpacity>
                  </View>
              )}
+             
+             {/* ALTERAÇÃO: CustomAlert para substituir Alert.alert */}
+             <CustomAlert
+                 visible={alertVisible}
+                 type={alertType}
+                 title={alertTitle}
+                 message={alertMessage}
+                 buttons={alertButtons}
+                 onClose={() => setAlertVisible(false)}
+             />
          </View>
      );
 }

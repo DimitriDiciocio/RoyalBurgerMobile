@@ -21,8 +21,6 @@ import api from "./api";
  */
 export const getAllProducts = async (filters = {}) => {
   try {
-    console.log("Obtendo todos os produtos com filtros:", filters);
-    
     // ALTERAÇÃO: Adicionar filter_unavailable aos parâmetros
     const params = { ...filters };
     
@@ -39,28 +37,21 @@ export const getAllProducts = async (filters = {}) => {
       params.filter_unavailable = 'true';
     }
     
-    console.log("Parâmetros enviados para API:", params);
     const response = await api.get("/products", { params });
-    
-    console.log("Resposta da API de produtos:", {
-      status: response.status,
-      hasData: !!response.data,
-      hasItems: !!response.data?.items,
-      itemsCount: response.data?.items?.length || 0,
-      pagination: response.data?.pagination,
-      fullResponse: response.data
-    });
-    
     return response.data;
   } catch (error) {
-    console.error("Erro ao obter produtos:", error);
-    console.error("Detalhes do erro:", {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status,
-      url: error.config?.url,
-      params: error.config?.params
-    });
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error("Erro ao obter produtos:", error);
+      console.error("Detalhes do erro:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: error.config?.url,
+        params: error.config?.params
+      });
+    }
     throw error;
   }
 };
@@ -97,7 +88,11 @@ export const checkProductAvailability = async (productId, quantity = 1) => {
     });
     return response.data;
   } catch (error) {
-    console.error("Erro ao verificar disponibilidade:", error);
+    // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error("Erro ao verificar disponibilidade:", error);
+    }
     // Retorna status unknown em caso de erro
     return {
       status: 'unknown',
@@ -205,7 +200,6 @@ export const getProductsBySection = async (sectionId, filters = {}) => {
  */
 export const getProductsByCategory = async (categoryId, options = {}) => {
   try {
-    console.log("Obtendo produtos da categoria:", categoryId, "com opções:", options);
     const { page = 1, page_size = 10, include_inactive = false, filter_unavailable = true } = options;
     
     const params = {
@@ -219,7 +213,11 @@ export const getProductsByCategory = async (categoryId, options = {}) => {
     const response = await api.get(`/products/category/${categoryId}`, { params });
     return response.data;
   } catch (error) {
-    console.log("Erro ao obter produtos da categoria:", error);
+    // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.log("Erro ao obter produtos da categoria:", error);
+    }
     throw error;
   }
 };
@@ -311,14 +309,17 @@ export const removeIngredientFromProduct = async (productId, ingredientId) => {
  */
 export const getMostOrderedProducts = async (options = {}) => {
   try {
-    console.log("Obtendo produtos mais pedidos com opções:", options);
     const { page = 1, page_size = 10 } = options;
     const response = await api.get("/products/most-ordered", {
       params: { page, page_size },
     });
     return response.data;
   } catch (error) {
-    console.log("Erro ao obter produtos mais pedidos:", error);
+    // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.log("Erro ao obter produtos mais pedidos:", error);
+    }
     throw error;
   }
 };
@@ -333,7 +334,6 @@ export const getMostOrderedProducts = async (options = {}) => {
  */
 export const getRecentlyAddedProducts = async (options = {}) => {
   try {
-    console.log("Obtendo produtos recentemente adicionados com opções:", options);
     const { page = 1, page_size = 10, days = 30 } = options;
     // ALTERAÇÃO: Passa parâmetro days para API filtrar produtos criados no período
     const response = await api.get("/products/recently-added", {
@@ -341,7 +341,11 @@ export const getRecentlyAddedProducts = async (options = {}) => {
     });
     return response.data;
   } catch (error) {
-    console.log("Erro ao obter produtos recentemente adicionados:", error);
+    // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+    const isDev = __DEV__;
+    if (isDev) {
+      console.log("Erro ao obter produtos recentemente adicionados:", error);
+    }
     throw error;
   }
 };
