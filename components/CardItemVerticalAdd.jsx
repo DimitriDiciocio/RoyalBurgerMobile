@@ -12,9 +12,23 @@ export default function CardItemVerticalAdd({
     title = "Nome produto",
     description = "Descrição dos itens ...",
     price = "R$50,00",
+    originalPrice = null, // ALTERAÇÃO: preço original (para exibir riscado quando houver promoção)
+    discountPercentage = null, // ALTERAÇÃO: percentual de desconto para badge
     imageSource = null,
     onAdd = () => {}
 }) {
+    // ALTERAÇÃO: Função para renderizar badge de desconto
+    const renderDiscountBadge = () => {
+        if (discountPercentage && discountPercentage > 0) {
+            return (
+                <View style={styles.discountBadge}>
+                    <Text style={styles.discountBadgeText}>-{discountPercentage}%</Text>
+                </View>
+            );
+        }
+        return null;
+    };
+
     return (
         <View style={styles.container}>
             <View style={styles.imageWrapper}>
@@ -27,6 +41,8 @@ export default function CardItemVerticalAdd({
                 ) : (
                     <View style={styles.image} />
                 )}
+                {/* ALTERAÇÃO: Badge de desconto */}
+                {renderDiscountBadge()}
             </View>
             <View style={styles.contentContainer}>
                 <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
@@ -36,7 +52,15 @@ export default function CardItemVerticalAdd({
                     {description}
                 </Text>
                 <View style={styles.bottomSection}>
-                    <Text style={styles.price}>{price}</Text>
+                    {/* ALTERAÇÃO: Exibir preço original riscado e novo preço quando houver promoção */}
+                    {originalPrice ? (
+                        <View style={styles.priceContainer}>
+                            <Text style={styles.originalPrice}>{originalPrice}</Text>
+                            <Text style={styles.priceWithDiscount}>{price}</Text>
+                        </View>
+                    ) : (
+                        <Text style={styles.price}>{price}</Text>
+                    )}
                     <TouchableOpacity 
                         style={styles.addButton}
                         onPress={onAdd}
@@ -112,6 +136,40 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#000000',
         flex: 1,
+    },
+    // ALTERAÇÃO: Container para preços (original riscado + novo preço)
+    priceContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        flex: 1,
+    },
+    originalPrice: {
+        fontSize: 11,
+        fontWeight: '400',
+        color: '#999',
+        textDecorationLine: 'line-through',
+    },
+    priceWithDiscount: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: '#000000',
+    },
+    // ALTERAÇÃO: Estilos para badge de desconto
+    discountBadge: {
+        position: 'absolute',
+        top: 8,
+        left: 8,
+        backgroundColor: '#F44336',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 4,
+        zIndex: 10,
+    },
+    discountBadgeText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#FFFFFF',
     },
     addButton: {
         width: 30,

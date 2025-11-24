@@ -272,9 +272,28 @@ function HomeScreen({ navigation }) {
             // Garante que apenas produtos com estoque disponível aparecem em novidades
             const validatedProducts = await filterProductsWithStock(allProducts);
             
-            // ALTERAÇÃO: Formatar produtos para exibição
-            const formattedProducts = validatedProducts
-                .map(product => formatProductForCard(product))
+            // ALTERAÇÃO: Buscar promoções para os produtos de novidades (igual aos mais pedidos)
+            const productsWithPromotions = await Promise.allSettled(
+                validatedProducts.map(async (product) => {
+                    let promotion = null;
+                    try {
+                        if (product.id) {
+                            promotion = await getPromotionByProductId(product.id);
+                        }
+                    } catch (error) {
+                        // Ignora erros ao buscar promoção (produto pode não ter promoção)
+                    }
+                    return { product, promotion };
+                })
+            );
+            
+            // ALTERAÇÃO: Formatar produtos para exibição com suas promoções
+            const formattedProducts = productsWithPromotions
+                .filter(result => result.status === 'fulfilled')
+                .map(result => {
+                    const { product, promotion } = result.value;
+                    return formatProductForCard(product, promotion);
+                })
                 .filter(product => product !== null); // Remove produtos indisponíveis
             
             return formattedProducts;

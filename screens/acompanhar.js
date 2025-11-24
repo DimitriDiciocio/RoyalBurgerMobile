@@ -33,6 +33,7 @@ export default function Acompanhar({ navigation, route }) {
     gain_rate: 0.1, // valor padrão: 1 ponto vale 0.1 reais (10 centavos por ponto)
   });
   const [ingredientsCache, setIngredientsCache] = useState(null); // ALTERAÇÃO: Cache de ingredientes para buscar preços
+  const [storeAddress, setStoreAddress] = useState(null); // ALTERAÇÃO: Endereço da loja para retirada no balcão
   const orderId = route?.params?.orderId;
   const orderStatusRef = useRef(null);
 
@@ -152,7 +153,7 @@ export default function Acompanhar({ navigation, route }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // ALTERAÇÃO: Buscar configurações públicas (taxa de conversão de pontos e taxa de entrega)
+        // ALTERAÇÃO: Buscar configurações públicas (taxa de conversão de pontos, taxa de entrega e endereço da loja)
         try {
           const publicSettings = await getPublicSettings();
           
@@ -167,6 +168,11 @@ export default function Acompanhar({ navigation, route }) {
             setLoyaltyRates({
               gain_rate: parseFloat(publicSettings.loyalty_rates.gain_rate) || 0.1,
             });
+          }
+          
+          // ALTERAÇÃO: Buscar endereço da loja para exibir em pedidos de retirada no balcão
+          if (publicSettings?.company_info?.endereco) {
+            setStoreAddress(publicSettings.company_info.endereco);
           }
         } catch (error) {
           console.log('Erro ao buscar configurações públicas:', error);
@@ -464,12 +470,25 @@ export default function Acompanhar({ navigation, route }) {
                   </Text>
                 </View>
 
-                {/* ALTERAÇÃO: Local de entrega embaixo do total */}
+                {/* ALTERAÇÃO: Local de entrega ou retirada embaixo do total */}
                 {(() => {
                   const isPickup = order.order_type === 'pickup';
                   
+                  // ALTERAÇÃO: Se for pickup, mostrar informações de retirada no balcão
                   if (isPickup) {
-                    return null;
+                    return (
+                      <View style={styles.deliveryInfoSection}>
+                        <View style={styles.deliveryInfoRow}>
+                          <SvgXml xml={localizationSvg} width={16} height={20} />
+                          <View style={styles.deliveryInfoText}>
+                            <Text style={styles.deliveryInfoTitle}>Retirada no balcão</Text>
+                            {storeAddress ? (
+                              <Text style={styles.deliveryInfoSubtitle}>{storeAddress}</Text>
+                            ) : null}
+                          </View>
+                        </View>
+                      </View>
+                    );
                   }
                   
                   // ALTERAÇÃO: Buscar endereço do pedido ou usar endereço ativo como fallback
@@ -523,7 +542,8 @@ export default function Acompanhar({ navigation, route }) {
                     if (method === 'pix') return 'Pix';
                     if (method === 'credit' || method === 'credit_card') return 'Cartão de Crédito';
                     if (method === 'debit' || method === 'debit_card') return 'Cartão de Débito';
-                    if (method === 'cash' || method === 'dinheiro') return 'Dinheiro';
+                    // ALTERAÇÃO: Incluir 'money' no mapeamento para português
+                    if (method === 'cash' || method === 'dinheiro' || method === 'money') return 'Dinheiro';
                     if (method === 'delivery') return 'Pagamento na entrega';
                     return paymentMethod;
                   };
@@ -537,7 +557,8 @@ export default function Acompanhar({ navigation, route }) {
                     if (method === 'debit' || method === 'debit_card') {
                       return order.card_type === 'debit' ? 'Débito' : 'Cartão';
                     }
-                    if (method === 'cash' || method === 'dinheiro') return 'Dinheiro';
+                    // ALTERAÇÃO: Incluir 'money' no mapeamento para português
+                    if (method === 'cash' || method === 'dinheiro' || method === 'money') return 'Dinheiro';
                     if (method === 'delivery') return 'Pix';
                     return '';
                   };
@@ -552,11 +573,20 @@ export default function Acompanhar({ navigation, route }) {
 <path d="M20 4H4C2.89 4 2.01 4.89 2.01 6L2 18C2 19.11 2.89 20 4 20H20C21.11 20 22 19.11 22 18V6C22 4.89 21.11 4 20 4ZM20 18H4V12H20V18ZM20 8H4V6H20V8Z" fill="#000000"/>
 </svg>`;
                   
+                  // ALTERAÇÃO: SVG de dinheiro
+                  const cashSvg = `<svg width="20" height="20" viewBox="0 0 36 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M10 0C7.79375 0 6 1.79375 6 4V18C6 20.2062 7.79375 22 10 22H32C34.2062 22 36 20.2062 36 18V4C36 1.79375 34.2062 0 32 0H10ZM21 6C23.7625 6 26 8.2375 26 11C26 13.7625 23.7625 16 21 16C18.2375 16 16 13.7625 16 11C16 8.2375 18.2375 6 21 6ZM10 7.5V4.5C10 4.225 10.225 4 10.5 4H13.5C13.775 4 14.0063 4.225 13.9688 4.5C13.7437 6.3125 12.3062 7.74375 10.5 7.96875C10.225 8 10 7.775 10 7.5ZM10 14.5C10 14.225 10.225 13.9937 10.5 14.0312C12.3125 14.2563 13.7437 15.6938 13.9688 17.5C14 17.775 13.775 18 13.5 18H10.5C10.225 18 10 17.775 10 17.5V14.5ZM31.5 7.96875C29.6875 7.74375 28.2563 6.30625 28.0312 4.5C28 4.225 28.225 4 28.5 4H31.5C31.775 4 32 4.225 32 4.5V7.5C32 7.775 31.775 8.00625 31.5 7.96875ZM32 14.5V17.5C32 17.775 31.775 18 31.5 18H28.5C28.225 18 27.9937 17.775 28.0312 17.5C28.2563 15.6875 29.6938 14.2563 31.5 14.0312C31.775 14 32 14.225 32 14.5ZM3 7.5C3 6.66875 2.33125 6 1.5 6C0.66875 6 0 6.66875 0 7.5V24C0 26.2062 1.79375 28 4 28H28.5C29.3312 28 30 27.3312 30 26.5C30 25.6688 29.3312 25 28.5 25H4C3.45 25 3 24.55 3 24V7.5Z" fill="#000000"/>
+</svg>`;
+                  
                   const isPix = paymentMethod.toLowerCase() === 'pix' || paymentMethod.toLowerCase() === 'delivery';
                   const isCard = paymentMethod.toLowerCase() === 'credit' || 
                                  paymentMethod.toLowerCase() === 'credit_card' ||
                                  paymentMethod.toLowerCase() === 'debit' || 
                                  paymentMethod.toLowerCase() === 'debit_card';
+                  // ALTERAÇÃO: Verificar se é pagamento em dinheiro
+                  const isCash = paymentMethod.toLowerCase() === 'cash' || 
+                                 paymentMethod.toLowerCase() === 'dinheiro' ||
+                                 paymentMethod.toLowerCase() === 'money';
                   
                   return (
                     <View style={styles.paymentInfoSection}>
@@ -565,6 +595,8 @@ export default function Acompanhar({ navigation, route }) {
                           <SvgXml xml={pixSvg} width={20} height={20} />
                         ) : isCard ? (
                           <SvgXml xml={cardSvg} width={20} height={20} />
+                        ) : isCash ? (
+                          <SvgXml xml={cashSvg} width={20} height={20} />
                         ) : (
                           <View style={styles.paymentIconPlaceholder} />
                         )}
@@ -640,11 +672,11 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   statusContainer: {
-    marginBottom: 20,
+    marginBottom: 12, // ALTERAÇÃO: Reduzido de 20 para 12 para diminuir espaçamento
     paddingHorizontal: 20,
   },
   itemsSection: {
-    marginTop: 20,
+    marginTop: 0, // ALTERAÇÃO: Removido marginTop para diminuir espaçamento
   },
   itemsSectionTitle: {
     fontSize: 20,

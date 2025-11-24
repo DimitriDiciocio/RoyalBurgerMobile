@@ -6,7 +6,7 @@ import BotaoCheck from '../components/BotaoCheck';
 import BotaoSwitch from '../components/BotaoSwitch';
 import AlterarSenhaBottomSheet from '../components/AlterarSenhaBottomSheet';
 import CustomAlert from '../components/CustomAlert';
-import { logout } from '../services/userService';
+import { logout, getStoredUserData, getNotificationPreferences, updateNotificationPreferences, get2FAStatus, toggle2FA } from '../services/userService';
 
 // SVG do ícone de voltar (igual ao produto.js)
 const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -35,17 +35,49 @@ export default function Config({ navigation }) {
   const [alertMessage, setAlertMessage] = useState('');
   const [alertButtons, setAlertButtons] = useState([]);
 
-  // Carregar configurações do AsyncStorage
+  // ALTERAÇÃO: Carregar configurações do backend
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const pedidos = await AsyncStorage.getItem('notificacaoPedidos');
-        const promocoes = await AsyncStorage.getItem('notificacaoPromocoes');
-        const duasEtapas = await AsyncStorage.getItem('verificacaoDuasEtapas');
-        
-        if (pedidos !== null) setNotificacaoPedidos(JSON.parse(pedidos));
-        if (promocoes !== null) setNotificacaoPromocoes(JSON.parse(promocoes));
-        if (duasEtapas !== null) setVerificacaoDuasEtapas(JSON.parse(duasEtapas));
+        const user = await getStoredUserData();
+        if (!user || !user.id) {
+          console.error('Usuário não encontrado');
+          return;
+        }
+
+        // Carregar preferências de notificação do backend
+        try {
+          const notificationPrefs = await getNotificationPreferences(user.id);
+          if (notificationPrefs) {
+            setNotificacaoPedidos(notificationPrefs.notify_order_updates ?? false);
+            setNotificacaoPromocoes(notificationPrefs.notify_promotions ?? false);
+            
+            // Salvar no AsyncStorage como cache
+            await AsyncStorage.setItem('notificacaoPedidos', JSON.stringify(notificationPrefs.notify_order_updates ?? false));
+            await AsyncStorage.setItem('notificacaoPromocoes', JSON.stringify(notificationPrefs.notify_promotions ?? false));
+          }
+        } catch (error) {
+          console.error('Erro ao carregar preferências de notificação:', error);
+          // Fallback para AsyncStorage se a API falhar
+          const pedidos = await AsyncStorage.getItem('notificacaoPedidos');
+          const promocoes = await AsyncStorage.getItem('notificacaoPromocoes');
+          if (pedidos !== null) setNotificacaoPedidos(JSON.parse(pedidos));
+          if (promocoes !== null) setNotificacaoPromocoes(JSON.parse(promocoes));
+        }
+
+        // Carregar status do 2FA do backend
+        try {
+          const twoFactorStatus = await get2FAStatus();
+          if (twoFactorStatus) {
+            setVerificacaoDuasEtapas(twoFactorStatus.two_factor_enabled ?? false);
+            await AsyncStorage.setItem('verificacaoDuasEtapas', JSON.stringify(twoFactorStatus.two_factor_enabled ?? false));
+          }
+        } catch (error) {
+          console.error('Erro ao carregar status do 2FA:', error);
+          // Fallback para AsyncStorage se a API falhar
+          const duasEtapas = await AsyncStorage.getItem('verificacaoDuasEtapas');
+          if (duasEtapas !== null) setVerificacaoDuasEtapas(JSON.parse(duasEtapas));
+        }
       } catch (error) {
         console.error('Erro ao carregar configurações:', error);
       }
@@ -54,32 +86,99 @@ export default function Config({ navigation }) {
     loadSettings();
   }, []);
 
-  // Salvar configurações no AsyncStorage
-  useEffect(() => {
-    const saveSettings = async () => {
-      try {
-        await AsyncStorage.setItem('notificacaoPedidos', JSON.stringify(notificacaoPedidos));
-        await AsyncStorage.setItem('notificacaoPromocoes', JSON.stringify(notificacaoPromocoes));
-        await AsyncStorage.setItem('verificacaoDuasEtapas', JSON.stringify(verificacaoDuasEtapas));
-      } catch (error) {
-        console.error('Erro ao salvar configurações:', error);
-      }
-    };
+  // ALTERAÇÃO: Removido useEffect que salvava automaticamente - agora salvamos no backend quando o usuário altera
+
+  // ALTERAÇÃO: Handlers para os toggles que atualizam o backend
+  const handleNotificacaoPedidos = async () => {
+    const oldValue = notificacaoPedidos;
+    const newValue = !oldValue;
+    setNotificacaoPedidos(newValue); // Atualiza UI imediatamente
     
-    saveSettings();
-  }, [notificacaoPedidos, notificacaoPromocoes, verificacaoDuasEtapas]);
+    try {
+      const user = await getStoredUserData();
+      if (!user || !user.id) {
+        throw new Error('Usuário não encontrado');
+      }
 
-  // Handlers para os toggles
-  const handleNotificacaoPedidos = () => {
-    setNotificacaoPedidos(!notificacaoPedidos);
+      await updateNotificationPreferences(user.id, {
+        notify_order_updates: newValue
+      });
+      
+      // Salvar no AsyncStorage como cache
+      await AsyncStorage.setItem('notificacaoPedidos', JSON.stringify(newValue));
+    } catch (error) {
+      console.error('Erro ao atualizar notificação de pedidos:', error);
+      // ALTERAÇÃO: Reverter o estado em caso de erro usando o valor anterior salvo
+      setNotificacaoPedidos(oldValue);
+      // ALTERAÇÃO: Mostrar erro com CustomAlert
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('Não foi possível atualizar a configuração. Tente novamente.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
+    }
   };
 
-  const handleNotificacaoPromocoes = () => {
-    setNotificacaoPromocoes(!notificacaoPromocoes);
+  const handleNotificacaoPromocoes = async () => {
+    const oldValue = notificacaoPromocoes;
+    const newValue = !oldValue;
+    setNotificacaoPromocoes(newValue); // Atualiza UI imediatamente
+    
+    try {
+      const user = await getStoredUserData();
+      if (!user || !user.id) {
+        throw new Error('Usuário não encontrado');
+      }
+
+      await updateNotificationPreferences(user.id, {
+        notify_promotions: newValue
+      });
+      
+      // Salvar no AsyncStorage como cache
+      await AsyncStorage.setItem('notificacaoPromocoes', JSON.stringify(newValue));
+    } catch (error) {
+      console.error('Erro ao atualizar notificação de promoções:', error);
+      // ALTERAÇÃO: Reverter o estado em caso de erro usando o valor anterior salvo
+      setNotificacaoPromocoes(oldValue);
+      // ALTERAÇÃO: Mostrar erro com CustomAlert
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('Não foi possível atualizar a configuração. Tente novamente.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
+    }
   };
 
-  const handleVerificacaoDuasEtapas = () => {
-    setVerificacaoDuasEtapas(!verificacaoDuasEtapas);
+  const handleVerificacaoDuasEtapas = async () => {
+    const oldValue = verificacaoDuasEtapas;
+    const newValue = !oldValue;
+    setVerificacaoDuasEtapas(newValue); // Atualiza UI imediatamente
+    
+    try {
+      await toggle2FA(newValue);
+      
+      // ALTERAÇÃO: Recarregar status do 2FA do backend para garantir sincronização
+      try {
+        const twoFactorStatus = await get2FAStatus();
+        if (twoFactorStatus) {
+          setVerificacaoDuasEtapas(twoFactorStatus.two_factor_enabled ?? false);
+          await AsyncStorage.setItem('verificacaoDuasEtapas', JSON.stringify(twoFactorStatus.two_factor_enabled ?? false));
+        }
+      } catch (refreshError) {
+        // Se falhar ao recarregar, usa o valor que foi definido
+        await AsyncStorage.setItem('verificacaoDuasEtapas', JSON.stringify(newValue));
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar verificação em duas etapas:', error);
+      // ALTERAÇÃO: Reverter o estado em caso de erro usando o valor anterior salvo
+      setVerificacaoDuasEtapas(oldValue);
+      // ALTERAÇÃO: Mostrar erro com CustomAlert
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('Não foi possível atualizar a verificação em duas etapas. Tente novamente.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
+    }
   };
 
   const handleChangePassword = () => {
@@ -87,7 +186,7 @@ export default function Config({ navigation }) {
   };
 
   const handleVerifyEmail = () => {
-    console.log('Verificar email');
+    // TODO: REVISAR implementar verificação de email
     // Adicione a navegação ou ação desejada aqui
   };
 

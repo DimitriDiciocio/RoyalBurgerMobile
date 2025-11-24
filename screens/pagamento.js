@@ -273,9 +273,10 @@ export default function Pagamento({ navigation }) {
     const handleSelectPickup = () => {
         setEnderecoSelecionado(null);
         setIsPickup(true);
-        // ALTERAÇÃO: Limpar valor do troco quando selecionar pickup
+        // ALTERAÇÃO: Limpar valor do troco quando selecionar pickup e fechar bottom sheet se estiver aberto
         setTrocoValue('');
         trocoValueRef.current = '';
+        setShowTrocoBottomSheet(false); // ALTERAÇÃO: Fechar bottom sheet de troco se estiver aberto
         setShowEnderecosBottomSheet(false);
     };
 
@@ -396,8 +397,15 @@ export default function Pagamento({ navigation }) {
             setShowCardTypeBottomSheet(true);
         }
         // ALTERAÇÃO: Mostrar bottom sheet de troco apenas se não for pickup
-        else if (payment === 'cash' && !isPickup) {
-            setShowTrocoBottomSheet(true);
+        // Se for pickup, não precisa de troco (pagamento é feito no balcão)
+        else if (payment === 'cash') {
+            if (!isPickup) {
+                setShowTrocoBottomSheet(true);
+            } else {
+                // Se for pickup, limpar valor do troco (não é necessário)
+                setTrocoValue('');
+                trocoValueRef.current = '';
+            }
         }
         // Se mudar de cartão para outro método, limpar tipo de cartão
         else {
@@ -834,9 +842,10 @@ export default function Pagamento({ navigation }) {
                     base_modifications: [],
                 };
                 
-                // Adiciona observações se houver
-                if (item.observacoes) {
-                    apiItem.notes = item.observacoes;
+                // ALTERAÇÃO: Adiciona observações se houver (verificar múltiplos campos)
+                const itemNotes = item.observacoes || item.notes || '';
+                if (itemNotes && itemNotes.trim()) {
+                    apiItem.notes = itemNotes.trim();
                 }
                 
                 // Converte extras (selectedExtras)
@@ -1303,7 +1312,8 @@ export default function Pagamento({ navigation }) {
                 </View>
             </BottomSheet>
 
-            {/* Bottom Sheet de Troco */}
+            {/* ALTERAÇÃO: Bottom Sheet de Troco - só mostra se não for pickup */}
+            {!isPickup && (
             <BottomSheet 
                 visible={showTrocoBottomSheet} 
                 onClose={() => setShowTrocoBottomSheet(false)}
@@ -1347,6 +1357,7 @@ export default function Pagamento({ navigation }) {
                     </TouchableOpacity>
                 </View>
             </BottomSheet>
+            )}
 
             {/* Bottom Sheets de Endereços */}
             <EnderecosBottomSheet

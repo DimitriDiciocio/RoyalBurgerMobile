@@ -2,25 +2,41 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 
 export default function OrderStatusBar({ status }) {
-  // Mapear status para mensagens (igual ao web)
+  // ALTERAÇÃO: Normalizar status para minúsculas e remover espaços
+  const normalizedStatus = (status || '').toLowerCase().trim();
+  
+  // ALTERAÇÃO: Mapear status para mensagens (incluindo todos os status possíveis da API)
   const statusMessages = {
     'pending': 'Seu pedido está sendo processado!',
     'preparing': 'Seu pedido está sendo preparado!',
     'ready': 'Seu pedido está pronto!',
+    'pronto': 'Seu pedido está pronto!', // ALTERAÇÃO: Status em português
+    'in_progress': 'Seu pedido está pronto!', // ALTERAÇÃO: Fallback para ready - mesma mensagem
+    'processing': 'Seu pedido está sendo processado!',
+    'confirmed': 'Seu pedido foi confirmado!',
+    'awaiting_payment': 'Aguardando pagamento',
+    'active_table': 'Mesa ativa', // ALTERAÇÃO: Status para pedidos on-site
     'on_the_way': 'Seu pedido está em rota de entrega!',
+    'out_for_delivery': 'Seu pedido está em rota de entrega!', // ALTERAÇÃO: Sinônimo de on_the_way
     'delivered': 'Seu pedido foi entregue!',
     'paid': 'Seu pedido foi pago!',
     'completed': 'Seu pedido foi concluído!',
     'cancelled': 'Seu pedido foi cancelado.'
   };
 
-  // Mapear status para etapas completas (igual ao web)
+  // ALTERAÇÃO: Mapear status para etapas completas (incluindo todos os status possíveis)
   const getStepConfig = (status) => {
     const steps = {
       'pending': { pending: true, preparing: false, delivered: false },
+      'processing': { pending: true, preparing: false, delivered: false },
+      'confirmed': { pending: true, preparing: false, delivered: false },
+      'awaiting_payment': { pending: true, preparing: false, delivered: false },
+      'active_table': { pending: true, preparing: false, delivered: false },
       'preparing': { pending: true, preparing: true, delivered: false },
-      'ready': { pending: true, preparing: true, delivered: false },
+      'ready': { pending: true, preparing: true, delivered: false }, // ALTERAÇÃO: Preenche segunda barrinha
+      'in_progress': { pending: true, preparing: true, delivered: false }, // ALTERAÇÃO: Fallback para ready
       'on_the_way': { pending: true, preparing: true, delivered: false },
+      'out_for_delivery': { pending: true, preparing: true, delivered: false }, // ALTERAÇÃO: Sinônimo de on_the_way
       'delivered': { pending: true, preparing: true, delivered: true },
       'paid': { pending: true, preparing: true, delivered: true },
       'completed': { pending: true, preparing: true, delivered: true },
@@ -29,8 +45,8 @@ export default function OrderStatusBar({ status }) {
     return steps[status] || steps['pending'];
   };
 
-  const stepConfig = getStepConfig(status);
-  const statusMessage = statusMessages[status] || 'Status desconhecido';
+  const stepConfig = getStepConfig(normalizedStatus);
+  const statusMessage = statusMessages[normalizedStatus] || `Status: ${status || 'desconhecido'}`;
 
   // Componente de barra com animação
   const AnimatedStep = ({ isComplete, isMiddle = false }) => {
@@ -144,7 +160,7 @@ export default function OrderStatusBar({ status }) {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 30,
+    marginBottom: 16, // ALTERAÇÃO: Reduzido de 30 para 16 para diminuir espaçamento
   },
   statusMessage: {
     color: '#101010',

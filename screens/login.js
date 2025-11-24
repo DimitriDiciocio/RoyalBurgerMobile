@@ -72,6 +72,17 @@ export default function Login({navigation}) {
             } else {
                 const message = result.error || '';
                 
+                // ALTERAÇÃO: Verifica se 2FA está habilitado
+                if (result.requires_2fa && result.user_id) {
+                    // Redireciona para tela de verificação 2FA
+                    navigation.navigate('VerificacaoEmail', { 
+                        email: email,
+                        user_id: result.user_id,
+                        is2FA: true
+                    });
+                    return;
+                }
+                
                 // Verifica APENAS se o backend retornou especificamente que o email não está verificado
                 // Status 403 E mensagem específica de verificação
                 const isUnverified = 

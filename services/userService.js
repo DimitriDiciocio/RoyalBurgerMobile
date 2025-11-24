@@ -23,7 +23,17 @@ export const login = async (userData) => {
     // Faz a requisição já com userData (que deve ter { email, password })
     const response = await api.post("/users/login", userData);
 
-    const { access_token, user, full_name, roles } = response.data || {};
+    const { access_token, user, full_name, roles, requires_2fa, user_id } = response.data || {};
+
+    // ALTERAÇÃO: Se 2FA está habilitado, retorna informação especial
+    if (requires_2fa) {
+      return {
+        ok: false,
+        requires_2fa: true,
+        user_id: user_id,
+        error: response.data?.message || "Código de verificação 2FA enviado para seu email",
+      };
+    }
 
     if (!access_token) {
       return { ok: false, error: "Token de acesso não recebido." };
@@ -388,7 +398,13 @@ export const verify2FA = async (userId, code) => {
 
     return response.data;
   } catch (error) {
-    throw error;
+    // ALTERAÇÃO: Estruturar erro de forma consistente
+    const structuredError = {
+      message: error.response?.data?.error || error.message || "Erro ao verificar código 2FA",
+      status: error.response?.status,
+      data: error.response?.data,
+    };
+    throw structuredError;
   }
 };
 
@@ -443,6 +459,51 @@ export const get2FAStatus = async () => {
 export const updatePassword = async (passwordData) => {
   try {
     const response = await api.put("/users/change-password", passwordData);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Reenvia código 2FA para o usuário.
+ * @param {number} userId - ID do usuário
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const resend2FACode = async (userId) => {
+  try {
+    const response = await api.post("/users/resend-2fa-code", {
+      user_id: userId
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Obtém as preferências de notificação do usuário.
+ * @param {number} userId - ID do usuário
+ * @returns {Promise<object>} - Preferências de notificação { notify_order_updates, notify_promotions }
+ */
+export const getNotificationPreferences = async (userId) => {
+  try {
+    const response = await api.get(`/customers/${userId}/notification-preferences`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Atualiza as preferências de notificação do usuário.
+ * @param {number} userId - ID do usuário
+ * @param {object} preferences - Preferências { notify_order_updates?: boolean, notify_promotions?: boolean }
+ * @returns {Promise<object>} - Resposta da API
+ */
+export const updateNotificationPreferences = async (userId, preferences) => {
+  try {
+    const response = await api.put(`/customers/${userId}/notification-preferences`, preferences);
     return response.data;
   } catch (error) {
     throw error;

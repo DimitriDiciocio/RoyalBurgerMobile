@@ -13,9 +13,13 @@ import Header from "../components/Header";
 import VerificationCodeInput from "../components/VerificationCodeInput";
 import CustomAlert from "../components/CustomAlert";
 import { requestEmailVerification, verifyEmailCode, resendVerificationCode } from "../services/customerService";
+import { verify2FA, resend2FACode } from "../services/userService";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useBasket } from "../contexts/BasketContext";
 
 export default function VerificacaoEmail({ navigation, route }) {
-  const { email, userData } = route.params || {};
+  const { email, userData, user_id, is2FA } = route.params || {};
+  const { claimGuestCartAfterLogin } = useBasket();
   
   const [code, setCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -31,9 +35,10 @@ export default function VerificacaoEmail({ navigation, route }) {
   const [alertButtons, setAlertButtons] = useState([]);
 
   useEffect(() => {
-    // Envia o email de verificação automaticamente quando a tela carrega
+    // ALTERAÇÃO: Se for 2FA, não envia email novamente (já foi enviado no login)
+    // Se for verificação de email normal, envia o email
     const sendInitialEmail = async () => {
-      if (email) {
+      if (email && !is2FA) {
         try {
           await requestEmailVerification(email);
           setSuccess('Código de verificação enviado para seu email!');
@@ -41,6 +46,9 @@ export default function VerificacaoEmail({ navigation, route }) {
           console.log('Erro ao enviar email inicial:', error);
           // Não mostra erro aqui para não confundir o usuário
         }
+      } else if (is2FA) {
+        // Para 2FA, apenas mostra mensagem de sucesso
+        setSuccess('Código de verificação 2FA enviado para seu email!');
       }
     };
 
@@ -59,7 +67,7 @@ export default function VerificacaoEmail({ navigation, route }) {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [email]);
+  }, [email, is2FA]);
 
   const handleCodeChange = (newCode) => {
     setCode(newCode);
@@ -74,38 +82,67 @@ export default function VerificacaoEmail({ navigation, route }) {
   };
 
   const verifyCode = async (verificationCode) => {
-    if (!email) {
-      setError('Email não encontrado. Tente fazer o cadastro novamente.');
-      return;
-    }
-
     setIsVerifying(true);
     setError('');
     setSuccess('');
 
     try {
-      const response = await verifyEmailCode(email, verificationCode);
-      
-      if (response.success) {
-        setSuccess('Email verificado com sucesso!');
+      // ALTERAÇÃO: Se for 2FA, usa verify2FA; senão usa verifyEmailCode
+      if (is2FA && user_id) {
+        const response = await verify2FA(user_id, verificationCode);
         
-        // Aguarda um pouco e redireciona para login
-        setTimeout(() => {
-          navigation.navigate('Login', {
-            message: 'Email verificado com sucesso! Faça login para continuar.',
-            email: email
-          });
-        }, 1500);
+        if (response.access_token) {
+          setSuccess('Verificação 2FA realizada com sucesso!');
+          
+          // ALTERAÇÃO: Login automático após verificação 2FA bem-sucedida
+          // O token já foi salvo pelo verify2FA, então apenas reivindica o carrinho e redireciona
+          try {
+            await claimGuestCartAfterLogin();
+          } catch (cartError) {
+            // Erro silencioso - não bloqueia o login
+            console.log('Erro ao reivindicar carrinho:', cartError);
+          }
+          
+          setTimeout(() => {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Home' }],
+            });
+          }, 1500);
+        }
+      } else {
+        if (!email) {
+          setError('Email não encontrado. Tente fazer o cadastro novamente.');
+          return;
+        }
+
+        const response = await verifyEmailCode(email, verificationCode);
+        
+        if (response.success) {
+          setSuccess('Email verificado com sucesso!');
+          
+          // ALTERAÇÃO: Redireciona para login ao invés de cadastro
+          setTimeout(() => {
+            navigation.navigate('Login', {
+              message: 'Email verificado com sucesso! Faça login para continuar.',
+              email: email
+            });
+          }, 1500);
+        }
       }
     } catch (error) {
-      const errorMessage = error.message || 'Erro ao verificar código';
+      // ALTERAÇÃO: Melhor tratamento de erros para 2FA e verificação de email
+      const errorMessage = error.message || error.data?.error || error.response?.data?.error || 'Erro ao verificar código';
       setError(errorMessage);
       
-      // ALTERAÇÃO: Se o código expirou, oferece reenvio com CustomAlert
-      if (errorMessage.includes('expirado') || errorMessage.includes('CODE_EXPIRED')) {
+      // ALTERAÇÃO: Se o código expirou ou é inválido, oferece reenvio com CustomAlert
+      const lowerMessage = errorMessage.toLowerCase();
+      if (lowerMessage.includes('expirado') || lowerMessage.includes('code_expired') || 
+          lowerMessage.includes('inválido') || lowerMessage.includes('invalid_code') ||
+          lowerMessage.includes('não encontrado') || lowerMessage.includes('no_verification_found')) {
         setAlertType('warning');
-        setAlertTitle('Código Expirado');
-        setAlertMessage('O código de verificação expirou. Deseja solicitar um novo código?');
+        setAlertTitle('Código Inválido ou Expirado');
+        setAlertMessage('O código de verificação está inválido ou expirou. Deseja solicitar um novo código?');
         setAlertButtons([
           { text: 'Cancelar', style: 'cancel' },
           { text: 'Reenviar', onPress: resendCode }
@@ -118,16 +155,42 @@ export default function VerificacaoEmail({ navigation, route }) {
   };
 
   const resendCode = async () => {
-    if (!email) {
-      setError('Email não encontrado. Tente fazer o cadastro novamente.');
-      return;
-    }
-
     setIsResending(true);
     setError('');
     setSuccess('');
 
     try {
+      // ALTERAÇÃO: Para 2FA, usa a nova rota de reenvio 2FA
+      if (is2FA && user_id) {
+        try {
+          await resend2FACode(user_id);
+          setSuccess('Novo código 2FA enviado para seu email!');
+          setCountdown(60); // Reinicia contador
+          
+          // Inicia novo timer
+          const timer = setInterval(() => {
+            setCountdown((prev) => {
+              if (prev <= 1) {
+                clearInterval(timer);
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+        } catch (error) {
+          const errorMessage = error.response?.data?.error || error.message || 'Erro ao reenviar código 2FA';
+          setError(errorMessage);
+        } finally {
+          setIsResending(false);
+        }
+        return;
+      }
+
+      if (!email) {
+        setError('Email não encontrado. Tente fazer o cadastro novamente.');
+        return;
+      }
+
       const response = await resendVerificationCode(email);
       
       if (response.success) {
@@ -160,7 +223,12 @@ export default function VerificacaoEmail({ navigation, route }) {
   };
 
   const handleBackToRegister = () => {
-    navigation.navigate('Cadastro');
+    // ALTERAÇÃO: Se for 2FA, volta para login; senão volta para cadastro
+    if (is2FA) {
+      navigation.navigate('Login');
+    } else {
+      navigation.navigate('Cadastro');
+    }
   };
 
   return (
@@ -195,10 +263,15 @@ export default function VerificacaoEmail({ navigation, route }) {
             <Text style={styles.icon}>✉️</Text>
           </View>
           
-          <Text style={styles.titulo}>Verifique seu email</Text>
+          <Text style={styles.titulo}>
+            {is2FA ? 'Verificação em duas etapas' : 'Verifique seu email'}
+          </Text>
           
           <Text style={styles.subtitulo}>
-            Enviamos um código de verificação de 6 dígitos para:
+            {is2FA 
+              ? 'Enviamos um código de verificação 2FA de 6 dígitos para:'
+              : 'Enviamos um código de verificação de 6 dígitos para:'
+            }
           </Text>
           
           <Text style={styles.emailText}>{email}</Text>
@@ -253,7 +326,7 @@ export default function VerificacaoEmail({ navigation, route }) {
             disabled={isVerifying || isResending}
           >
             <Text style={styles.backButtonText}>
-              Voltar ao cadastro
+              {is2FA ? 'Voltar ao login' : 'Voltar ao cadastro'}
             </Text>
           </TouchableOpacity>
         </View>

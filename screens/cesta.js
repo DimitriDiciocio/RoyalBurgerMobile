@@ -10,6 +10,9 @@ import { useBasket } from '../contexts/BasketContext';
 import ItensCesta from '../components/itensCesta';
 import CardItemVerticalAdd from '../components/CardItemVerticalAdd';
 import { getPublicSettings, validateCartForOrder } from '../services';
+import { getAllProducts, filterProductsWithStock } from '../services/productService';
+import { getPromotionByProductId } from '../services/promotionService';
+import api from '../services/api';
 
 const backArrowSvg = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M5.29385 9.29365C4.90322 9.68428 4.90322 10.3187 5.29385 10.7093L11.2938 16.7093C11.6845 17.0999 12.3188 17.0999 12.7095 16.7093C13.1001 16.3187 13.1001 15.6843 12.7095 15.2937L7.41572 9.9999L12.7063 4.70615C13.097 4.31553 13.097 3.68115 12.7063 3.29053C12.3157 2.8999 11.6813 2.8999 11.2907 3.29053L5.29072 9.29053L5.29385 9.29365Z" fill="black"/>
@@ -33,6 +36,9 @@ export default function Cesta({ navigation }) {
     const [alertTitle, setAlertTitle] = useState('');
     const [alertMessage, setAlertMessage] = useState('');
     const [alertButtons, setAlertButtons] = useState([]);
+    // ALTERAÇÃO: Estado para produtos sugeridos
+    const [suggestedProducts, setSuggestedProducts] = useState([]);
+    const [loadingSuggested, setLoadingSuggested] = useState(false);
     
     // Calcular total real dos itens da cesta (já inclui adicionais pois usa item.total)
     const calculateTotal = () => {
@@ -435,83 +441,157 @@ export default function Cesta({ navigation }) {
         navigation.navigate('Home');
     };
 
-    // Dados aleatórios para a seção "Peça também"
-    const suggestedProducts = [
-        {
-            id: 'suggested_1',
-            name: 'Hambúrguer Clássico',
-            description: 'Pão brioche, carne, queijo, alface e tomate',
-            price: 25.90,
-            image: null
-        },
-        {
-            id: 'suggested_2',
-            name: 'Batata Frita Crocante',
-            description: 'Batatas fritas temperadas com sal e páprica',
-            price: 12.50,
-            image: null
-        },
-        {
-            id: 'suggested_3',
-            name: 'Refrigerante Lata',
-            description: 'Coca-Cola, Pepsi ou Guaraná - 350ml',
-            price: 4.50,
-            image: null
-        },
-        {
-            id: 'suggested_4',
-            name: 'Milkshake de Chocolate',
-            description: 'Milkshake cremoso de chocolate com chantilly',
-            price: 18.90,
-            image: null
-        },
-        {
-            id: 'suggested_5',
-            name: 'Onion Rings',
-            description: 'Anéis de cebola empanados e crocantes',
-            price: 15.90,
-            image: null
-        },
-        {
-            id: 'suggested_6',
-            name: 'Salada Caesar',
-            description: 'Alface, croutons, queijo parmesão e molho caesar',
-            price: 22.90,
-            image: null
-        },
-        {
-            id: 'suggested_7',
-            name: 'Nuggets de Frango',
-            description: '6 unidades de nuggets crocantes de frango',
-            price: 19.90,
-            image: null
-        },
-        {
-            id: 'suggested_8',
-            name: 'Açaí Bowl',
-            description: 'Açaí cremoso com granola e frutas',
-            price: 16.90,
-            image: null
-        },
-        {
-            id: 'suggested_9',
-            name: 'Suco Natural',
-            description: 'Suco de laranja, maçã ou uva - 300ml',
-            price: 8.90,
-            image: null
-        },
-        {
-            id: 'suggested_10',
-            name: 'Cookie de Chocolate',
-            description: 'Cookie caseiro com gotas de chocolate',
-            price: 6.90,
-            image: null
+    // ALTERAÇÃO: Função para formatar produto para CardItemVerticalAdd
+    const formatProductForSuggested = (product, promotion = null) => {
+        const basePrice = parseFloat(product.price || 0);
+        
+        // Calcular preço com desconto se houver promoção
+        let finalPrice = basePrice;
+        if (promotion) {
+            if (promotion.discount_percentage && parseFloat(promotion.discount_percentage) > 0) {
+                const discountPercentage = parseFloat(promotion.discount_percentage);
+                finalPrice = basePrice * (1 - discountPercentage / 100);
+            } else if (promotion.discount_value && parseFloat(promotion.discount_value) > 0) {
+                finalPrice = basePrice - parseFloat(promotion.discount_value);
+            }
         }
-    ];
+        
+        // Monta URL da imagem
+        let imageUrl = null;
+        if (product.image_url) {
+            if (product.image_url.startsWith('http')) {
+                imageUrl = product.image_url;
+            } else if (product.id) {
+                const baseUrl = api.defaults.baseURL.replace('/api', '');
+                imageUrl = `${baseUrl}/api/products/image/${product.id}`;
+            }
+        }
+        
+        return {
+            id: product.id,
+            name: product.name || 'Produto',
+            description: product.description || '',
+            price: finalPrice,
+            originalPrice: promotion ? basePrice : null,
+            discountPercentage: promotion?.discount_percentage ? Math.round(parseFloat(promotion.discount_percentage)) : null,
+            image: imageUrl ? { uri: imageUrl } : null,
+            promotion: promotion
+        };
+    };
+
+    // ALTERAÇÃO: Carregar produtos sugeridos de outras categorias
+    useEffect(() => {
+        const loadSuggestedProducts = async () => {
+            if (basketItems.length === 0) {
+                setSuggestedProducts([]);
+                return;
+            }
+
+            try {
+                setLoadingSuggested(true);
+                
+                // Identificar categorias dos produtos no carrinho
+                const categoriesInBasket = new Set();
+                const productIdsInBasket = new Set();
+                
+                basketItems.forEach(item => {
+                    const productId = item.originalProductId || item.productId;
+                    if (productId) {
+                        productIdsInBasket.add(productId);
+                    }
+                    
+                    // ALTERAÇÃO: Tentar obter category_id do produto de múltiplas fontes
+                    const categoryId = item.product?.category_id || 
+                                      item.product?.section_id || 
+                                      item.category_id || 
+                                      item.section_id;
+                    if (categoryId) {
+                        categoriesInBasket.add(categoryId);
+                    }
+                });
+
+                // Buscar todos os produtos disponíveis
+                const response = await getAllProducts({
+                    page: 1,
+                    page_size: 50, // Buscar mais para ter opções após filtrar
+                    filter_unavailable: true
+                });
+
+                const allProducts = response?.items || (Array.isArray(response) ? response : []);
+                
+                // ALTERAÇÃO: Filtrar produtos:
+                // 1. Não estão no carrinho
+                // 2. São de categorias diferentes (se houver categorias no carrinho)
+                // 3. Estão ativos
+                const filteredProducts = allProducts.filter(product => {
+                    // Não incluir produtos que já estão no carrinho
+                    if (productIdsInBasket.has(product.id)) {
+                        return false;
+                    }
+                    
+                    // ALTERAÇÃO: Não incluir produtos de categorias que já estão no carrinho
+                    // Verificar tanto category_id quanto section_id
+                    const productCategoryId = product.category_id || product.section_id;
+                    if (productCategoryId && categoriesInBasket.size > 0 && categoriesInBasket.has(productCategoryId)) {
+                        return false;
+                    }
+                    
+                    // Apenas produtos ativos
+                    if (product.is_active === false || product.is_active === 0) {
+                        return false;
+                    }
+                    
+                    return true;
+                });
+
+                // Validar estoque dos produtos filtrados
+                const validatedProducts = await filterProductsWithStock(filteredProducts);
+                
+                // Limitar a 10 produtos
+                const limitedProducts = validatedProducts.slice(0, 10);
+                
+                // Buscar promoções para os produtos selecionados
+                const productsWithPromotions = await Promise.allSettled(
+                    limitedProducts.map(async (product) => {
+                        let promotion = null;
+                        try {
+                            if (product.id) {
+                                promotion = await getPromotionByProductId(product.id);
+                            }
+                        } catch (error) {
+                            // Ignora erros ao buscar promoção
+                        }
+                        return { product, promotion };
+                    })
+                );
+
+                // Formatar produtos para exibição
+                const formattedProducts = productsWithPromotions
+                    .filter(result => result.status === 'fulfilled')
+                    .map(result => {
+                        const { product, promotion } = result.value;
+                        return formatProductForSuggested(product, promotion);
+                    })
+                    .filter(product => product !== null);
+
+                setSuggestedProducts(formattedProducts);
+            } catch (error) {
+                const isDev = __DEV__;
+                if (isDev) {
+                    console.error('Erro ao carregar produtos sugeridos:', error);
+                }
+                setSuggestedProducts([]);
+            } finally {
+                setLoadingSuggested(false);
+            }
+        };
+
+        loadSuggestedProducts();
+    }, [basketItems]);
 
     const handleAddSuggestedProduct = (product) => {
-        // IDs de sugestão são fictícios; direciona o usuário para a Home para escolher um produto real
-        navigation.navigate('Home');
+        // Navegar para a tela de produto para adicionar ao carrinho
+        navigation.navigate('Produto', { productId: product.id });
     };
 
     if (isLoading) {
@@ -590,29 +670,43 @@ export default function Cesta({ navigation }) {
                     </TouchableOpacity>
                 )}
 
-                <View style={styles.suggestedSection}>
-                    <Text style={styles.suggestedTitle}>Peça também</Text>
-                    <ScrollView 
-                        horizontal 
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.suggestedScrollContent}
-                    >
-                        {suggestedProducts.map((product) => {
-                            const safePrice = parseFloat(product.price) || 0;
-                            console.log('[Cesta] Suggested product price:', { productId: product.id, price: product.price, safePrice });
-                            return (
-                                <CardItemVerticalAdd
-                                    key={product.id}
-                                    title={product.name}
-                                    description={product.description}
-                                    price={`R$ ${safePrice.toFixed(2).replace('.', ',')}`}
-                                    imageSource={product.image}
-                                    onAdd={() => handleAddSuggestedProduct(product)}
-                                />
-                            );
-                        })}
-                    </ScrollView>
-                </View>
+                {suggestedProducts.length > 0 && (
+                    <View style={styles.suggestedSection}>
+                        <Text style={styles.suggestedTitle}>Peça também</Text>
+                        {loadingSuggested ? (
+                            <View style={styles.loadingSuggested}>
+                                <ActivityIndicator size="small" color="#FFC700" />
+                            </View>
+                        ) : (
+                            <ScrollView 
+                                horizontal 
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.suggestedScrollContent}
+                            >
+                                {suggestedProducts.map((product) => {
+                                    const safePrice = parseFloat(product.price) || 0;
+                                    const priceFormatted = `R$ ${safePrice.toFixed(2).replace('.', ',')}`;
+                                    const originalPriceFormatted = product.originalPrice 
+                                        ? `R$ ${parseFloat(product.originalPrice).toFixed(2).replace('.', ',')}`
+                                        : null;
+                                    
+                                    return (
+                                        <CardItemVerticalAdd
+                                            key={product.id}
+                                            title={product.name}
+                                            description={product.description}
+                                            price={priceFormatted}
+                                            originalPrice={originalPriceFormatted}
+                                            discountPercentage={product.discountPercentage}
+                                            imageSource={product.image}
+                                            onAdd={() => handleAddSuggestedProduct(product)}
+                                        />
+                                    );
+                                })}
+                            </ScrollView>
+                        )}
+                    </View>
+                )}
 
                 {/* Resumo de valores */}
                 <View style={styles.resumoSection}>
@@ -893,5 +987,10 @@ const styles = StyleSheet.create({
          justifyContent: 'center',
          alignItems: 'center',
          backgroundColor: '#F6F6F6',
+     },
+     loadingSuggested: {
+         paddingVertical: 20,
+         alignItems: 'center',
+         justifyContent: 'center',
      },
  });

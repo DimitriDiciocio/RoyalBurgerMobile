@@ -39,7 +39,8 @@ export default function CardPedido({ pedido, onAcompanhar, onVerDetalhes, onAdic
   };
 
   const getStatusInfo = (status) => {
-    const statusLower = status?.toLowerCase();
+    // ALTERAÇÃO: Normalizar status para minúsculas e remover espaços
+    const statusLower = (status || '').toLowerCase().trim();
     
     // Primeiro verificar casos específicos no switch
     switch (statusLower) {
@@ -52,7 +53,14 @@ export default function CardPedido({ pedido, onAcompanhar, onVerDetalhes, onAdic
         return { text: 'Preparo', badgeClass: 'preparo', backgroundColor: '#FFD700', textColor: '#101010' };
       case 'ready':
       case 'pronto':
+      case 'in_progress': // ALTERAÇÃO: Fallback para ready
         return { text: 'Pronto', badgeClass: 'pronto', backgroundColor: '#32CD32', textColor: '#FFFFFF' };
+      case 'confirmed': // ALTERAÇÃO: Status confirmado
+        return { text: 'Confirmado', badgeClass: 'novo', backgroundColor: '#FF8C00', textColor: '#FFFFFF' };
+      case 'awaiting_payment': // ALTERAÇÃO: Aguardando pagamento
+        return { text: 'Aguardando pagamento', badgeClass: 'novo', backgroundColor: '#FF8C00', textColor: '#FFFFFF' };
+      case 'active_table': // ALTERAÇÃO: Mesa ativa (pedidos on-site)
+        return { text: 'Mesa ativa', badgeClass: 'novo', backgroundColor: '#FF8C00', textColor: '#FFFFFF' };
       case 'out_for_delivery':
       case 'delivering':
       case 'entrega':
@@ -72,6 +80,7 @@ export default function CardPedido({ pedido, onAcompanhar, onVerDetalhes, onAdic
       case 'concluido':
       case 'finalizado':
       case 'entregue':
+      case 'paid': // ALTERAÇÃO: Status pago
         return { text: 'Concluído', badgeClass: 'concluido', backgroundColor: '#4CAF50', textColor: '#FFFFFF' };
       case 'cancelled':
       case 'canceled':
@@ -90,7 +99,11 @@ export default function CardPedido({ pedido, onAcompanhar, onVerDetalhes, onAdic
              statusLower.includes('transport'))) {
           return { text: 'Em rota de entrega', badgeClass: 'entrega', backgroundColor: '#A0522D', textColor: '#FFFFFF' };
         }
-        return { text: 'Desconhecido', badgeClass: 'novo', backgroundColor: '#888888', textColor: '#FFFFFF' };
+        // ALTERAÇÃO: Log em desenvolvimento para identificar status desconhecidos
+        if (__DEV__) {
+          console.log('[CardPedido] Status desconhecido:', status, '| Normalizado:', statusLower);
+        }
+        return { text: status || 'Desconhecido', badgeClass: 'novo', backgroundColor: '#888888', textColor: '#FFFFFF' };
     }
   };
 
@@ -117,6 +130,9 @@ export default function CardPedido({ pedido, onAcompanhar, onVerDetalhes, onAdic
     switch (statusLower) {
       case 'pending':
       case 'novo':
+      case 'confirmed': // ALTERAÇÃO: Status confirmado
+      case 'awaiting_payment': // ALTERAÇÃO: Aguardando pagamento
+      case 'active_table': // ALTERAÇÃO: Mesa ativa
         estimatedMin = 30;
         estimatedMax = 45;
         break;
@@ -128,6 +144,7 @@ export default function CardPedido({ pedido, onAcompanhar, onVerDetalhes, onAdic
         break;
       case 'ready':
       case 'pronto':
+      case 'in_progress': // ALTERAÇÃO: Fallback para ready
         estimatedMin = 5;
         estimatedMax = 15;
         break;
@@ -176,7 +193,9 @@ export default function CardPedido({ pedido, onAcompanhar, onVerDetalhes, onAdic
   const isInProgress = !isCompleted && (
     status === 'pending' || status === 'processing' || status === 'preparing' || 
     status === 'novo' || status === 'preparo' || status === 'ready' || 
-    status === 'pronto' || status === 'out_for_delivery' || status === 'delivering' || 
+    status === 'pronto' || status === 'in_progress' || status === 'confirmed' || // ALTERAÇÃO: Incluir novos status
+    status === 'awaiting_payment' || status === 'active_table' || // ALTERAÇÃO: Incluir novos status
+    status === 'out_for_delivery' || status === 'delivering' || 
     status === 'entrega' || status === 'em_rota' || status === 'em rota' ||
     status === 'saiu_para_entrega' || status === 'saiu para entrega' ||
     status === 'saiu_entrega' || status === 'rota' || status === 'on_the_way' ||

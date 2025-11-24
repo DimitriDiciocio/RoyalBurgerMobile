@@ -178,18 +178,50 @@ export default function Pedidos({ navigation }) {
     }
   };
 
-  // Separar pedidos em andamento do histórico
+  // ALTERAÇÃO: Separar pedidos em andamento do histórico (incluindo todos os status possíveis)
   const getOrdersInProgress = () => {
     return orders.filter(pedido => {
-      const status = pedido.status?.toLowerCase();
-      return status === 'pending' || status === 'processing' || status === 'preparing';
+      const status = (pedido.status || '').toLowerCase().trim();
+      // ALTERAÇÃO: Incluir todos os status que indicam pedido em andamento
+      return status === 'pending' || 
+             status === 'processing' || 
+             status === 'preparing' || 
+             status === 'ready' || 
+             status === 'pronto' ||
+             status === 'in_progress' ||
+             status === 'confirmed' ||
+             status === 'awaiting_payment' ||
+             status === 'active_table' ||
+             status === 'on_the_way' ||
+             status === 'out_for_delivery' ||
+             status === 'delivering' ||
+             status === 'em_rota' ||
+             status === 'em rota' ||
+             status === 'saiu_para_entrega' ||
+             status === 'saiu para entrega';
     });
   };
 
   const getOrdersHistory = () => {
     return orders.filter(pedido => {
-      const status = pedido.status?.toLowerCase();
-      return !(status === 'pending' || status === 'processing' || status === 'preparing');
+      const status = (pedido.status || '').toLowerCase().trim();
+      // ALTERAÇÃO: Excluir todos os status que indicam pedido em andamento
+      return !(status === 'pending' || 
+               status === 'processing' || 
+               status === 'preparing' || 
+               status === 'ready' || 
+               status === 'pronto' ||
+               status === 'in_progress' ||
+               status === 'confirmed' ||
+               status === 'awaiting_payment' ||
+               status === 'active_table' ||
+               status === 'on_the_way' ||
+               status === 'out_for_delivery' ||
+               status === 'delivering' ||
+               status === 'em_rota' ||
+               status === 'em rota' ||
+               status === 'saiu_para_entrega' ||
+               status === 'saiu para entrega');
     });
   };
 
