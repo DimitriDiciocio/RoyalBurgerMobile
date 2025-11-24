@@ -163,6 +163,7 @@ const styles = StyleSheet.create({
         paddingLeft: 8,
         paddingTop: 5,
         paddingRight: 8,
+        paddingBottom: 8, // ALTERAÇÃO: adiciona padding inferior para evitar que conteúdo seja cortado
         flex: 1,
     },
     title: {

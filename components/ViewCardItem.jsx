@@ -1,8 +1,7 @@
-import React from 'react';
-import {View, Text, StyleSheet, FlatList, Alert} from 'react-native';
+import React, { useCallback } from 'react';
+import {View, Text, StyleSheet, FlatList} from 'react-native';
 import CardItemVertical from "./CardItemVertical";
 import TimerPromotions from "./TimerPromotions";
-import { checkProductAvailability } from '../services/productService';
 
 export default function ViewCardItem({
                                          title = "Seção",
@@ -11,39 +10,32 @@ export default function ViewCardItem({
                                          promoTimer = null,
                                          navigation = null
                                      }) {
-    const handleCardPress = async (item) => {
+    const handleCardPress = useCallback(async (item) => {
         if (!navigation) return;
         
         const productId = item.id || item.originalProductId;
         
-        if (!productId) {
-            navigation.navigate('Produto', { produto: item });
-            return;
-        }
-        
-        try {
-            // Verificar disponibilidade antes de navegar
-            const availability = await checkProductAvailability(productId, 1);
+        // ALTERAÇÃO: Navegação direta igual ao CardItemHorizontal - passa objeto completo do produto
+        // A validação de estoque será feita na tela de produto quando necessário
+        if (productId) {
+            // ALTERAÇÃO: Normaliza objeto produto para formato esperado pela tela
+            const normalizedProduto = {
+                ...item,
+                name: item.name || item.title,
+                id: productId
+            };
             
-            if (!availability.is_available) {
-                Alert.alert(
-                    'Produto Indisponível',
-                    availability.message || 'Este produto está temporariamente indisponível devido à falta de ingredientes em estoque.',
-                    [{ text: 'OK' }]
-                );
-                return;
-            }
-            
-            // Se disponível, navega normalmente
-            navigation.navigate('Produto', { produto: item });
-        } catch (error) {
-            console.error('Erro ao verificar disponibilidade:', error);
-            // Em caso de erro na verificação, permite navegar (fail-safe)
+            navigation.navigate('Produto', { 
+                produto: normalizedProduto,
+                productId: productId
+            });
+        } else {
+            // Se não tiver productId, navega com o objeto item completo
             navigation.navigate('Produto', { produto: item });
         }
-    };
+    }, [navigation]);
 
-    const renderCard = ({item}) => (
+    const renderCard = useCallback(({item}) => (
         <CardItemVertical
             title={item.title}
             description={item.description}
@@ -57,7 +49,11 @@ export default function ViewCardItem({
             availabilityStatus={item.availability_status || item.availabilityStatus} // ALTERAÇÃO: passa status de disponibilidade para badges
             max_quantity={item.max_quantity} // ALTERAÇÃO: passa quantidade máxima para badges
         />
-    );
+    ), [handleCardPress]);
+
+    const keyExtractor = useCallback((item, index) => {
+        return (item.id || item.originalProductId || index).toString();
+    }, []);
 
     return (
         <View style={styles.container}>
@@ -77,7 +73,7 @@ export default function ViewCardItem({
             <FlatList
                 data={data}
                 renderItem={renderCard}
-                keyExtractor={(item, index) => index.toString()}
+                keyExtractor={keyExtractor}
                 horizontal={true}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.containerCard}
@@ -85,6 +81,13 @@ export default function ViewCardItem({
                 snapToAlignment="start"
                 decelerationRate="fast"
                 snapToInterval={155}
+                scrollEnabled={true}
+                bounces={true}
+                nestedScrollEnabled={true}
+                removeClippedSubviews={true}
+                initialNumToRender={3}
+                maxToRenderPerBatch={5}
+                windowSize={5}
             />
         </View>
     );
@@ -100,9 +103,9 @@ const styles = StyleSheet.create({
     },
     containerCard: {
         marginVertical: 15,
-        paddingHorizontal:5,
-        height:'100%',
-        width:'100%',
+        paddingHorizontal: 5,
+        paddingRight: 15, // ALTERAÇÃO: adiciona padding direito para garantir que o último item seja visível
+        paddingBottom: 10, // ALTERAÇÃO: adiciona padding inferior para evitar que cards sejam cortados na parte de baixo
     },
     separator: {
         width: 15,

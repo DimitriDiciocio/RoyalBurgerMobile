@@ -5,10 +5,10 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
 } from "react-native";
 import BottomSheet from "./BottomSheet";
+import CustomAlert from "./CustomAlert";
 import { updateProfile } from "../services";
 
 export default function EditarDadoBottomSheet({
@@ -24,6 +24,12 @@ export default function EditarDadoBottomSheet({
 }) {
   const [value, setValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  // ALTERAÇÃO: Estados para CustomAlert
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertType, setAlertType] = useState('info');
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertButtons, setAlertButtons] = useState([]);
 
   const formatDateInput = (text) => {
     if (field !== 'date_of_birth') return text;
@@ -74,29 +80,49 @@ export default function EditarDadoBottomSheet({
     const yearNum = parseInt(year);
     const currentYear = new Date().getFullYear();
     
-    // Validações básicas com mensagens específicas
+    // ALTERAÇÃO: Validações básicas com mensagens específicas usando CustomAlert
     if (isNaN(dayNum) || isNaN(monthNum) || isNaN(yearNum)) {
-      Alert.alert("Erro", "Por favor, digite apenas números na data.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('Por favor, digite apenas números na data.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return false;
     }
     
     if (dayNum < 1 || dayNum > 31) {
-      Alert.alert("Erro", "O dia deve estar entre 1 e 31.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('O dia deve estar entre 1 e 31.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return false;
     }
     
     if (monthNum < 1 || monthNum > 12) {
-      Alert.alert("Erro", "O mês deve estar entre 1 e 12.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('O mês deve estar entre 1 e 12.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return false;
     }
     
     if (yearNum < 1900) {
-      Alert.alert("Erro", "O ano deve ser maior que 1900.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('O ano deve ser maior que 1900.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return false;
     }
     
     if (yearNum > currentYear) {
-      Alert.alert("Erro", `O ano não pode ser maior que ${currentYear}.`);
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage(`O ano não pode ser maior que ${currentYear}.`);
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return false;
     }
     
@@ -111,7 +137,11 @@ export default function EditarDadoBottomSheet({
     if (dayNum > daysInMonth[monthNum - 1]) {
       const monthNames = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", 
                          "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-      Alert.alert("Erro", `${monthNames[monthNum - 1]} tem apenas ${daysInMonth[monthNum - 1]} dias.`);
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage(`${monthNames[monthNum - 1]} tem apenas ${daysInMonth[monthNum - 1]} dias.`);
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return false;
     }
     
@@ -121,7 +151,11 @@ export default function EditarDadoBottomSheet({
     
     // Verifica se a data é válida
     if (birthDate.getDate() !== dayNum || birthDate.getMonth() !== monthNum - 1 || birthDate.getFullYear() !== yearNum) {
-      Alert.alert("Erro", "Data inválida. Verifique se o dia, mês e ano estão corretos.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('Data inválida. Verifique se o dia, mês e ano estão corretos.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return false;
     }
     
@@ -134,7 +168,11 @@ export default function EditarDadoBottomSheet({
     console.log(`Idade calculada: ${ageInYears} anos`);
     
     if (ageInYears < 18) {
-      Alert.alert("Erro", "Você deve ter pelo menos 18 anos para usar este serviço.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('Você deve ter pelo menos 18 anos para usar este serviço.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return false;
     }
     
@@ -143,7 +181,11 @@ export default function EditarDadoBottomSheet({
 
   const handleSave = async () => {
     if (!value.trim()) {
-      Alert.alert("Erro", "Por favor, preencha o campo.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('Por favor, preencha o campo.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return;
     }
 
@@ -218,28 +260,41 @@ export default function EditarDadoBottomSheet({
       }
       
       await updateProfile({ [field]: processedValue });
-      Alert.alert("Sucesso", "Dados atualizados com sucesso!");
-      
-      // Para data de nascimento, passa o valor no formato visual (DD/MM/AAAA)
-      if (field === 'date_of_birth' && processedValue.includes('-')) {
-        const parts = processedValue.split('-');
-        if (parts.length === 3) {
-          const [day, month, year] = parts;
-          onSave(`${day}/${month}/${year}`);
-        } else {
-          onSave(processedValue);
+      // ALTERAÇÃO: Usar CustomAlert para sucesso
+      setAlertType('success');
+      setAlertTitle('Sucesso');
+      setAlertMessage('Dados atualizados com sucesso!');
+      setAlertButtons([
+        {
+          text: 'OK',
+          onPress: () => {
+            // Para data de nascimento, passa o valor no formato visual (DD/MM/AAAA)
+            if (field === 'date_of_birth' && processedValue.includes('-')) {
+              const parts = processedValue.split('-');
+              if (parts.length === 3) {
+                const [day, month, year] = parts;
+                onSave(`${day}/${month}/${year}`);
+              } else {
+                onSave(processedValue);
+              }
+            } else {
+              onSave(processedValue);
+            }
+            onClose();
+          }
         }
-      } else {
-        onSave(processedValue);
-      }
-      
-      onClose();
+      ]);
+      setAlertVisible(true);
     } catch (error) {
       const errorMessage =
         error?.response?.data?.error ||
         error?.message ||
         "Erro ao atualizar dados";
-      Alert.alert("Erro", errorMessage);
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage(errorMessage);
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
     } finally {
       setIsLoading(false);
     }
@@ -280,6 +335,16 @@ export default function EditarDadoBottomSheet({
           </TouchableOpacity>
         </View>
       </View>
+      
+      {/* ALTERAÇÃO: CustomAlert para substituir Alert.alert */}
+      <CustomAlert
+        visible={alertVisible}
+        type={alertType}
+        title={alertTitle}
+        message={alertMessage}
+        buttons={alertButtons}
+        onClose={() => setAlertVisible(false)}
+      />
     </BottomSheet>
   );
 }

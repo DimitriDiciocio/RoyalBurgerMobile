@@ -8,10 +8,10 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 import Header from "../components/Header";
 import VerificationCodeInput from "../components/VerificationCodeInput";
+import CustomAlert from "../components/CustomAlert";
 import { requestEmailVerification, verifyEmailCode, resendVerificationCode } from "../services/customerService";
 
 export default function VerificacaoEmail({ navigation, route }) {
@@ -23,6 +23,12 @@ export default function VerificacaoEmail({ navigation, route }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [countdown, setCountdown] = useState(0);
+  // ALTERAÇÃO: Estados para CustomAlert
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertType, setAlertType] = useState('info');
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertButtons, setAlertButtons] = useState([]);
 
   useEffect(() => {
     // Envia o email de verificação automaticamente quando a tela carrega
@@ -95,16 +101,16 @@ export default function VerificacaoEmail({ navigation, route }) {
       const errorMessage = error.message || 'Erro ao verificar código';
       setError(errorMessage);
       
-      // Se o código expirou, oferece reenvio
+      // ALTERAÇÃO: Se o código expirou, oferece reenvio com CustomAlert
       if (errorMessage.includes('expirado') || errorMessage.includes('CODE_EXPIRED')) {
-        Alert.alert(
-          'Código Expirado',
-          'O código de verificação expirou. Deseja solicitar um novo código?',
-          [
-            { text: 'Cancelar', style: 'cancel' },
-            { text: 'Reenviar', onPress: resendCode }
-          ]
-        );
+        setAlertType('warning');
+        setAlertTitle('Código Expirado');
+        setAlertMessage('O código de verificação expirou. Deseja solicitar um novo código?');
+        setAlertButtons([
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Reenviar', onPress: resendCode }
+        ]);
+        setAlertVisible(true);
       }
     } finally {
       setIsVerifying(false);
@@ -252,6 +258,16 @@ export default function VerificacaoEmail({ navigation, route }) {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      
+      {/* ALTERAÇÃO: CustomAlert para substituir Alert.alert */}
+      <CustomAlert
+        visible={alertVisible}
+        type={alertType}
+        title={alertTitle}
+        message={alertMessage}
+        buttons={alertButtons}
+        onClose={() => setAlertVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

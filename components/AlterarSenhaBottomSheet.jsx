@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   ScrollView,
   KeyboardAvoidingView,
@@ -12,6 +11,7 @@ import {
 } from "react-native";
 import BottomSheet from "./BottomSheet";
 import Input from "./Input";
+import CustomAlert from "./CustomAlert";
 import { updatePassword, verifyPassword } from "../services";
 
 export default function AlterarSenhaBottomSheet({
@@ -23,6 +23,12 @@ export default function AlterarSenhaBottomSheet({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isCurrentPasswordValid, setIsCurrentPasswordValid] = useState(false);
+  // ALTERAÇÃO: Estados para CustomAlert
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertType, setAlertType] = useState('info');
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertButtons, setAlertButtons] = useState([]);
 
   // Estados para validação de senha em tempo real (igual ao cadastro)
   const [passwordRequirements, setPasswordRequirements] = useState({
@@ -71,34 +77,58 @@ export default function AlterarSenhaBottomSheet({
   };
 
   const handleSave = async () => {
-    // Validações
+    // ALTERAÇÃO: Validações usando CustomAlert
     if (!currentPassword.trim()) {
-      Alert.alert("Erro", "Por favor, digite sua senha atual.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('Por favor, digite sua senha atual.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return;
     }
 
     if (!isCurrentPasswordValid) {
-      Alert.alert("Erro", "Por favor, digite sua senha atual correta.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('Por favor, digite sua senha atual correta.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return;
     }
 
     if (!newPassword.trim()) {
-      Alert.alert("Erro", "Por favor, digite sua nova senha.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('Por favor, digite sua nova senha.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return;
     }
 
     if (!confirmPassword.trim()) {
-      Alert.alert("Erro", "Por favor, confirme sua nova senha.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('Por favor, confirme sua nova senha.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert("Erro", "As senhas não coincidem.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('As senhas não coincidem.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return;
     }
 
     if (!validatePassword(newPassword)) {
-      Alert.alert("Erro", "A nova senha não atende aos requisitos.");
+      setAlertType('delete');
+      setAlertTitle('Erro');
+      setAlertMessage('A nova senha não atende aos requisitos.');
+      setAlertButtons([{ text: 'OK' }]);
+      setAlertVisible(true);
       return;
     }
 
@@ -109,27 +139,44 @@ export default function AlterarSenhaBottomSheet({
         new_password: newPassword,
       });
       
-      Alert.alert("Sucesso", "Senha alterada com sucesso!");
-      
-      // Limpa os campos
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setIsCurrentPasswordValid(false);
-      
-      onClose();
+      // ALTERAÇÃO: Usar CustomAlert para sucesso
+      setAlertType('success');
+      setAlertTitle('Sucesso');
+      setAlertMessage('Senha alterada com sucesso!');
+      setAlertButtons([
+        {
+          text: 'OK',
+          onPress: () => {
+            // Limpa os campos
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+            setIsCurrentPasswordValid(false);
+            onClose();
+          }
+        }
+      ]);
+      setAlertVisible(true);
     } catch (error) {
       const errorMessage =
         error?.response?.data?.error ||
         error?.message ||
         "Erro ao alterar senha";
       
-      // Se for erro 401, significa que a senha atual está incorreta
+      // ALTERAÇÃO: Se for erro 401, significa que a senha atual está incorreta
       if (error?.response?.status === 401) {
         setIsCurrentPasswordValid(false);
-        Alert.alert("Erro", "Senha atual incorreta. Verifique e tente novamente.");
+        setAlertType('delete');
+        setAlertTitle('Erro');
+        setAlertMessage('Senha atual incorreta. Verifique e tente novamente.');
+        setAlertButtons([{ text: 'OK' }]);
+        setAlertVisible(true);
       } else {
-        Alert.alert("Erro", errorMessage);
+        setAlertType('delete');
+        setAlertTitle('Erro');
+        setAlertMessage(errorMessage);
+        setAlertButtons([{ text: 'OK' }]);
+        setAlertVisible(true);
       }
     } finally {
       setIsLoading(false);
@@ -215,6 +262,16 @@ export default function AlterarSenhaBottomSheet({
           </TouchableOpacity>
         </View>
       </ScrollView>
+      
+      {/* ALTERAÇÃO: CustomAlert para substituir Alert.alert */}
+      <CustomAlert
+        visible={alertVisible}
+        type={alertType}
+        title={alertTitle}
+        message={alertMessage}
+        buttons={alertButtons}
+        onClose={() => setAlertVisible(false)}
+      />
     </BottomSheet>
   );
 }

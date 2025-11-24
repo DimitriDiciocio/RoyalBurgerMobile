@@ -1,7 +1,8 @@
 import React, {useState, useEffect} from 'react';
-import {StyleSheet, View, Text, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Alert, Keyboard} from 'react-native';
+import {StyleSheet, View, Text, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform, Keyboard} from 'react-native';
 import Header from "../components/Header";
 import Input from "../components/Input";
+import CustomAlert from "../components/CustomAlert";
 import { resetPassword } from "../services/customerService";
 
 export default function RedefinirSenha({navigation, route}) {
@@ -13,6 +14,12 @@ export default function RedefinirSenha({navigation, route}) {
     const [submitError, setSubmitError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [keyboardVisible, setKeyboardVisible] = useState(false);
+    // ALTERAÇÃO: Estados para CustomAlert
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertType, setAlertType] = useState('info');
+    const [alertTitle, setAlertTitle] = useState('');
+    const [alertMessage, setAlertMessage] = useState('');
+    const [alertButtons, setAlertButtons] = useState([]);
 
     // Estados para validação de senha em tempo real
     const [passwordRequirements, setPasswordRequirements] = useState({
@@ -105,16 +112,17 @@ export default function RedefinirSenha({navigation, route}) {
         try {
             const result = await resetPassword(email, route?.params?.resetCode, newPassword);
             if (result.ok) {
-                Alert.alert(
-                    'Senha redefinida!',
-                    'Sua senha foi redefinida com sucesso. Faça login com sua nova senha.',
-                    [
-                        {
-                            text: 'OK',
-                            onPress: () => navigation.navigate('Login')
-                        }
-                    ]
-                );
+                // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+                setAlertType('success');
+                setAlertTitle('Senha redefinida!');
+                setAlertMessage('Sua senha foi redefinida com sucesso. Faça login com sua nova senha.');
+                setAlertButtons([
+                    {
+                        text: 'OK',
+                        onPress: () => navigation.navigate('Login')
+                    }
+                ]);
+                setAlertVisible(true);
             } else {
                 setSubmitError(result.error || 'Erro ao redefinir senha');
             }
@@ -244,6 +252,16 @@ export default function RedefinirSenha({navigation, route}) {
                     </TouchableOpacity>
                 </View>
             </ScrollView>
+            
+            {/* ALTERAÇÃO: CustomAlert para substituir Alert.alert */}
+            <CustomAlert
+                visible={alertVisible}
+                type={alertType}
+                title={alertTitle}
+                message={alertMessage}
+                buttons={alertButtons}
+                onClose={() => setAlertVisible(false)}
+            />
         </KeyboardAvoidingView>
     );
 }

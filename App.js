@@ -379,58 +379,65 @@ function HomeScreen({ navigation }) {
             try {
                 setLoadingSections(true);
                 
-                // Carregar produtos mais pedidos
+                // ALTERAÇÃO: Carregar produtos mais pedidos baseados em pedidos pagos reais do banco de dados
                 try {
-                    // ALTERAÇÃO: Filtrar produtos indisponíveis na API
-                    const allProductsResponse = await getAllProducts({ 
-                        page_size: 1000,
-                        include_inactive: false,
-                        filter_unavailable: true // Filtrar produtos sem estoque na API
-                    });
-                    const allProducts = allProductsResponse?.items || (Array.isArray(allProductsResponse) ? allProductsResponse : []);
-                    
-                    // ALTERAÇÃO: Filtrar apenas produtos ativos
-                    const activeProducts = allProducts.filter((product) => {
-                        const isActive = 
-                            product.is_active !== false &&
-                            product.is_active !== 0 &&
-                            product.is_active !== "false";
-                        return isActive;
+                    // ALTERAÇÃO: Buscar produtos mais pedidos da API (já ordenados por quantidade de pedidos pagos)
+                    const mostOrderedResponse = await getMostOrderedProducts({
+                        page: 1,
+                        page_size: 10 // ALTERAÇÃO: Buscar mais produtos para ter opções após filtrar por estoque
                     });
                     
-                    // ALTERAÇÃO: Validar estoque de cada produto e adicionar availability_status
-                    const validatedProducts = await filterProductsWithStock(activeProducts);
+                    const mostOrderedProducts = mostOrderedResponse?.items || (Array.isArray(mostOrderedResponse) ? mostOrderedResponse : []);
                     
-                    // Pegar os primeiros 6 produtos para "Os mais pedidos"
-                    const firstProducts = validatedProducts.slice(0, 6);
-                    
-                    // ALTERAÇÃO: Buscar promoções para os produtos mais pedidos
-                    const productsWithPromotions = await Promise.allSettled(
-                        firstProducts.map(async (product) => {
-                            let promotion = null;
-                            try {
-                                if (product.id) {
-                                    promotion = await getPromotionByProductId(product.id);
+                    // ALTERAÇÃO: Se não houver produtos mais pedidos no banco, não exibir a seção
+                    if (!mostOrderedProducts || mostOrderedProducts.length === 0) {
+                        setMostOrderedData([]);
+                    } else {
+                        // ALTERAÇÃO: Filtrar apenas produtos ativos
+                        const activeProducts = mostOrderedProducts.filter((product) => {
+                            const isActive = 
+                                product.is_active !== false &&
+                                product.is_active !== 0 &&
+                                product.is_active !== "false";
+                            return isActive;
+                        });
+                        
+                        // ALTERAÇÃO: Validar estoque de cada produto e adicionar availability_status
+                        const validatedProducts = await filterProductsWithStock(activeProducts);
+                        
+                        // ALTERAÇÃO: Limitar a 6 produtos (mantendo ordem original da API - mais pedidos primeiro)
+                        const topProducts = validatedProducts.slice(0, 6);
+                        
+                        // ALTERAÇÃO: Buscar promoções para os produtos mais pedidos
+                        const productsWithPromotions = await Promise.allSettled(
+                            topProducts.map(async (product) => {
+                                let promotion = null;
+                                try {
+                                    if (product.id) {
+                                        promotion = await getPromotionByProductId(product.id);
+                                    }
+                                } catch (error) {
+                                    // Ignora erros ao buscar promoção (produto pode não ter promoção)
                                 }
-                            } catch (error) {
-                                // Ignora erros ao buscar promoção (produto pode não ter promoção)
-                            }
-                            return { product, promotion };
-                        })
-                    );
-                    
-                    // Formatar produtos para as seções com suas promoções
-                    const formattedProducts = productsWithPromotions
-                        .filter(result => result.status === 'fulfilled')
-                        .map(result => {
-                            const { product, promotion } = result.value;
-                            return formatProductForCard(product, promotion);
-                        })
-                        .filter(product => product !== null);
-                    
-                    setMostOrderedData(formattedProducts);
+                                return { product, promotion };
+                            })
+                        );
+                        
+                        // ALTERAÇÃO: Formatar produtos para as seções com suas promoções
+                        const formattedProducts = productsWithPromotions
+                            .filter(result => result.status === 'fulfilled')
+                            .map(result => {
+                                const { product, promotion } = result.value;
+                                return formatProductForCard(product, promotion);
+                            })
+                            .filter(product => product !== null);
+                        
+                        // ALTERAÇÃO: Só definir dados se houver produtos formatados (com estoque disponível)
+                        setMostOrderedData(formattedProducts);
+                    }
                 } catch (error) {
-                    // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
+                    // ALTERAÇÃO: Em caso de erro, não exibir a seção (array vazio)
+                    // A API pode retornar erro se não houver pedidos pagos ainda
                     const isDev = __DEV__;
                     if (isDev) {
                         console.log('Erro ao carregar produtos mais pedidos:', error);

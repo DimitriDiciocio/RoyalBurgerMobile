@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BotaoCheck from '../components/BotaoCheck';
 import BotaoSwitch from '../components/BotaoSwitch';
 import AlterarSenhaBottomSheet from '../components/AlterarSenhaBottomSheet';
+import CustomAlert from '../components/CustomAlert';
 import { logout } from '../services/userService';
 
 // SVG do ícone de voltar (igual ao produto.js)
@@ -27,6 +28,12 @@ export default function Config({ navigation }) {
   const [notificacaoPromocoes, setNotificacaoPromocoes] = useState(false);
   const [verificacaoDuasEtapas, setVerificacaoDuasEtapas] = useState(false);
   const [showAlterarSenha, setShowAlterarSenha] = useState(false);
+  // ALTERAÇÃO: Estados para CustomAlert
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertType, setAlertType] = useState('info');
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertButtons, setAlertButtons] = useState([]);
 
   // Carregar configurações do AsyncStorage
   useEffect(() => {
@@ -85,33 +92,37 @@ export default function Config({ navigation }) {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Sair da conta',
-      'Tem certeza que deseja sair da sua conta?',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
+    // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+    setAlertType('warning');
+    setAlertTitle('Sair da conta');
+    setAlertMessage('Tem certeza que deseja sair da sua conta?');
+    setAlertButtons([
+      {
+        text: 'Cancelar',
+        style: 'cancel',
+      },
+      {
+        text: 'Sair',
+        onPress: async () => {
+          try {
+            await logout();
+            // Navega para a tela de login
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+          } catch (error) {
+            // ALTERAÇÃO: Mostrar erro com CustomAlert
+            setAlertType('delete');
+            setAlertTitle('Erro');
+            setAlertMessage('Não foi possível sair da conta. Tente novamente.');
+            setAlertButtons([{ text: 'OK' }]);
+            setAlertVisible(true);
+          }
         },
-        {
-          text: 'Sair',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await logout();
-              // Navega para a tela de login
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              });
-            } catch (error) {
-              console.error('Erro ao fazer logout:', error);
-              Alert.alert('Erro', 'Não foi possível sair da conta. Tente novamente.');
-            }
-          },
-        },
-      ]
-    );
+      },
+    ]);
+    setAlertVisible(true);
   };
 
   return (
@@ -187,6 +198,16 @@ export default function Config({ navigation }) {
       <AlterarSenhaBottomSheet
         visible={showAlterarSenha}
         onClose={() => setShowAlterarSenha(false)}
+      />
+      
+      {/* ALTERAÇÃO: CustomAlert para substituir Alert.alert */}
+      <CustomAlert
+        visible={alertVisible}
+        type={alertType}
+        title={alertTitle}
+        message={alertMessage}
+        buttons={alertButtons}
+        onClose={() => setAlertVisible(false)}
       />
     </View>
   );
