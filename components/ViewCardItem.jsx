@@ -1,7 +1,8 @@
 import React, { useCallback } from 'react';
-import {View, Text, StyleSheet, FlatList} from 'react-native';
+import {View, Text, StyleSheet, FlatList, Alert} from 'react-native';
 import CardItemVertical from "./CardItemVertical";
 import TimerPromotions from "./TimerPromotions";
+import { checkProductAvailability } from '../services/productService';
 
 export default function ViewCardItem({
                                          title = "Seção",
@@ -15,22 +16,28 @@ export default function ViewCardItem({
         
         const productId = item.id || item.originalProductId;
         
-        // ALTERAÇÃO: Navegação direta igual ao CardItemHorizontal - passa objeto completo do produto
-        // A validação de estoque será feita na tela de produto quando necessário
-        if (productId) {
-            // ALTERAÇÃO: Normaliza objeto produto para formato esperado pela tela
-            const normalizedProduto = {
-                ...item,
-                name: item.name || item.title,
-                id: productId
-            };
+        if (!productId) {
+            navigation.navigate('Produto', { produto: item });
+            return;
+        }
+        
+        try {
+            // Verificar disponibilidade antes de navegar
+            const availability = await checkProductAvailability(productId, 1);
             
-            navigation.navigate('Produto', { 
-                produto: normalizedProduto,
-                productId: productId
-            });
-        } else {
-            // Se não tiver productId, navega com o objeto item completo
+            if (!availability.is_available) {
+                Alert.alert(
+                    'Produto Indisponível',
+                    availability.message || 'Este produto está temporariamente indisponível devido à falta de ingredientes em estoque.',
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
+            
+            // Se disponível, navega normalmente
+            navigation.navigate('Produto', { produto: item });
+        } catch (error) {
+            // Em caso de erro na verificação, permite navegar (fail-safe)
             navigation.navigate('Produto', { produto: item });
         }
     }, [navigation]);
