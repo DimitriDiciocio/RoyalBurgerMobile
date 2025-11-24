@@ -77,4 +77,3 @@ rm -rf node_modules .expo
 npm install
 npm start -- --reset-cache
 ```
-
