@@ -1,13 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
 import { StyleSheet, View, Image, FlatList, Dimensions } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
-export default function CarouselImg() {
+// ALTERAÇÃO: Memoizar componente para evitar re-renderizações desnecessárias
+const CarouselImg = memo(function CarouselImg() {
     const [currentIndex, setCurrentIndex] = useState(0);
     const flatListRef = useRef(null);
     const autoScrollTimerRef = useRef(null);
     const isDraggingRef = useRef(false);
+    // ALTERAÇÃO: Ref para manter o índice atual no closure do setInterval
+    const currentIndexRef = useRef(0);
 
     const banners = [
         require('../assets/img/1banner-bem-vindo.png'),
@@ -17,11 +20,17 @@ export default function CarouselImg() {
         require('../assets/img/5banner-sanduíches.png'),
     ];
 
+    // ALTERAÇÃO: Atualizar ref sempre que currentIndex mudar
+    useEffect(() => {
+        currentIndexRef.current = currentIndex;
+    }, [currentIndex]);
+
     const startAutoScroll = () => {
         if (autoScrollTimerRef.current) return;
         autoScrollTimerRef.current = setInterval(() => {
             if (isDraggingRef.current) return;
-            const nextIndex = (currentIndex + 1) % banners.length;
+            // ALTERAÇÃO: Usar ref para acessar o valor atual do índice
+            const nextIndex = (currentIndexRef.current + 1) % banners.length;
             flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
             setCurrentIndex(nextIndex);
         }, 5000);
@@ -138,7 +147,7 @@ export default function CarouselImg() {
             </View>
         </View>
     );
-}
+});
 
 const styles = StyleSheet.create({
     container: {
@@ -175,3 +184,5 @@ const styles = StyleSheet.create({
         borderRadius: 4,
     },
 });
+
+export default CarouselImg;

@@ -674,9 +674,94 @@ export const BasketProvider = ({ children }) => {
     };
 
     // Atualizar item do carrinho via API
-    const updateBasketItem = async (cartItemId, updates = {}) => {
+    // ALTERAÇÃO: Função auxiliar para atualizar item localmente sem recarregar todo o carrinho
+    const updateItemLocally = useCallback((cartItemId, updates, apiResponse = null) => {
+        let oldItemTotal = 0;
+        let newItemTotal = 0;
+        
+        setBasketItems(prevItems => {
+            const updatedItems = prevItems.map(item => {
+                if (item.cartItemId === cartItemId || item.id === cartItemId) {
+                    oldItemTotal = parseFloat(item.total || 0);
+                    
+                    // Se temos resposta da API, usar dados atualizados dela
+                    if (apiResponse) {
+                        // A API pode retornar o item atualizado em diferentes estruturas
+                        const apiItem = apiResponse.item || 
+                                       (apiResponse.cart?.items && Array.isArray(apiResponse.cart.items) 
+                                           ? apiResponse.cart.items.find(i => i.id === cartItemId) 
+                                           : null) || 
+                                       null;
+                        
+                        if (apiItem) {
+                            const apiSubtotal = parseFloat(apiItem.item_subtotal || 0);
+                            const itemQuantity = parseInt(apiItem.quantity || updates.quantity || item.quantity || 1, 10);
+                            
+                            // Calcular novo total baseado na resposta da API
+                            let newTotal = apiSubtotal;
+                            if (apiSubtotal <= 0 || isNaN(apiSubtotal)) {
+                                // Fallback: calcular baseado no preço unitário
+                                const unitPrice = parseFloat(item.price || 0);
+                                newTotal = unitPrice * itemQuantity;
+                            }
+                            
+                            newItemTotal = newTotal;
+                            
+                            return {
+                                ...item,
+                                quantity: itemQuantity,
+                                total: newTotal,
+                                observacoes: (apiItem.notes || item.observacoes || '').trim(),
+                            };
+                        }
+                    }
+                    
+                    // Update otimista: atualizar quantidade e recalcular total localmente
+                    const newQuantity = updates.quantity !== undefined ? updates.quantity : item.quantity;
+                    const unitPrice = parseFloat(item.price || 0);
+                    const currentTotal = parseFloat(item.total || 0);
+                    const currentQuantity = parseInt(item.quantity || 1, 10);
+                    
+                    // Calcular novo total proporcionalmente
+                    const newTotal = currentQuantity > 0 && currentTotal > 0
+                        ? (currentTotal / currentQuantity) * newQuantity
+                        : unitPrice * newQuantity;
+                    
+                    newItemTotal = newTotal;
+                    
+                    return {
+                        ...item,
+                        quantity: newQuantity,
+                        total: newTotal,
+                    };
+                }
+                return item;
+            });
+            
+            // ALTERAÇÃO: Atualizar total do carrinho localmente também
+            if (oldItemTotal !== newItemTotal) {
+                setBasketTotal(prevTotal => prevTotal - oldItemTotal + newItemTotal);
+            }
+            
+            return updatedItems;
+        });
+    }, []);
+
+    const updateBasketItem = async (cartItemId, updates = {}, options = {}) => {
+        // ALTERAÇÃO: Opção para fazer update otimista (atualizar UI imediatamente)
+        const optimisticUpdate = options.optimisticUpdate !== false; // Default: true
+        const skipFullReload = options.skipFullReload === true; // Default: false
+        
         try {
-            setLoading(true);
+            // ALTERAÇÃO: Update otimista - atualizar UI imediatamente se habilitado
+            if (optimisticUpdate) {
+                updateItemLocally(cartItemId, updates);
+            }
+            
+            // Não mostrar loading se for update otimista (melhor UX)
+            if (!optimisticUpdate) {
+                setLoading(true);
+            }
             
             // Converter selectedExtras se fornecido
             let extras = updates.extras;
@@ -692,13 +777,16 @@ export const BasketProvider = ({ children }) => {
             // ALTERAÇÃO: Garantir que observações sejam sempre enviadas (mesmo que vazias)
             const notesToUpdate = String(updates.observacoes || updates.notes || '').trim();
             
-            console.log('[BasketContext] Atualizando item com observações:', {
-                cartItemId,
-                quantity: updates.quantity,
-                notes: notesToUpdate,
-                notesLength: notesToUpdate.length,
-                hasNotes: notesToUpdate.length > 0
-            });
+            const isDev = __DEV__;
+            if (isDev) {
+                console.log('[BasketContext] Atualizando item com observações:', {
+                    cartItemId,
+                    quantity: updates.quantity,
+                    notes: notesToUpdate,
+                    notesLength: notesToUpdate.length,
+                    hasNotes: notesToUpdate.length > 0
+                });
+            }
             
             const result = await updateCartItemAPI(cartItemId, {
                 quantity: updates.quantity,
@@ -708,17 +796,37 @@ export const BasketProvider = ({ children }) => {
             });
             
             if (result.success) {
-                // Recarregar carrinho da API
-                await loadCart();
-                return { success: true, data: result.data };
+                // ALTERAÇÃO: Se skipFullReload, atualizar apenas o item específico com dados da API
+                if (skipFullReload) {
+                    // Atualizar item localmente com dados da API (pode estar em result.data.item ou result.data.cart.items)
+                    updateItemLocally(cartItemId, updates, result.data);
+                } else {
+                    // Recarregar carrinho completo apenas se necessário
+                    await loadCart();
+                }
+                return { success: true, data: result.data, errorType: result.errorType };
             } else {
-                return { success: false, error: result.error };
+                // ALTERAÇÃO: Se falhou e fizemos update otimista, reverter
+                if (optimisticUpdate) {
+                    // Recarregar carrinho para reverter mudanças
+                    await loadCart();
+                }
+                return { success: false, error: result.error, errorType: result.errorType };
             }
         } catch (error) {
-            console.error('Erro ao atualizar item do carrinho:', error);
+            const isDev = __DEV__;
+            if (isDev) {
+                console.error('Erro ao atualizar item do carrinho:', error);
+            }
+            // ALTERAÇÃO: Se falhou e fizemos update otimista, reverter
+            if (optimisticUpdate) {
+                await loadCart();
+            }
             return { success: false, error: error.message };
         } finally {
-            setLoading(false);
+            if (!optimisticUpdate) {
+                setLoading(false);
+            }
         }
     };
 

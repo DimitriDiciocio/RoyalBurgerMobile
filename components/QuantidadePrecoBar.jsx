@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 export default function QuantidadePrecoBar({
-    unitPrice = 0,
+    unitPrice = null, // ALTERAÇÃO: Não usar fallback 0
     initialQuantity = 1,
     additionalTotal = 0,
     onQuantityChange = () => {},
@@ -22,12 +22,19 @@ export default function QuantidadePrecoBar({
         }
     }, [initialQuantity]);
 
+    // ALTERAÇÃO: Não usar fallback 0, retornar null se preço não estiver disponível
     const priceNumber = useMemo(() => {
-        const num = typeof unitPrice === 'string' ? parseFloat(unitPrice.replace('R$', '').replace('.', '').replace(',', '.')) : Number(unitPrice || 0);
-        return isNaN(num) ? 0 : num;
+        if (unitPrice === null || unitPrice === undefined) {
+            return null;
+        }
+        const num = typeof unitPrice === 'string' ? parseFloat(unitPrice.replace('R$', '').replace('.', '').replace(',', '.')) : Number(unitPrice);
+        return isNaN(num) ? null : num;
     }, [unitPrice]);
 
     const total = useMemo(() => {
+        if (priceNumber === null) {
+            return null;
+        }
         const baseTotal = priceNumber * quantity;
         return baseTotal + (additionalTotal || 0);
     }, [priceNumber, quantity, additionalTotal]);
@@ -69,7 +76,9 @@ export default function QuantidadePrecoBar({
                         <Text style={styles.stepperSign}>+</Text>
                     </TouchableOpacity>
                 </View>
-                <Text style={styles.totalText}>{formatCurrency(total)}</Text>
+                <Text style={styles.totalText}>
+                    {total !== null ? formatCurrency(total) : '...'}
+                </Text>
             </View>
 
             <TouchableOpacity style={styles.addButton} onPress={handleAdd} activeOpacity={0.9}>

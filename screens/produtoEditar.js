@@ -230,11 +230,44 @@ import api from '../services/api';
             const fetchProduct = async () => {
                 try {
                     setLoadingProduct(true);
-                    // Carregar cache de ingredientes primeiro
-                    await loadIngredientsCache();
+                    // ALTERAÇÃO: Carregar cache de ingredientes em paralelo com outras operações
+                    const cachePromise = loadIngredientsCache();
                     
                     // Prioriza productId; se não houver, tenta usar produto.id ou mantém produto
                     const idToFetch = productId || produto?.id;
+                    const pid = idToFetch || produto?.id;
+                    
+                    // ALTERAÇÃO: Buscar ingredientes em paralelo com produto para carregar mais rápido
+                    const fetchIngredients = async () => {
+                        if (pid) {
+                            try {
+                                const ingredientsResponse = await getProductIngredients(pid);
+                                // Tratar resposta que pode ser array direto ou objeto com items
+                                let ingredientsList = [];
+                                if (Array.isArray(ingredientsResponse)) {
+                                    ingredientsList = ingredientsResponse;
+                                } else if (ingredientsResponse && ingredientsResponse.items && Array.isArray(ingredientsResponse.items)) {
+                                    ingredientsList = ingredientsResponse.items;
+                                }
+                                if (!isCancelled) setProductIngredients(ingredientsList);
+                            } catch (e) {
+                                const isDev = __DEV__;
+                                if (isDev) {
+                                    console.error('Erro ao buscar ingredientes:', e);
+                                }
+                                if (!isCancelled) setProductIngredients([]);
+                            }
+                        } else {
+                            if (!isCancelled) setProductIngredients([]);
+                        }
+                    };
+                    
+                    // ALTERAÇÃO: Iniciar busca de ingredientes imediatamente (não esperar produto)
+                    const ingredientsPromise = fetchIngredients();
+                    
+                    // Aguardar cache de ingredientes
+                    await cachePromise;
+                    
                     let data = null;
                     if (idToFetch) {
                         try {
@@ -251,12 +284,7 @@ import api from '../services/api';
                                 data = p && p.product ? p.product : p;
                             } catch (errProd) {
                                 // Se falhar, ainda tentamos obter ingredientes isolados (opcional)
-                                try {
-                                    const alt = await getProductIngredients(idToFetch);
-                                    if (!isCancelled) setProductIngredients(Array.isArray(alt) ? alt : []);
-                                } catch (errIng) {
-                                    // ignora
-                                }
+                                // (já está sendo feito em fetchIngredients acima)
                             }
                         }
                     } else if (produto) {
@@ -265,28 +293,14 @@ import api from '../services/api';
 
                     if (!isCancelled) {
                         // Log para depuração do retorno
-                        console.log('[DEBUG] Produto - dados recebidos da API:', data);
-                        setProductData(data || produto || null);
-                        // Buscar ingredientes somente com ID válido
-                        const pid = idToFetch || data?.id;
-                        if (pid) {
-                            try {
-                                const ingredientsResponse = await getProductIngredients(pid);
-                                // Tratar resposta que pode ser array direto ou objeto com items
-                                let ingredientsList = [];
-                                if (Array.isArray(ingredientsResponse)) {
-                                    ingredientsList = ingredientsResponse;
-                                } else if (ingredientsResponse && ingredientsResponse.items && Array.isArray(ingredientsResponse.items)) {
-                                    ingredientsList = ingredientsResponse.items;
-                                }
-                                if (!isCancelled) setProductIngredients(ingredientsList);
-                            } catch (e) {
-                                console.error('Erro ao buscar ingredientes:', e);
-                                if (!isCancelled) setProductIngredients([]);
-                            }
-                        } else {
-                            setProductIngredients([]);
+                        const isDev = __DEV__;
+                        if (isDev) {
+                            console.log('[DEBUG] Produto - dados recebidos da API:', data);
                         }
+                        setProductData(data || produto || null);
+                        
+                        // ALTERAÇÃO: Aguardar ingredientes (já iniciado acima)
+                        await ingredientsPromise;
                     }
                 } catch (e) {
                     if (!isCancelled) {
@@ -532,24 +546,29 @@ import api from '../services/api';
             navigation.navigate('Cesta');
         };
 
-        // Separar ingredientes em produto padrão e extras
-        const defaultIngredients = productIngredients.filter((ing) => {
-            const portions = parseFloat(ing.portions || 0) || 0;
-            const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
-            const maxQty = ing.max_quantity || ing.maxQuantity;
-            // Excluir se portions <= 0 ou se min_quantity === max_quantity (sem possibilidade de alteração)
-            if (portions <= 0) return false;
-            if (maxQty !== null && maxQty !== undefined) {
-                const maxQtyNum = parseInt(maxQty, 10);
-                if (minQty === maxQtyNum) return false;
-            }
-            return true;
-        });
+        // ALTERAÇÃO: Separar ingredientes em produto padrão e extras usando useMemo para otimização
+        const defaultIngredients = useMemo(() => {
+            return productIngredients.filter((ing) => {
+                const portions = parseFloat(ing.portions || 0) || 0;
+                const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+                const maxQty = ing.max_quantity || ing.maxQuantity;
+                // Excluir se portions <= 0 ou se min_quantity === max_quantity (sem possibilidade de alteração)
+                if (portions <= 0) return false;
+                if (maxQty !== null && maxQty !== undefined) {
+                    const maxQtyNum = parseInt(maxQty, 10);
+                    if (minQty === maxQtyNum) return false;
+                }
+                return true;
+            });
+        }, [productIngredients]);
 
-        const extraIngredients = productIngredients.filter((ing) => {
-            const portions = parseFloat(ing.portions || 0) || 0;
-            return portions === 0;
-        });
+        // ALTERAÇÃO: Usar useMemo para otimizar filtro de extras
+        const extraIngredients = useMemo(() => {
+            return productIngredients.filter((ing) => {
+                const portions = parseFloat(ing.portions || 0) || 0;
+                return portions === 0;
+            });
+        }, [productIngredients]);
 
         // Somar a quantidade total de extras selecionados
         const selectedExtrasCount = extraIngredients.reduce((total, ing) => {

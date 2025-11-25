@@ -1,4 +1,5 @@
 import api from "./api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
  * ========================================
@@ -255,10 +256,71 @@ export const setDefaultAddress = async (customerId, addressId) => {
  * @param {number} customerId - ID do cliente
  * @returns {Promise<object>} - Saldo de pontos com data de expiração
  */
+/**
+ * Salva os pontos do usuário no cache local
+ * @param {number} points - Quantidade de pontos
+ * @returns {Promise<void>}
+ */
+export const saveLoyaltyPointsToCache = async (points) => {
+  try {
+    await AsyncStorage.setItem("loyalty_points", JSON.stringify(points));
+  } catch (error) {
+    // ALTERAÇÃO: Log apenas em desenvolvimento
+    const isDev = __DEV__;
+    if (isDev) {
+      console.warn("Erro ao salvar pontos no cache:", error);
+    }
+  }
+};
+
+/**
+ * Recupera os pontos do usuário do cache local
+ * @returns {Promise<number|null>} - Quantidade de pontos (null se não houver cache)
+ */
+export const getLoyaltyPointsFromCache = async () => {
+  try {
+    const cachedPoints = await AsyncStorage.getItem("loyalty_points");
+    if (cachedPoints !== null) {
+      return JSON.parse(cachedPoints);
+    }
+    return null;
+  } catch (error) {
+    // ALTERAÇÃO: Log apenas em desenvolvimento
+    const isDev = __DEV__;
+    if (isDev) {
+      console.warn("Erro ao recuperar pontos do cache:", error);
+    }
+    return null;
+  }
+};
+
+/**
+ * Limpa o cache de pontos (útil no logout)
+ * @returns {Promise<void>}
+ */
+export const clearLoyaltyPointsCache = async () => {
+  try {
+    await AsyncStorage.removeItem("loyalty_points");
+  } catch (error) {
+    // ALTERAÇÃO: Log apenas em desenvolvimento
+    const isDev = __DEV__;
+    if (isDev) {
+      console.warn("Erro ao limpar cache de pontos:", error);
+    }
+  }
+};
+
 export const getLoyaltyBalance = async (customerId) => {
   try {
     const response = await api.get(`/loyalty/balance/${customerId}`);
-    return response.data;
+    const balanceData = response.data;
+    
+    // ALTERAÇÃO: Salvar pontos no cache quando buscar da API
+    if (balanceData?.current_balance !== undefined) {
+      await saveLoyaltyPointsToCache(balanceData.current_balance);
+    }
+    
+    return balanceData;
   } catch (error) {
     throw error;
   }

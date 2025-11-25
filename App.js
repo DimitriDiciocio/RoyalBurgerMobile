@@ -25,7 +25,7 @@ import Acompanhar from "./screens/acompanhar";
 import Config from "./screens/config";
 import Cesta from "./screens/cesta";
 import Pagamento from "./screens/pagamento";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { isAuthenticated, getStoredUserData, logout, getCurrentUserProfile } from "./services";
 import { getLoyaltyBalance, getCustomerAddresses } from "./services/customerService";
 import { getAllProducts, getMostOrderedProducts, getRecentlyAddedProducts, filterProductsWithStock } from "./services/productService";
@@ -244,7 +244,7 @@ function HomeScreen({ navigation }) {
     };
 
     // ALTERAÇÃO: Função para carregar produtos recentemente adicionados (novidades)
-    const loadRecentlyAddedProducts = async () => {
+    const loadRecentlyAddedProducts = async (promotionsMap = {}) => {
         try {
             // ALTERAÇÃO: Chamar API com parâmetro days para filtrar por período
             const response = await getRecentlyAddedProducts({
@@ -259,10 +259,13 @@ function HomeScreen({ navigation }) {
             // Garante que apenas produtos com estoque disponível aparecem em novidades
             const validatedProducts = await filterProductsWithStock(allProducts);
             
-            // ALTERAÇÃO: Remover busca de promoções - causa re-renderizações desnecessárias
-            // Produtos já mostram seu preço atual sem necessidade de verificar promoção aqui
+            // ALTERAÇÃO: Aplicar promoções do mapa sem fazer requisições extras
             const formattedProducts = validatedProducts
-                .map(product => formatProductForCard(product, null))
+                .map(product => {
+                    // Buscar promoção no mapa usando o ID do produto (normalizado para string)
+                    const promotion = promotionsMap[String(product.id)] || null;
+                    return formatProductForCard(product, promotion);
+                })
                 .filter(product => product !== null); // Remove produtos indisponíveis
             
             return formattedProducts;
@@ -284,7 +287,7 @@ function HomeScreen({ navigation }) {
             const promotions = response?.items || response || [];
             
             if (!promotions || promotions.length === 0) {
-                return { products: [], longestExpiry: null };
+                return { products: [], longestExpiry: null, promotionsMap: {} };
             }
             
             // Filtrar promoções expiradas e produtos inativos
@@ -305,6 +308,17 @@ function HomeScreen({ navigation }) {
                     return true;
                 })
                 .slice(0, 10); // Limitar a 10 promoções
+            
+            // ALTERAÇÃO: Criar mapa de promoções por productId para reutilizar em outras seções
+            // Usar String() para garantir consistência na busca (IDs podem ser string ou número)
+            const promotionsMap = {};
+            validPromotions.forEach(promo => {
+                const productId = promo.product_id || promo.product?.id;
+                if (productId) {
+                    // ALTERAÇÃO: Normalizar ID para string para garantir busca consistente
+                    promotionsMap[String(productId)] = promo;
+                }
+            });
             
             // Preparar produtos com dados de promoção
             const productsWithPromotion = validPromotions.map(promo => ({
@@ -349,7 +363,8 @@ function HomeScreen({ navigation }) {
             
             return {
                 products: formattedProducts,
-                longestExpiry: promotionWithLongestValidity?.promotion?.expires_at || null
+                longestExpiry: promotionWithLongestValidity?.promotion?.expires_at || null,
+                promotionsMap: promotionsMap // ALTERAÇÃO: Retornar mapa de promoções para reutilizar
             };
         } catch (error) {
             // ALTERAÇÃO: Removido console.error em produção
@@ -357,7 +372,7 @@ function HomeScreen({ navigation }) {
             if (isDev) {
                 console.error('Erro ao carregar promoções:', error);
             }
-            return { products: [], longestExpiry: null };
+            return { products: [], longestExpiry: null, promotionsMap: {} };
         }
     };
 
@@ -367,6 +382,10 @@ function HomeScreen({ navigation }) {
         const loadHomeSections = async () => {
             try {
                 setLoadingSections(true);
+                
+                // ALTERAÇÃO: Carregar promoções primeiro para criar mapa e reutilizar nas outras seções
+                const promotionsData = await loadPromotionsSection();
+                const promotionsMap = promotionsData.promotionsMap || {};
                 
                 // ALTERAÇÃO: Carregar produtos mais pedidos baseados em pedidos pagos reais do banco de dados
                 let formattedMostOrdered = [];
@@ -396,10 +415,13 @@ function HomeScreen({ navigation }) {
                         // ALTERAÇÃO: Limitar a 6 produtos (mantendo ordem original da API - mais pedidos primeiro)
                         const topProducts = validatedProducts.slice(0, 6);
                         
-                        // ALTERAÇÃO: Remover busca de promoções - causa re-renderizações desnecessárias
-                        // Produtos já mostram seu preço atual sem necessidade de verificar promoção aqui
+                        // ALTERAÇÃO: Aplicar promoções do mapa sem fazer requisições extras
                         formattedMostOrdered = topProducts
-                            .map(product => formatProductForCard(product, null))
+                            .map(product => {
+                                // Buscar promoção no mapa usando o ID do produto (normalizado para string)
+                                const promotion = promotionsMap[String(product.id)] || null;
+                                return formatProductForCard(product, promotion);
+                            })
                             .filter(product => product !== null);
                     }
                     
@@ -415,12 +437,11 @@ function HomeScreen({ navigation }) {
                     setMostOrderedData([]);
                 }
                 
-                // ALTERAÇÃO: Carregar produtos recentemente adicionados (novidades)
-                const recentlyAddedProducts = await loadRecentlyAddedProducts();
+                // ALTERAÇÃO: Carregar produtos recentemente adicionados (novidades) com mapa de promoções
+                const recentlyAddedProducts = await loadRecentlyAddedProducts(promotionsMap);
                 setComboData(recentlyAddedProducts);
                 
-                // ALTERAÇÃO: Carregar promoções especiais apenas uma vez
-                const promotionsData = await loadPromotionsSection();
+                // ALTERAÇÃO: Definir dados de promoções
                 setPromotionsData(promotionsData.products);
                 setPromoLongestExpiry(promotionsData.longestExpiry);
                 
@@ -488,7 +509,8 @@ function HomeScreen({ navigation }) {
         return defaultTime;
     };
 
-    const handlePromoExpire = () => {
+    // ALTERAÇÃO: Memoizar handlePromoExpire para evitar recriação e re-renderizações do carrossel
+    const handlePromoExpire = useCallback(() => {
         // ALTERAÇÃO: Recarrega promoções quando uma expira
         const reloadPromotions = async () => {
             try {
@@ -499,15 +521,12 @@ function HomeScreen({ navigation }) {
                 const isDev = __DEV__;
                 if (isDev) {
                     // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
-                    const isDev = __DEV__;
-                    if (isDev) {
-                        console.error('Erro ao recarregar promoções:', error);
-                    }
+                    console.error('Erro ao recarregar promoções:', error);
                 }
             }
         };
         reloadPromotions();
-    };
+    }, []);
 
     const handleLogout = async () => {
         try {
@@ -527,8 +546,12 @@ function HomeScreen({ navigation }) {
         navigation.navigate('Cesta');
     };
 
-    // Conteúdo sections
-    const renderPromotionalHeader = () => (
+    // ALTERAÇÃO: Memoizar getPromoEndTime para evitar recriação
+    const promoEndTime = useMemo(() => getPromoEndTime(), [promoLongestExpiry]);
+    
+    // ALTERAÇÃO: Conteúdo sections memoizado com useMemo para evitar recriação do carrossel
+    // ListHeaderComponent precisa receber um componente renderizado, não uma função
+    const renderPromotionalHeader = useMemo(() => (
         <View style={styles.promotionalContent}>
             <View style={styles.carouselImg}>
                 <CarouselImg />
@@ -547,7 +570,7 @@ function HomeScreen({ navigation }) {
                     title="Promoções especiais"
                     data={promotionsData}
                     promoTimer={{
-                        endTime: getPromoEndTime(),
+                        endTime: promoEndTime,
                         onExpire: handlePromoExpire
                     }}
                     navigation={navigation}
@@ -562,7 +585,7 @@ function HomeScreen({ navigation }) {
                 />
             )}
         </View>
-    );
+    ), [mostOrderedData, promotionsData, comboData, promoEndTime, handlePromoExpire, navigation]);
 
     return (
         <View style={styles.container}>

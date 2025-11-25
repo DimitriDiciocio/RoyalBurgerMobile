@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import Header from '../components/Header';
@@ -388,11 +388,15 @@ export default function Cesta({ navigation }) {
                     }));
             }
             
+            // ALTERAÇÃO: Usar update otimista e não recarregar todo o carrinho para melhor performance
             const result = await updateBasketItem(cartItemId, {
                 quantity: newQuantity,
                 extras: extras,
                 observacoes: item.observacoes || '',
                 baseModifications: item.modifications || []
+            }, {
+                optimisticUpdate: true, // Atualizar UI imediatamente
+                skipFullReload: true // Não recarregar todo o carrinho, apenas atualizar item específico
             });
             
             if (!result.success) {
@@ -410,30 +414,32 @@ export default function Cesta({ navigation }) {
                     setAlertButtons([{ text: 'OK' }]);
                     setAlertVisible(true);
                 }
+                // ALTERAÇÃO: Se falhou, o update otimista já foi revertido pelo updateBasketItem
                 return;
             }
 
-            // Validação preventiva do carrinho após atualizar quantidade
-            try {
-                const validation = await validateCartForOrder();
-                const isValid = validation?.success && (validation.is_valid !== false) && (!(validation.alerts) || validation.alerts.length === 0);
-                if (!isValid) {
-                    const alertsText = Array.isArray(validation?.alerts) && validation.alerts.length > 0
-                        ? validation.alerts.join('\\n')
-                        : 'Alguns itens estão indisponíveis ou com estoque insuficiente.';
-                    // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
-                    setAlertType('warning');
-                    setAlertTitle('Carrinho inválido');
-                    setAlertMessage(alertsText);
-                    setAlertButtons([{ text: 'OK' }]);
-                    setAlertVisible(true);
-                    // Recarrega carrinho para refletir estado consistente
-                    await loadCart();
-                }
-            } catch (e) {
-                // Silencia erro de validação para não bloquear fluxo, apenas recarrega
-                await loadCart();
-            }
+            // ALTERAÇÃO: Validação apenas em background (não bloqueia UI)
+            // Fazer validação de forma assíncrona sem bloquear a interface
+            validateCartForOrder()
+                .then(validation => {
+                    const isValid = validation?.success && (validation.is_valid !== false) && (!(validation.alerts) || validation.alerts.length === 0);
+                    if (!isValid) {
+                        const alertsText = Array.isArray(validation?.alerts) && validation.alerts.length > 0
+                            ? validation.alerts.join('\\n')
+                            : 'Alguns itens estão indisponíveis ou com estoque insuficiente.';
+                        // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
+                        setAlertType('warning');
+                        setAlertTitle('Carrinho inválido');
+                        setAlertMessage(alertsText);
+                        setAlertButtons([{ text: 'OK' }]);
+                        setAlertVisible(true);
+                        // Recarrega carrinho para refletir estado consistente apenas se necessário
+                        loadCart();
+                    }
+                })
+                .catch(() => {
+                    // Silencia erro de validação - não é crítico
+                });
         }
     };
 
@@ -479,8 +485,25 @@ export default function Cesta({ navigation }) {
         };
     };
 
-    // ALTERAÇÃO: Carregar produtos sugeridos de outras categorias
+    // ALTERAÇÃO: Ref para armazenar a última assinatura de IDs processada
+    const lastProcessedIdsRef = useRef('');
+
+    // ALTERAÇÃO: Carregar produtos sugeridos apenas quando a lista de produtos mudar (não quando quantidade mudar)
     useEffect(() => {
+        // ALTERAÇÃO: Criar "assinatura" dos produtos no carrinho (apenas IDs) para evitar recarregar quando apenas quantidade muda
+        const currentProductIds = basketItems
+            .map(item => item.originalProductId || item.productId)
+            .filter(id => id != null)
+            .sort((a, b) => a - b)
+            .join(',');
+
+        // ALTERAÇÃO: Só recarregar se a lista de IDs de produtos realmente mudou
+        if (currentProductIds === lastProcessedIdsRef.current) {
+            return; // Não recarregar se apenas a quantidade mudou
+        }
+
+        lastProcessedIdsRef.current = currentProductIds;
+
         const loadSuggestedProducts = async () => {
             if (basketItems.length === 0) {
                 setSuggestedProducts([]);
@@ -636,13 +659,16 @@ export default function Cesta({ navigation }) {
                          <Text style={styles.title}>Cesta</Text>
                      </View>
                      
-                     <TouchableOpacity 
-                         style={styles.limparButton} 
-                         onPress={handleLimpar}
-                         activeOpacity={0.7}
-                     >
-                         <Text style={styles.limparButtonText}>Limpar</Text>
-                     </TouchableOpacity>
+                     {/* ALTERAÇÃO: Botão Limpar - apenas mostrar se houver itens na cesta */}
+                     {basketItems.length > 0 && (
+                         <TouchableOpacity 
+                             style={styles.limparButton} 
+                             onPress={handleLimpar}
+                             activeOpacity={0.7}
+                         >
+                             <Text style={styles.limparButtonText}>Limpar</Text>
+                         </TouchableOpacity>
+                     )}
                  </View>
                 <Text style={styles.sectionTitle}>Itens adicionados</Text>
                 
@@ -708,42 +734,44 @@ export default function Cesta({ navigation }) {
                     </View>
                 )}
 
-                {/* Resumo de valores */}
-                <View style={styles.resumoSection}>
-                    <Text style={styles.resumoTitulo}>Resumo de valores</Text>
-                    
-                    <View style={styles.resumoItem}>
-                        <Text style={styles.resumoLabel}>Taxa de entrega</Text>
-                        <Text style={styles.resumoValor}>
-                            R$ {(parseFloat(deliveryFee) || 0).toFixed(2).replace('.', ',')}
-                        </Text>
-                    </View>
+                {/* ALTERAÇÃO: Resumo de valores - apenas mostrar se houver itens na cesta */}
+                {basketItems.length > 0 && (
+                    <View style={styles.resumoSection}>
+                        <Text style={styles.resumoTitulo}>Resumo de valores</Text>
+                        
+                        <View style={styles.resumoItem}>
+                            <Text style={styles.resumoLabel}>Taxa de entrega</Text>
+                            <Text style={styles.resumoValor}>
+                                R$ {(parseFloat(deliveryFee) || 0).toFixed(2).replace('.', ',')}
+                            </Text>
+                        </View>
 
-                    <View style={styles.resumoItem}>
-                        <Text style={styles.resumoLabel}>Descontos</Text>
-                        <Text style={styles.resumoValor}>
-                            - R$ {(parseFloat(calculatePromotionDiscounts()) || 0).toFixed(2).replace('.', ',')}
-                        </Text>
-                    </View>
+                        <View style={styles.resumoItem}>
+                            <Text style={styles.resumoLabel}>Descontos</Text>
+                            <Text style={styles.resumoValor}>
+                                - R$ {(parseFloat(calculatePromotionDiscounts()) || 0).toFixed(2).replace('.', ',')}
+                            </Text>
+                        </View>
 
-                    <View style={styles.resumoItem}>
-                        <Text style={styles.resumoTotalLabel}>Total</Text>
-                        <Text style={styles.resumoTotalValor}>
-                            {(() => {
-                                // ALTERAÇÃO: basketTotal já vem com desconto aplicado (item_subtotal da API já tem desconto)
-                                // Não subtrair desconto novamente, apenas somar taxa de entrega
-                                const safeBasketTotal = parseFloat(basketTotal) || 0;
-                                const safeDeliveryFee = parseFloat(deliveryFee) || 0;
-                                const total = safeBasketTotal + safeDeliveryFee;
-                                return `R$ ${total.toFixed(2).replace('.', ',')}`;
-                            })()}
-                        </Text>
-                    </View>
+                        <View style={styles.resumoItem}>
+                            <Text style={styles.resumoTotalLabel}>Total</Text>
+                            <Text style={styles.resumoTotalValor}>
+                                {(() => {
+                                    // ALTERAÇÃO: basketTotal já vem com desconto aplicado (item_subtotal da API já tem desconto)
+                                    // Não subtrair desconto novamente, apenas somar taxa de entrega
+                                    const safeBasketTotal = parseFloat(basketTotal) || 0;
+                                    const safeDeliveryFee = parseFloat(deliveryFee) || 0;
+                                    const total = safeBasketTotal + safeDeliveryFee;
+                                    return `R$ ${total.toFixed(2).replace('.', ',')}`;
+                                })()}
+                            </Text>
+                        </View>
 
-                     <Text style={styles.pontosText}>
-                         Nessa compra, você ganhará <Text style={styles.pontosDestaque}>{calculateEarnedPoints()}</Text> pontos Royal
-                     </Text>
-                 </View>
+                         <Text style={styles.pontosText}>
+                             Nessa compra, você ganhará <Text style={styles.pontosDestaque}>{calculateEarnedPoints()}</Text> pontos Royal
+                         </Text>
+                     </View>
+                )}
              </ScrollView>
 
              {/* Footer fixo */}

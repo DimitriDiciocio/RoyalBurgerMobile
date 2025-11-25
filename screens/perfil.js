@@ -14,6 +14,7 @@ import {
   getCurrentUserProfile,
   testTokenValidity,
   getLoyaltyBalance,
+  getLoyaltyPointsFromCache,
 } from "../services";
 import { calculateDaysUntilExpiration } from "../services/customerService";
   import {
@@ -64,38 +65,101 @@ const infoSvg = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xml
 
 export default function Perfil({ navigation }) {
   const isFocused = useIsFocused();
-  const [userInfo, setUserInfo] = useState(null);
+  
+  // ALTERAÇÃO: Inicializar com dados do cache do Header imediatamente (em memória - mais rápido)
+  const getInitialUserInfo = () => {
+    const cachedUserInfo = getHeaderUserCache();
+    if (cachedUserInfo?.name) {
+      return {
+        name: cachedUserInfo.name,
+        id: cachedUserInfo.id,
+        email: cachedUserInfo.email,
+      };
+    }
+    return null;
+  };
+  
+  const [userInfo, setUserInfo] = useState(getInitialUserInfo());
   const [showDadosConta, setShowDadosConta] = useState(false);
   const [showEnderecos, setShowEnderecos] = useState(false);
   const [showEditarEndereco, setShowEditarEndereco] = useState(false);
   const [enderecoSelecionado, setEnderecoSelecionado] = useState(null);
   const [enderecos, setEnderecos] = useState([]);
   const [enderecoAtivo, setEnderecoAtivo] = useState(null);
-  const [loyaltyBalance, setLoyaltyBalance] = useState(0);
+  // ALTERAÇÃO: Inicializar com pontos do cache (null se não houver)
+  const [loyaltyBalance, setLoyaltyBalance] = useState(null);
   const [loadingPoints, setLoadingPoints] = useState(false);
   const [loyaltyData, setLoyaltyData] = useState(null);
+  
+  // ALTERAÇÃO: Carregar dados do cache ao montar o componente (antes de qualquer requisição)
+  useEffect(() => {
+    const loadCachedData = async () => {
+      // Carregar pontos do cache
+      const cachedPoints = await getLoyaltyPointsFromCache();
+      if (cachedPoints !== null) {
+        setLoyaltyBalance(cachedPoints);
+      }
+      
+      // ALTERAÇÃO: Se ainda não tem userInfo do cache do Header, tenta carregar do AsyncStorage
+      if (!userInfo) {
+        try {
+          const storedData = await getStoredUserData();
+          if (storedData) {
+            const cachedUserInfo = getHeaderUserCache();
+            const userName = cachedUserInfo?.name || storedData.full_name || storedData.name;
+            if (userName) {
+              setUserInfo({
+                name: userName,
+                id: storedData.id,
+                email: storedData.email,
+                ...storedData,
+              });
+            }
+          }
+        } catch (e) {
+          // Ignora erro
+        }
+      }
+    };
+    loadCachedData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const getUserData = async () => {
       try {
         const ok = await isAuthenticated();
         if (ok) {
-          // Primeiro tenta obter dados atualizados da API
+          // ALTERAÇÃO: Primeiro usa cache do Header para exibição imediata
+          const cachedUserInfo = getHeaderUserCache();
+          if (cachedUserInfo?.name && !userInfo?.name) {
+            setUserInfo(prev => ({
+              ...prev,
+              name: cachedUserInfo.name,
+              id: cachedUserInfo.id || prev?.id,
+              email: cachedUserInfo.email || prev?.email,
+            }));
+          }
+          
+          // Depois tenta obter dados atualizados da API (em background)
           let user;
           try {
             user = await getCurrentUserProfile();
           } catch (apiError) {
             // Se falhar, usa dados locais como fallback
-            console.warn(
-              "Erro ao obter dados da API, usando dados locais:",
-              apiError
-            );
+            const isDev = __DEV__;
+            if (isDev) {
+              console.warn(
+                "Erro ao obter dados da API, usando dados locais:",
+                apiError
+              );
+            }
             user = await getStoredUserData();
           }
 
           // ALTERAÇÃO: Usa o cache do Header se disponível, senão usa dados do usuário
-          const cachedUserInfo = getHeaderUserCache();
-          const userName = cachedUserInfo?.name || user?.full_name || user?.name || undefined;
+          const updatedCachedUserInfo = getHeaderUserCache();
+          const userName = updatedCachedUserInfo?.name || user?.full_name || user?.name || userInfo?.name;
           
           // Mantém todos os dados do usuário
           const normalized = user
@@ -106,7 +170,7 @@ export default function Perfil({ navigation }) {
                 address: user.address || undefined,
                 avatar: undefined,
               }
-            : null;
+            : userInfo; // Mantém dados do cache se não houver dados da API
           setUserInfo(normalized);
 
           // Buscar endereços e pontos do usuário de forma sequencial
@@ -170,13 +234,26 @@ export default function Perfil({ navigation }) {
   const fetchLoyaltyBalance = async (userId) => {
     try {
       setLoadingPoints(true);
+      // ALTERAÇÃO: Carregar pontos do cache primeiro para exibição imediata
+      const cachedPoints = await getLoyaltyPointsFromCache();
+      if (cachedPoints !== null) {
+        setLoyaltyBalance(cachedPoints);
+      }
+      
+      // Buscar pontos atualizados da API
       const balance = await getLoyaltyBalance(userId);
-      setLoyaltyBalance(balance?.current_balance || 0);
+      setLoyaltyBalance(balance?.current_balance ?? null);
       setLoyaltyData(balance);
     } catch (error) {
-      console.error("Erro ao buscar pontos:", error);
-      setLoyaltyBalance(0);
+      // ALTERAÇÃO: Em caso de erro, usar cache se disponível
+      const cachedPoints = await getLoyaltyPointsFromCache();
+      setLoyaltyBalance(cachedPoints);
       setLoyaltyData(null);
+      
+      const isDev = __DEV__;
+      if (isDev) {
+        console.error("Erro ao buscar pontos:", error);
+      }
     } finally {
       setLoadingPoints(false);
     }
@@ -184,17 +261,21 @@ export default function Perfil({ navigation }) {
 
   // Função para calcular dias restantes até expiração
   const getDaysUntilExpiration = () => {
-    if (!loyaltyData) {
-      return 0;
+    if (!loyaltyData || !loyaltyData.expiration_date) {
+      return null; // ALTERAÇÃO: Retorna null se não houver dados de expiração
     }
     
     // A API retorna a data de expiração como 'expiration_date' no formato 'YYYY-MM-DD'
-    if (loyaltyData.expiration_date) {
-      return calculateDaysUntilExpiration(loyaltyData.expiration_date);
+    return calculateDaysUntilExpiration(loyaltyData.expiration_date);
+  };
+  
+  // ALTERAÇÃO: Função para verificar se os pontos realmente expiraram
+  const hasPointsExpired = () => {
+    if (!loyaltyData || !loyaltyData.expiration_date) {
+      return false; // Se não houver data de expiração, não considera expirado
     }
-    
-    // Se não tiver data de expiração, retorna 0 (não mostra mensagem de expiração)
-    return 0;
+    const daysLeft = getDaysUntilExpiration();
+    return daysLeft !== null && daysLeft === 0 && loyaltyBalance !== null && loyaltyBalance > 0;
   };
 
   const handleAddEndereco = () => {
@@ -427,15 +508,29 @@ export default function Perfil({ navigation }) {
           <View style={styles.pointsContent}>
             <View style={styles.pointsDisplay}>
               <SvgXml xml={crownSvg} width={40} height={40} />
-              <Text style={styles.pointsNumber}>{loyaltyBalance}</Text>
+              <Text style={styles.pointsNumber}>
+                {loyaltyBalance !== null && loyaltyBalance !== undefined ? loyaltyBalance : '...'}
+              </Text>
             </View>
             <Text style={styles.pointsExpiration}>
-              {getDaysUntilExpiration() > 0 
-                ? `Faltam ${getDaysUntilExpiration()} dias para seus pontos expirarem`
-                : loyaltyBalance > 0 
-                  ? 'Seus pontos expiraram'
-                  : 'Você não possui pontos para expirar'
-              }
+              {loyaltyBalance !== null && loyaltyBalance !== undefined ? (
+                (() => {
+                  const daysLeft = getDaysUntilExpiration();
+                  // ALTERAÇÃO: Mostra mensagem apenas se houver dados de expiração
+                  if (daysLeft !== null) {
+                    if (daysLeft > 0) {
+                      return `Faltam ${daysLeft} dias para seus pontos expirarem`;
+                    } else if (hasPointsExpired()) {
+                      // ALTERAÇÃO: Mostra "expiraram" apenas quando realmente expiraram
+                      return 'Seus pontos expiraram';
+                    }
+                  }
+                  // Se não houver dados de expiração ou pontos já foram usados, não mostra mensagem
+                  return '';
+                })()
+              ) : (
+                'Carregando pontos...'
+              )}
             </Text>
           </View>
         </View>

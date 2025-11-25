@@ -5,7 +5,7 @@ import { SvgXml } from 'react-native-svg';
 import Header from '../components/Header';
 import MenuNavigation from '../components/MenuNavigation';
 import { isAuthenticated, getStoredUserData } from '../services/userService';
-import { getCustomerAddresses, getLoyaltyBalance, calculateDaysUntilExpiration } from '../services/customerService';
+import { getCustomerAddresses, getLoyaltyBalance, calculateDaysUntilExpiration, getLoyaltyPointsFromCache } from '../services/customerService';
 import { getPublicSettings } from '../services';
 
 // SVGs dos ícones
@@ -25,7 +25,19 @@ export default function ClubeRoyal({ navigation }) {
   const [userInfo, setUserInfo] = useState(null);
   const [enderecos, setEnderecos] = useState([]);
   const [enderecoAtivo, setEnderecoAtivo] = useState(null);
-  const [loyaltyBalance, setLoyaltyBalance] = useState(0);
+  // ALTERAÇÃO: Inicializar com pontos do cache (null se não houver)
+  const [loyaltyBalance, setLoyaltyBalance] = useState(null);
+  
+  // ALTERAÇÃO: Carregar pontos do cache ao montar o componente
+  useEffect(() => {
+    const loadCachedPoints = async () => {
+      const cachedPoints = await getLoyaltyPointsFromCache();
+      if (cachedPoints !== null) {
+        setLoyaltyBalance(cachedPoints);
+      }
+    };
+    loadCachedPoints();
+  }, []);
   const [loyaltyData, setLoyaltyData] = useState(null);
   const [loadingPoints, setLoadingPoints] = useState(false);
   const [loyaltyRates, setLoyaltyRates] = useState({
@@ -51,17 +63,33 @@ export default function ClubeRoyal({ navigation }) {
   const fetchLoyaltyBalance = async (userId) => {
     try {
       setLoadingPoints(true);
+      // ALTERAÇÃO: Carregar pontos do cache primeiro para exibição imediata
+      const cachedPoints = await getLoyaltyPointsFromCache();
+      if (cachedPoints !== null) {
+        setLoyaltyBalance(cachedPoints);
+      }
+      
+      // Buscar pontos atualizados da API
       const balance = await getLoyaltyBalance(userId);
-      console.log('Dados da API de pontos:', balance); // Debug
-      const points = balance?.current_balance || 0;
+      const isDev = __DEV__;
+      if (isDev) {
+        console.log('Dados da API de pontos:', balance); // Debug
+      }
+      const points = balance?.current_balance ?? null;
       setLoyaltyBalance(points);
       setLoyaltyData(balance);
       return points;
     } catch (error) {
-      console.error('Erro ao buscar pontos:', error);
-      setLoyaltyBalance(0);
+      // ALTERAÇÃO: Em caso de erro, usar cache se disponível
+      const cachedPoints = await getLoyaltyPointsFromCache();
+      setLoyaltyBalance(cachedPoints);
       setLoyaltyData(null);
-      return 0;
+      
+      const isDev = __DEV__;
+      if (isDev) {
+        console.error('Erro ao buscar pontos:', error);
+      }
+      return cachedPoints;
     } finally {
       setLoadingPoints(false);
     }
@@ -69,18 +97,21 @@ export default function ClubeRoyal({ navigation }) {
 
   // Função para calcular dias restantes até expiração
   const getDaysUntilExpiration = () => {
-    if (!loyaltyData) {
-      return 0;
+    if (!loyaltyData || !loyaltyData.expiration_date) {
+      return null; // ALTERAÇÃO: Retorna null se não houver dados de expiração
     }
     
     // A API retorna a data de expiração como 'expiration_date' no formato 'YYYY-MM-DD'
-    if (loyaltyData.expiration_date) {
-      const days = calculateDaysUntilExpiration(loyaltyData.expiration_date);
-      return days;
+    return calculateDaysUntilExpiration(loyaltyData.expiration_date);
+  };
+  
+  // ALTERAÇÃO: Função para verificar se os pontos realmente expiraram
+  const hasPointsExpired = () => {
+    if (!loyaltyData || !loyaltyData.expiration_date) {
+      return false; // Se não houver data de expiração, não considera expirado
     }
-    
-    // Se não tiver data de expiração, retorna 0 (não mostra mensagem de expiração)
-    return 0;
+    const daysLeft = getDaysUntilExpiration();
+    return daysLeft !== null && daysLeft === 0 && loyaltyBalance !== null && loyaltyBalance > 0;
   };
 
   const handleEnderecoAtivoChange = (data) => {
@@ -191,15 +222,29 @@ export default function ClubeRoyal({ navigation }) {
           <View style={styles.pointsContent}>
             <View style={styles.pointsDisplay}>
               <SvgXml xml={crownSvg} width={40} height={40} />
-              <Text style={styles.pointsNumber}>{loyaltyBalance}</Text>
+              <Text style={styles.pointsNumber}>
+                {loyaltyBalance !== null && loyaltyBalance !== undefined ? loyaltyBalance : '...'}
+              </Text>
             </View>
             <Text style={styles.pointsExpiration}>
-              {getDaysUntilExpiration() > 0 
-                ? `Faltam ${getDaysUntilExpiration()} dias para seus pontos expirarem`
-                : loyaltyBalance > 0 
-                  ? 'Seus pontos expiraram'
-                  : 'Você não possui pontos para expirar'
-              }
+              {loyaltyBalance !== null && loyaltyBalance !== undefined ? (
+                (() => {
+                  const daysLeft = getDaysUntilExpiration();
+                  // ALTERAÇÃO: Mostra mensagem apenas se houver dados de expiração
+                  if (daysLeft !== null) {
+                    if (daysLeft > 0) {
+                      return `Faltam ${daysLeft} dias para seus pontos expirarem`;
+                    } else if (hasPointsExpired()) {
+                      // ALTERAÇÃO: Mostra "expiraram" apenas quando realmente expiraram
+                      return 'Seus pontos expiraram';
+                    }
+                  }
+                  // Se não houver dados de expiração ou pontos já foram usados, não mostra mensagem
+                  return '';
+                })()
+              ) : (
+                'Carregando pontos...'
+              )}
             </Text>
             <TouchableOpacity 
               style={styles.historyButton}

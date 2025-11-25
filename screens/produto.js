@@ -68,7 +68,8 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
         const [loadingProduct, setLoadingProduct] = useState(false);
         const [productData, setProductData] = useState(null);
         const [productIngredients, setProductIngredients] = useState([]);
-        const [promotion, setPromotion] = useState(null); // ALTERAÇÃO: estado para promoção do produto
+        // ALTERAÇÃO: Inicializar promoção com valor do produto se disponível para evitar piscar do preço
+        const [promotion, setPromotion] = useState(produto?.promotion || null);
         const [observacoes, setObservacoes] = useState('');
         const [quantity, setQuantity] = useState(1);
         const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -298,11 +299,64 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
             const fetchProduct = async () => {
                 try {
                     setLoadingProduct(true);
-                    // Carregar cache de ingredientes primeiro
-                    await loadIngredientsCache();
+                    // ALTERAÇÃO: Carregar cache de ingredientes em paralelo com outras operações
+                    const cachePromise = loadIngredientsCache();
                     
                     // Prioriza productId; se não houver, tenta usar produto.id ou mantém produto
                     const idToFetch = productId || produto?.id;
+                    const pid = idToFetch || produto?.id;
+                    
+                    // ALTERAÇÃO: Buscar ingredientes em paralelo com produto e promoção para carregar mais rápido
+                    const fetchIngredients = async () => {
+                        if (pid) {
+                            try {
+                                const ingredientsResponse = await getProductIngredients(pid);
+                                // Tratar resposta que pode ser array direto ou objeto com items
+                                let ingredientsList = [];
+                                if (Array.isArray(ingredientsResponse)) {
+                                    ingredientsList = ingredientsResponse;
+                                } else if (ingredientsResponse && ingredientsResponse.items && Array.isArray(ingredientsResponse.items)) {
+                                    ingredientsList = ingredientsResponse.items;
+                                }
+                                if (!isCancelled) setProductIngredients(ingredientsList);
+                            } catch (e) {
+                                // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                                const isDev = __DEV__;
+                                if (isDev) {
+                                    console.error('Erro ao buscar ingredientes:', e);
+                                }
+                                if (!isCancelled) setProductIngredients([]);
+                            }
+                        } else {
+                            if (!isCancelled) setProductIngredients([]);
+                        }
+                    };
+                    
+                    // ALTERAÇÃO: Iniciar busca de ingredientes imediatamente (não esperar produto)
+                    const ingredientsPromise = fetchIngredients();
+                    
+                    // ALTERAÇÃO: Buscar promoção imediatamente em paralelo (antes de buscar produto) para evitar piscar do preço
+                    const fetchPromotion = async () => {
+                        if (pid) {
+                            try {
+                                const productPromotion = await getPromotionByProductId(pid);
+                                if (!isCancelled) setPromotion(productPromotion);
+                            } catch (e) {
+                                // Ignora erros ao buscar promoção (produto pode não ter promoção)
+                                // ALTERAÇÃO: Só atualiza para null se não houver promoção inicial do produto
+                                if (!isCancelled && !produto?.promotion) {
+                                    setPromotion(null);
+                                }
+                            }
+                        } else if (!produto?.promotion) {
+                            setPromotion(null);
+                        }
+                    };
+                    const promotionPromise = fetchPromotion();
+                    
+                    // Aguardar cache de ingredientes
+                    await cachePromise;
+                    
                     let data = null;
                     if (idToFetch) {
                         try {
@@ -320,12 +374,7 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                 data = p && p.product ? p.product : p;
                             } catch (errProd) {
                                 // Se falhar, ainda tentamos obter ingredientes isolados (opcional)
-                                try {
-                                    const alt = await getProductIngredients(idToFetch);
-                                    if (!isCancelled) setProductIngredients(Array.isArray(alt) ? alt : []);
-                                } catch (errIng) {
-                                    // ignora
-                                }
+                                // (já está sendo feito em fetchIngredients acima)
                             }
                         }
                     } else if (produto) {
@@ -347,44 +396,8 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                     if (!isCancelled) {
                         setProductData(data || produto || null);
                         
-                        // ALTERAÇÃO: Buscar promoção do produto
-                        const pid = idToFetch || data?.id;
-                        if (pid) {
-                            try {
-                                const productPromotion = await getPromotionByProductId(pid);
-                                if (!isCancelled) setPromotion(productPromotion);
-                            } catch (e) {
-                                // Ignora erros ao buscar promoção (produto pode não ter promoção)
-                                if (!isCancelled) setPromotion(null);
-                            }
-                        } else {
-                            setPromotion(null);
-                        }
-                        
-                        // ALTERAÇÃO: sempre busca ingredientes separadamente para manter a mesma ordem do ProdutoEditar
-                        // Isso garante que a ordem original seja preservada (não alfabética)
-                        if (pid) {
-                            try {
-                                const ingredientsResponse = await getProductIngredients(pid);
-                                // Tratar resposta que pode ser array direto ou objeto com items
-                                let ingredientsList = [];
-                                if (Array.isArray(ingredientsResponse)) {
-                                    ingredientsList = ingredientsResponse;
-                                } else if (ingredientsResponse && ingredientsResponse.items && Array.isArray(ingredientsResponse.items)) {
-                                    ingredientsList = ingredientsResponse.items;
-                                }
-                                if (!isCancelled) setProductIngredients(ingredientsList);
-                            } catch (e) {
-                                // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
-                                const isDev = __DEV__;
-                                if (isDev) {
-                                    console.error('Erro ao buscar ingredientes:', e);
-                                }
-                                if (!isCancelled) setProductIngredients([]);
-                            }
-                        } else {
-                            setProductIngredients([]);
-                        }
+                        // ALTERAÇÃO: Aguardar promoção e ingredientes (já iniciados acima)
+                        await Promise.all([promotionPromise, ingredientsPromise]);
                     }
                 } catch (e) {
                     if (!isCancelled) {
@@ -431,19 +444,21 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
             navigation.navigate('Cesta');
         };
 
-        // Separar ingredientes em produto padrão e extras
-        const defaultIngredients = productIngredients.filter((ing) => {
-            // ALTERAÇÃO: usa mesma regra de ProdutoEditar para ordenar/filtrar ingredientes padrão
-            const portions = parseFloat(ing.portions || 0) || 0;
-            const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
-            const maxQty = ing.max_quantity || ing.maxQuantity;
-            if (portions <= 0) return false;
-            if (maxQty !== null && maxQty !== undefined) {
-                const maxQtyNum = parseInt(maxQty, 10);
-                if (minQty === maxQtyNum) return false;
-            }
-            return true;
-        });
+        // ALTERAÇÃO: Separar ingredientes em produto padrão e extras usando useMemo para otimização
+        const defaultIngredients = useMemo(() => {
+            return productIngredients.filter((ing) => {
+                // ALTERAÇÃO: usa mesma regra de ProdutoEditar para ordenar/filtrar ingredientes padrão
+                const portions = parseFloat(ing.portions || 0) || 0;
+                const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+                const maxQty = ing.max_quantity || ing.maxQuantity;
+                if (portions <= 0) return false;
+                if (maxQty !== null && maxQty !== undefined) {
+                    const maxQtyNum = parseInt(maxQty, 10);
+                    if (minQty === maxQtyNum) return false;
+                }
+                return true;
+            });
+        }, [productIngredients]);
 
         // Função para buscar produto atualizado quando quantity mudar
         // A API já calcula max_quantity considerando a quantity, então não precisamos recalcular
@@ -466,11 +481,14 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
             }
         };
 
-        const extraIngredients = productIngredients.filter((ing) => {
-            // ALTERAÇÃO: mesma lógica do ProdutoEditar para manter a ordem original dos extras
-            const portions = parseFloat(ing.portions || 0) || 0;
-            return portions === 0;
-        });
+        // ALTERAÇÃO: Usar useMemo para otimizar filtro de extras
+        const extraIngredients = useMemo(() => {
+            return productIngredients.filter((ing) => {
+                // ALTERAÇÃO: mesma lógica do ProdutoEditar para manter a ordem original dos extras
+                const portions = parseFloat(ing.portions || 0) || 0;
+                return portions === 0;
+            });
+        }, [productIngredients]);
 
         // Somar a quantidade total de extras selecionados (comportamento idêntico ao ProdutoEditar)
         const selectedExtrasCount = extraIngredients.reduce((total, ing) => {
@@ -611,7 +629,15 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
 
         // ALTERAÇÃO: Calcular preço final do produto com desconto se houver promoção
         const finalProductPrice = useMemo(() => {
-            const basePrice = parseFloat(productData?.price || produto?.price || 0);
+            // ALTERAÇÃO: Não usar fallback 0, retornar null se preço não estiver disponível
+            const basePriceRaw = productData?.price || produto?.price;
+            if (basePriceRaw === null || basePriceRaw === undefined) {
+                return null;
+            }
+            const basePrice = parseFloat(basePriceRaw);
+            if (isNaN(basePrice)) {
+                return null;
+            }
             
             if (promotion) {
                 // Priorizar discount_percentage se disponível

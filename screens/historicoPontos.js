@@ -5,7 +5,7 @@ import { SvgXml } from 'react-native-svg';
 import Header from '../components/Header';
 import MenuNavigation from '../components/MenuNavigation';
 import { isAuthenticated, getStoredUserData } from '../services/userService';
-import { getCustomerAddresses, getLoyaltyBalance, getLoyaltyHistory, calculateDaysUntilExpiration } from '../services/customerService';
+import { getCustomerAddresses, getLoyaltyBalance, getLoyaltyHistory, calculateDaysUntilExpiration, getLoyaltyPointsFromCache } from '../services/customerService';
 import { getOrderById } from '../services/orderService';
 
 // SVG do ícone da coroa
@@ -19,7 +19,19 @@ export default function HistoricoPontos({ navigation }) {
   const [userInfo, setUserInfo] = useState(null);
   const [enderecos, setEnderecos] = useState([]);
   const [enderecoAtivo, setEnderecoAtivo] = useState(null);
-  const [loyaltyBalance, setLoyaltyBalance] = useState(0);
+  // ALTERAÇÃO: Inicializar com pontos do cache (null se não houver)
+  const [loyaltyBalance, setLoyaltyBalance] = useState(null);
+  
+  // ALTERAÇÃO: Carregar pontos do cache ao montar o componente
+  useEffect(() => {
+    const loadCachedPoints = async () => {
+      const cachedPoints = await getLoyaltyPointsFromCache();
+      if (cachedPoints !== null) {
+        setLoyaltyBalance(cachedPoints);
+      }
+    };
+    loadCachedPoints();
+  }, []);
   const [loyaltyData, setLoyaltyData] = useState(null);
   const [loadingPoints, setLoadingPoints] = useState(false);
   const [history, setHistory] = useState([]);
@@ -41,13 +53,27 @@ export default function HistoricoPontos({ navigation }) {
   const fetchLoyaltyBalance = async (userId) => {
     try {
       setLoadingPoints(true);
+      // ALTERAÇÃO: Carregar pontos do cache primeiro para exibição imediata
+      const cachedPoints = await getLoyaltyPointsFromCache();
+      if (cachedPoints !== null) {
+        setLoyaltyBalance(cachedPoints);
+      }
+      
+      // Buscar pontos atualizados da API
       const balance = await getLoyaltyBalance(userId);
-      const points = balance?.current_balance || 0;
+      const points = balance?.current_balance ?? null;
       setLoyaltyBalance(points);
       setLoyaltyData(balance);
       return points;
     } catch (error) {
-      console.error('Erro ao buscar pontos:', error);
+      // ALTERAÇÃO: Em caso de erro, usar cache se disponível
+      const cachedPoints = await getLoyaltyPointsFromCache();
+      setLoyaltyBalance(cachedPoints);
+      
+      const isDev = __DEV__;
+      if (isDev) {
+        console.error('Erro ao buscar pontos:', error);
+      }
       setLoyaltyBalance(0);
       setLoyaltyData(null);
       return 0;

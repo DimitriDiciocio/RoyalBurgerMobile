@@ -85,6 +85,16 @@ export const logout = async () => {
     await AsyncStorage.removeItem("user_token");
     await AsyncStorage.removeItem("user_data");
     
+    // ALTERAÇÃO: Limpa o cache de pontos após logout
+    try {
+      const { clearLoyaltyPointsCache } = require('./customerService');
+      if (typeof clearLoyaltyPointsCache === 'function') {
+        await clearLoyaltyPointsCache();
+      }
+    } catch (error) {
+      // Ignora erro se o módulo não estiver disponível
+    }
+    
     // ALTERAÇÃO: Limpa o cache do Header após logout
     try {
       const { clearHeaderUserCache } = require('../components/Header');

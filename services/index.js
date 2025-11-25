@@ -66,6 +66,9 @@ export {
   removeCustomerAddress,
   getLoyaltyBalance,
   getLoyaltyHistory,
+  saveLoyaltyPointsToCache,
+  getLoyaltyPointsFromCache,
+  clearLoyaltyPointsCache,
 } from "./customerService";
 
 // Produtos
