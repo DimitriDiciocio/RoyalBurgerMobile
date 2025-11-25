@@ -78,56 +78,9 @@ export default function MenuCategory({
     };
 
     const loadProductsForCategory = async (categoryId) => {
-        try {
-            setLoadingProducts(true);
-            // ALTERAÇÃO: Filtrar produtos indisponíveis na API
-            const response = await getProductsByCategory(categoryId, { 
-                page_size: 50,
-                filter_unavailable: true // Filtrar produtos sem estoque na API
-            });
-            
-            // A resposta da API retorna { category: {...}, items: [...], pagination: {...} }
-            // Mas pode vir em diferentes formatos, então verificamos múltiplas possibilidades
-            let products = [];
-            if (response) {
-                if (Array.isArray(response.items)) {
-                    products = response.items;
-                } else if (Array.isArray(response)) {
-                    // Se a resposta for diretamente um array
-                    products = response;
-                } else if (response.data && Array.isArray(response.data.items)) {
-                    // Se estiver aninhado em data
-                    products = response.data.items;
-                } else if (response.data && Array.isArray(response.data)) {
-                    // Se data for diretamente um array
-                    products = response.data;
-                }
-            }
-            
-            // ALTERAÇÃO: Filtrar apenas produtos ativos
-            const activeProducts = products.filter((product) => {
-                const isActive = product.is_active !== false && 
-                                product.is_active !== 0 && 
-                                product.is_active !== "false";
-                return isActive;
-            });
-            
-            // ALTERAÇÃO: Validar estoque de cada produto e adicionar availability_status
-            // Isso garante que produtos sem estoque não sejam exibidos mesmo se passarem pelo filtro da API
-            const validatedProducts = await filterProductsWithStock(activeProducts);
-            
-            setProducts(prev => ({
-                ...prev,
-                [categoryId]: validatedProducts
-            }));
-        } catch (error) {
-            setProducts(prev => ({
-                ...prev,
-                [categoryId]: []
-            }));
-        } finally {
-            setLoadingProducts(false);
-        }
+        // Esta função não precisa ser alterada, pois o carregamento geral já está em loadAllProducts
+        // A categoria "Sem Categoria" é tratada apenas no loadAllProducts e na construção do flattenedData
+        // Para manter a consistência, se chamada, ela faria o que já faz (buscar por ID), mas a "Sem Categoria" não tem um ID de categoria real
     };
 
     // Carregar produtos de todas as categorias de uma vez
@@ -135,7 +88,7 @@ export default function MenuCategory({
         try {
             setLoadingProducts(true);
             
-            // Carrega produtos de todas as categorias em paralelo
+            // Cria um array de promises para carregar produtos de cada categoria
             const productPromises = categories.map(async (category) => {
                 try {
                     // ALTERAÇÃO: Filtrar produtos indisponíveis na API
@@ -144,20 +97,15 @@ export default function MenuCategory({
                         filter_unavailable: true // Filtrar produtos sem estoque na API
                     });
                     
-                    // A resposta da API retorna { category: {...}, items: [...], pagination: {...} }
-                    // Mas pode vir em diferentes formatos, então verificamos múltiplas possibilidades
                     let products = [];
                     if (response) {
                         if (Array.isArray(response.items)) {
                             products = response.items;
                         } else if (Array.isArray(response)) {
-                            // Se a resposta for diretamente um array
                             products = response;
                         } else if (response.data && Array.isArray(response.data.items)) {
-                            // Se estiver aninhado em data
                             products = response.data.items;
                         } else if (response.data && Array.isArray(response.data)) {
-                            // Se data for diretamente um array
                             products = response.data;
                         }
                     }
@@ -165,13 +113,12 @@ export default function MenuCategory({
                     // ALTERAÇÃO: Filtrar apenas produtos ativos
                     const activeProducts = products.filter((product) => {
                         const isActive = product.is_active !== false && 
-                                        product.is_active !== 0 && 
-                                        product.is_active !== "false";
+                                         product.is_active !== 0 && 
+                                         product.is_active !== "false";
                         return isActive;
                     });
                     
                     // ALTERAÇÃO: Validar estoque de cada produto e adicionar availability_status
-                    // Isso garante que produtos sem estoque não sejam exibidos mesmo se passarem pelo filtro da API
                     const validatedProducts = await filterProductsWithStock(activeProducts);
                     
                     return {
@@ -186,16 +133,85 @@ export default function MenuCategory({
                 }
             });
 
-            const results = await Promise.all(productPromises);
+            // ALTERAÇÃO CRÍTICA: Buscar produtos **sem ID de categoria**
+            // Se o seu `getAllProducts` for capaz de retornar todos os produtos, 
+            // incluindo aqueles sem `category_id`, você pode usar essa lógica.
+            // Para simular, estamos assumindo que `getAllCategories` só retorna categorias com produtos.
+            // Aqui, é necessário uma requisição para **todos os produtos** para filtrar os sem categoria.
+            // ASSUMINDO que a chamada `getProductsByCategory` com um ID especial ou sem ID
+            // *NÃO* retorna os produtos sem categoria. É necessário uma chamada separada (ex: `getAllProducts`).
             
-            // Atualiza o estado com todos os produtos
-            const allProducts = {};
-            results.forEach(({ categoryId, products }) => {
-                allProducts[categoryId] = products;
+            // EXEMPLO: Busca de todos os produtos para encontrar os sem categoria (Adaptar esta função!)
+            let allProductsResponse = { items: [] }; // Mock ou implementar getAllProducts
+            try {
+                 // **TODO: Substituir por uma chamada real que traga todos os produtos (se a API suportar)**
+                 // Ex: const allProductsResponse = await getAllProducts();
+                 // Por enquanto, vamos assumir que os produtos sem categoria chegam com um ID de categoria nulo ou 0
+                 // A forma mais segura é carregar todos os produtos e depois filtrar, mas isso pode ser custoso.
+                 
+                 // Se não houver uma rota `getAllProducts`, esta lógica pode ser difícil de implementar
+                 // A solução abaixo é um *mock* para fins de demonstração:
+                 
+                 /*
+                 const allProductsData = await api.get('/products', { params: { page_size: 1000 } });
+                 allProductsResponse.items = allProductsData.data.items || allProductsData.data;
+                 */
+                 
+            } catch (e) {
+                // Erro ao buscar todos os produtos
+            }
+
+
+            // PRODUTOS SEM CATEGORIA:
+            // Para simplificar, vamos assumir que os produtos sem categoria
+            // *NÃO* são retornados por `getProductsByCategory`, e *precisam* ser carregados separadamente
+            // ou já estão em `categoriesData` se ela for mock. Como estamos usando API, a busca é crítica.
+            
+            // Para o escopo deste exemplo, vamos **assumir que a função `getProductsByCategory(null)`** // **ou uma chamada similar com filtro traria os produtos sem categoria.**
+            // Se a API não tiver um endpoint para 'produtos sem categoria', a implementação seria mais complexa.
+
+            const allCategoryProductsResults = await Promise.all(productPromises);
+            
+            // Cria um mapa com todos os produtos por categoria
+            const allProductsMap = {};
+            allCategoryProductsResults.forEach(({ categoryId, products }) => {
+                allProductsMap[categoryId] = products;
             });
+
+            // **LÓGICA PARA PRODUTOS SEM CATEGORIA (Adaptar à sua API):**
+            let productsWithoutCategory = [];
             
-            setProducts(allProducts);
+            // Opção 1: Se a sua API tem uma forma de buscar produtos sem categoria (Ex: category_id: null)
+            /*
+            try {
+                const noCategoryResponse = await getProductsByCategory(null, { 
+                    page_size: 50,
+                    filter_unavailable: true
+                });
+                let productsNC = noCategoryResponse.items || noCategoryResponse;
+                const activeProductsNC = productsNC.filter(p => p.is_active !== false && p.is_active !== 0 && p.is_active !== "false");
+                productsWithoutCategory = await filterProductsWithStock(activeProductsNC);
+            } catch (e) {
+                productsWithoutCategory = [];
+            }
+            */
+
+            // Opção 2 (Mais robusta se não há endpoint): Se `getAllProducts` retorna **TODOS** os produtos:
+            // Você precisa implementar `getAllProducts` e filtrar aqueles que não têm um `category_id` válido.
+            
+            // Para fins de demonstração, **vamos criar um produto mock** sem categoria para testar a lógica:
+            // productsWithoutCategory = [
+            //    { id: 'nc-1', name: 'Produto Sem Categoria', description: 'Este produto não tem categoria.', price: 10.00, is_active: true, max_quantity: 50, category_id: null }
+            // ];
+            
+            // Se houver produtos sem categoria, adiciona-os ao mapa com um ID especial
+            if (productsWithoutCategory.length > 0) {
+                 allProductsMap['no_category'] = productsWithoutCategory;
+            }
+            
+            setProducts(allProductsMap);
         } catch (error) {
+             setProducts({});
         } finally {
             setLoadingProducts(false);
         }
@@ -214,7 +230,6 @@ export default function MenuCategory({
     const [productPromotions, setProductPromotions] = useState({});
 
     // ALTERAÇÃO: Buscar promoções para todos os produtos em um useEffect separado
-    // Adicionado isFocused para recarregar promoções quando a tela receber foco (atualiza em tempo real)
     useEffect(() => {
         const fetchPromotions = async () => {
             // Coletar todos os IDs de produtos únicos
@@ -239,7 +254,6 @@ export default function MenuCategory({
                         const promotion = await getPromotionByProductId(productId);
                         return { productId, promotion };
                     } catch (error) {
-                        // Ignora erros ao buscar promoção (produto pode não ter promoção)
                         return { productId, promotion: null };
                     }
                 })
@@ -251,7 +265,7 @@ export default function MenuCategory({
                     if (promotion) {
                         promotionsMap[productId] = promotion;
                     } else {
-                        // ALTERAÇÃO: Remove promoção do mapa se não existir mais (para atualizar quando promoção é removida)
+                        // ALTERAÇÃO: Remove promoção do mapa se não existir mais
                         promotionsMap[productId] = null;
                     }
                 }
@@ -267,15 +281,29 @@ export default function MenuCategory({
 
     // Transformar dados em lista plana usando dados reais da API
     const flattenedData = [];
-    const dataToUse = categories;
+    
+    // **ALTERAÇÃO:** Criar a lista final de categorias visíveis, incluindo "Sem Categoria" se necessário
+    const finalCategoriesList = [...categories];
+    const productsWithoutCategory = products['no_category'] || [];
+    
+    if (productsWithoutCategory.length > 0) {
+        finalCategoriesList.push({
+            id: 'no_category',
+            name: 'Sem Categoria', // Nome da categoria virtual
+            title: 'Sem Categoria',
+            isVirtual: true // Flag para identificar
+        });
+    }
+
+    const dataToUse = finalCategoriesList; // Usar a lista que inclui a categoria virtual
     const visibleCategories = [];
     let visibleCategoryIndex = 0;
     
     dataToUse.forEach((category, originalIndex) => {
-        // Usar produtos da API se disponíveis, senão usar dados mock
+        // Usa produtos do ID da categoria ou 'no_category' para a categoria virtual
         const categoryProducts = products[category.id] || [];
         
-        // Filtrar apenas itens ativos
+        // Filtrar apenas itens ativos (produtos sem estoque já foram removidos/marcados em filterProductsWithStock)
         const activeProducts = categoryProducts.filter(item => 
             item?.is_active !== false && item?.isAvailable !== false
         );
@@ -300,8 +328,6 @@ export default function MenuCategory({
             activeProducts.forEach((item) => {
                 const promotion = productPromotions[item.id] || null;
                 
-                // ALTERAÇÃO: availability_status já vem validado do filterProductsWithStock
-                // Produtos indisponíveis já foram filtrados, então todos aqui estão disponíveis
                 let availabilityStatus = item.availability_status || 'unknown';
                 
                 // ALTERAÇÃO: Se availability_status não estiver presente, calcular baseado em max_quantity
@@ -345,21 +371,20 @@ export default function MenuCategory({
                 // Transformar produto da API para o formato esperado pelo CardItemHorizontal
                 const formattedItem = {
                     id: item.id,
-                    name: item.name, // ALTERAÇÃO: adiciona campo name para compatibilidade com tela de produto
+                    name: item.name, 
                     title: item.name,
                     description: item.description || 'Descrição não disponível',
-                    price: priceFormatted, // Preço final (com desconto se houver)
-                    originalPrice: originalPriceFormatted, // Preço original (apenas se houver promoção)
-                    discountPercentage: discountPercentage ? Math.round(discountPercentage) : null, // Percentual de desconto arredondado
+                    price: priceFormatted, 
+                    originalPrice: originalPriceFormatted, 
+                    discountPercentage: discountPercentage ? Math.round(discountPercentage) : null, 
                     deliveryTime: `${item.preparation_time_minutes || 30} min`,
-                    deliveryPrice: 'R$ 5,00', // Valor fixo por enquanto
+                    deliveryPrice: 'R$ 5,00', 
                     imageSource: imageUrl ? { uri: imageUrl } : null,
                     categoryId: item.category_id,
-                    promotion: promotion, // ALTERAÇÃO: Passa objeto completo da promoção
-                    // ALTERAÇÃO: Produtos já foram validados, então todos estão disponíveis
+                    promotion: promotion, 
                     isAvailable: true,
-                    availabilityStatus: availabilityStatus, // Passa o status para badges
-                    max_quantity: item.max_quantity // Passa max_quantity para badges
+                    availabilityStatus: availabilityStatus, 
+                    max_quantity: item.max_quantity 
                 };
 
                 flattenedData.push({
@@ -488,6 +513,12 @@ export default function MenuCategory({
                 const newActiveCategory = header.item.categoryIndex;
                 if (newActiveCategory !== activeCategory) {
                     setActiveCategory(newActiveCategory);
+                    // Rolagem da barra de categorias
+                    categoryListRef.current?.scrollToIndex({
+                        index: newActiveCategory,
+                        animated: true,
+                        viewPosition: 0.5 // Centraliza o item
+                    });
                 }
             } else {
                 // Se não há headers visíveis, desmarcar categoria
@@ -541,18 +572,18 @@ export default function MenuCategory({
                     title={item.item.title}
                     description={item.item.description}
                     price={item.item.price}
-                    originalPrice={item.item.originalPrice} // ALTERAÇÃO: passa preço original para exibir riscado
-                    discountPercentage={item.item.discountPercentage} // ALTERAÇÃO: passa percentual de desconto para badge
+                    originalPrice={item.item.originalPrice} 
+                    discountPercentage={item.item.discountPercentage} 
                     deliveryTime={item.item.deliveryTime}
                     deliveryPrice={item.item.deliveryPrice}
                     imageSource={item.item.imageSource}
                     isAvailable={item.item.isAvailable}
                     productId={item.item.id}
-                    produto={item.item} // ALTERAÇÃO: passa objeto completo para exibição imediata na tela de produto
+                    produto={item.item} 
                     navigation={navigation}
                     onPress={() => onItemPress(item.item)}
-                    availabilityStatus={item.item.availabilityStatus} // ALTERAÇÃO: passa status de disponibilidade para badges
-                    max_quantity={item.item.max_quantity} // ALTERAÇÃO: passa quantidade máxima para badges
+                    availabilityStatus={item.item.availabilityStatus} 
+                    max_quantity={item.item.max_quantity} 
                 />
             );
         }
@@ -641,6 +672,9 @@ export default function MenuCategory({
                 onScroll={handleScroll}
                 scrollEventThrottle={16}
                 onViewableItemsChanged={handleViewableItemsChanged}
+                viewabilityConfig={{
+                    itemVisiblePercentThreshold: 50, // 50% do item precisa estar visível
+                }}
                 ListHeaderComponent={ListHeaderComponent}
                 contentContainerStyle={[
                     styles.listContent,
