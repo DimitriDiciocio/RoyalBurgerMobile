@@ -11,10 +11,13 @@ export default function CardItemVertical({
                                      deliveryTime = "40 - 50 min",
                                      deliveryPrice = "R$5,00",
                                      imageSource = null,
-                                     isAvailable = true, // ALTERAÇÃO: adicionar verificação de disponibilidade
+                                     isAvailable = true, // ALTERAÇÃO: disponibilidade do produto (padrão: true)
                                      onPress = () => {},
                                      availabilityStatus = null, // ALTERAÇÃO: status de disponibilidade para badges
-                                     max_quantity = null // ALTERAÇÃO: quantidade máxima disponível
+                                     max_quantity = null, // ALTERAÇÃO: quantidade máxima disponível
+                                     productId = null, // ALTERAÇÃO: ID do produto para navegação
+                                     produto = null, // ALTERAÇÃO: objeto completo do produto
+                                     navigation = null // ALTERAÇÃO: objeto de navegação
                                  }) {
     // ALTERAÇÃO: Função para renderizar badge de desconto
     const renderDiscountBadge = () => {
@@ -88,10 +91,41 @@ export default function CardItemVertical({
         return 'R$0,00';
     }, [price]);
 
+    // ALTERAÇÃO: Handler de navegação (igual ao CardItemHorizontal)
+    const handlePress = () => {
+        // Se não tiver navegação, usa onPress padrão
+        if (!navigation) {
+            onPress();
+            return;
+        }
+        
+        // Se tiver objeto produto completo, passa ele junto com productId
+        if (produto || productId) {
+            const normalizedProduto = produto ? {
+                ...produto,
+                name: produto.name || produto.title || title,
+                id: produto.id || productId
+            } : {
+                id: productId,
+                name: title,
+                description,
+                price,
+                imageSource
+            };
+            
+            navigation.navigate('Produto', { 
+                produto: normalizedProduto,
+                productId: productId || normalizedProduto?.id
+            });
+        } else {
+            onPress();
+        }
+    };
+
     return (
         <TouchableOpacity 
             style={[styles.container, !isAvailable && styles.unavailable]} 
-            onPress={onPress}
+            onPress={handlePress}
             disabled={!isAvailable}
         >
             <View style={styles.imageWrapper}>

@@ -1,8 +1,7 @@
 import React, { useCallback } from 'react';
-import {View, Text, StyleSheet, FlatList, Alert} from 'react-native';
+import {View, Text, StyleSheet, FlatList} from 'react-native';
 import CardItemVertical from "./CardItemVertical";
 import TimerPromotions from "./TimerPromotions";
-import { checkProductAvailability } from '../services/productService';
 
 export default function ViewCardItem({
                                          title = "Seção",
@@ -14,32 +13,13 @@ export default function ViewCardItem({
     const handleCardPress = useCallback(async (item) => {
         if (!navigation) return;
         
-        const productId = item.id || item.originalProductId;
+        // ALTERAÇÃO: Removida verificação redundante de disponibilidade
+        // Os produtos já foram filtrados com filterProductsWithStock antes de exibir
+        // Se o produto está sendo exibido, é porque tem estoque disponível
+        // A validação de estoque será feita na tela de produto ao adicionar à cesta
         
-        if (!productId) {
-            navigation.navigate('Produto', { produto: item });
-            return;
-        }
-        
-        try {
-            // Verificar disponibilidade antes de navegar
-            const availability = await checkProductAvailability(productId, 1);
-            
-            if (!availability.is_available) {
-                Alert.alert(
-                    'Produto Indisponível',
-                    availability.message || 'Este produto está temporariamente indisponível devido à falta de ingredientes em estoque.',
-                    [{ text: 'OK' }]
-                );
-                return;
-            }
-            
-            // Se disponível, navega normalmente
-            navigation.navigate('Produto', { produto: item });
-        } catch (error) {
-            // Em caso de erro na verificação, permite navegar (fail-safe)
-            navigation.navigate('Produto', { produto: item });
-        }
+        // Navega diretamente para a tela de produto
+        navigation.navigate('Produto', { produto: item, productId: item.id || item.originalProductId });
     }, [navigation]);
 
     const renderCard = useCallback(({item}) => (

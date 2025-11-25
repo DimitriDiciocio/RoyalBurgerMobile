@@ -543,10 +543,7 @@ export default function Pagamento({ navigation }) {
             valueInCents = reais * 100 + cents;
         }
         
-        // Se ultrapassar R$ 1.000,00, não permite
-        if (valueInCents >= 100001) {
-            return; // Não atualiza
-        }
+        // ALTERAÇÃO: Removido limite de R$ 1.000,00 - agora permite valores ilimitados
         
         // Remove zeros à esquerda desnecessários
         let cleanDigits = allNumbers;
@@ -557,8 +554,8 @@ export default function Pagamento({ navigation }) {
             cleanDigits = cleanReais ? cleanReais + cents : cents;
         }
         
-        // Limita a 6 dígitos (R$ 1.000,00 = 100000 centavos)
-        const limited = cleanDigits.slice(0, 6);
+        // ALTERAÇÃO: Removido limite de 6 dígitos - permite entrada ilimitada
+        const limited = cleanDigits;
         
         // Atualiza ref e estado
         trocoValueRef.current = formatCurrency(limited);
@@ -583,9 +580,9 @@ export default function Pagamento({ navigation }) {
         }
         
         const totalInCents = Math.round(calculateFinalTotal() * 100);
-        const maxCents = 100001; // R$ 1.000,01 (aceita até R$ 1.000,00)
+        // ALTERAÇÃO: Removido limite máximo - aceita qualquer valor acima do total
         
-        return valueInCents >= totalInCents && valueInCents < maxCents;
+        return valueInCents >= totalInCents;
     };
 
     const formatEndereco = (endereco) => {

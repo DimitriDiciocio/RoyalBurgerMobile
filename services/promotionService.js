@@ -17,14 +17,18 @@ import api from "./api";
  */
 export const getAllPromotions = async (options = {}) => {
   try {
-    console.log("Obtendo promoções ativas com opções:", options);
+    // ALTERAÇÃO: Removido console.log para evitar poluição do console
     const { include_expired = false } = options;
     const response = await api.get("/promotions", {
       params: { include_expired },
     });
     return response.data;
   } catch (error) {
-    console.log("Erro ao obter promoções:", error);
+    // ALTERAÇÃO: Log apenas em desenvolvimento
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error("Erro ao obter promoções:", error);
+    }
     throw error;
   }
 };
@@ -36,11 +40,15 @@ export const getAllPromotions = async (options = {}) => {
  */
 export const getPromotionById = async (promotionId) => {
   try {
-    console.log("Obtendo promoção por ID:", promotionId);
+    // ALTERAÇÃO: Removido console.log para evitar poluição do console
     const response = await api.get(`/promotions/${promotionId}`);
     return response.data;
   } catch (error) {
-    console.log("Erro ao obter promoção:", error);
+    // ALTERAÇÃO: Log apenas em desenvolvimento
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error("Erro ao obter promoção:", error);
+    }
     throw error;
   }
 };
@@ -52,14 +60,19 @@ export const getPromotionById = async (promotionId) => {
  */
 export const getPromotionByProductId = async (productId) => {
   try {
-    console.log("Obtendo promoção do produto:", productId);
+    // ALTERAÇÃO: Removido console.log para evitar poluição do console
     const response = await api.get(`/promotions/product/${productId}`);
     return response.data;
   } catch (error) {
-    console.log("Erro ao obter promoção do produto:", error);
+    // ALTERAÇÃO: Removido console.log - erro 404 é esperado quando produto não tem promoção
     // Se não encontrar promoção, retorna null (não é erro)
     if (error.response && error.response.status === 404) {
       return null;
+    }
+    // ALTERAÇÃO: Log apenas em caso de erro real (não 404)
+    const isDev = __DEV__;
+    if (isDev) {
+      console.error("Erro ao obter promoção do produto:", error);
     }
     throw error;
   }
