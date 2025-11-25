@@ -400,6 +400,30 @@ export default function MenuCategory({
     });
 
 
+    // ALTERAÇÃO: Handler para quando scrollToIndex falha (índice fora da tela)
+    const handleScrollToIndexFailed = (info) => {
+        const wait = new Promise(resolve => setTimeout(resolve, 500));
+        wait.then(() => {
+            flatListRef.current?.scrollToIndex({ 
+                index: info.index, 
+                animated: true,
+                viewOffset: 0,
+            });
+        });
+    };
+
+    // ALTERAÇÃO: Handler para quando scrollToIndex falha na lista de categorias
+    const handleCategoryScrollToIndexFailed = (info) => {
+        const wait = new Promise(resolve => setTimeout(resolve, 500));
+        wait.then(() => {
+            categoryListRef.current?.scrollToIndex({ 
+                index: info.index, 
+                animated: true,
+                viewPosition: 0.5,
+            });
+        });
+    };
+
     const scrollToCategory = async (categoryIndex) => {
         // Atualizar categoria imediatamente
         setActiveCategory(categoryIndex);
@@ -549,6 +573,7 @@ export default function MenuCategory({
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
                                 contentContainerStyle={styles.categoriesContainer}
+                                onScrollToIndexFailed={handleCategoryScrollToIndexFailed}
                             />
                         </View>
                     )}
@@ -660,6 +685,7 @@ export default function MenuCategory({
                         horizontal
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.categoriesContainer}
+                        onScrollToIndexFailed={handleCategoryScrollToIndexFailed}
                     />
                 </Animated.View>
             )}
@@ -688,6 +714,7 @@ export default function MenuCategory({
                 removeClippedSubviews={false}
                 maxToRenderPerBatch={10}
                 windowSize={10}
+                onScrollToIndexFailed={handleScrollToIndexFailed}
             />
         </View>
     );

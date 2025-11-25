@@ -80,6 +80,17 @@ export default function CarouselImg() {
         index,
     });
 
+    // ALTERAÇÃO: Handler para quando scrollToIndex falha (índice fora da tela)
+    const handleScrollToIndexFailed = (info) => {
+        const wait = new Promise(resolve => setTimeout(resolve, 500));
+        wait.then(() => {
+            flatListRef.current?.scrollToIndex({ 
+                index: info.index, 
+                animated: true,
+            });
+        });
+    };
+
     const renderItem = ({ item }) => (
         <View style={styles.imageContainer}>
             <Image
@@ -107,6 +118,7 @@ export default function CarouselImg() {
                 bounces={false}
                 scrollsToTop={false}
                 getItemLayout={getItemLayout}
+                onScrollToIndexFailed={handleScrollToIndexFailed}
                 onScrollBeginDrag={onScrollBeginDrag}
                 onMomentumScrollEnd={onScrollEnd}
                 keyExtractor={(item, index) => index.toString()}

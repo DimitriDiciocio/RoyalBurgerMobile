@@ -376,7 +376,8 @@ function HomeScreen({ navigation }) {
         }
     };
 
-    // Carrega dados das seções da home (seguindo o padrão do web)
+    // ALTERAÇÃO: Carrega dados das seções da home apenas uma vez ao montar o componente
+    // Removido isFocused da dependência para evitar recarregamentos desnecessários que reiniciam o carrossel
     useEffect(() => {
         const loadHomeSections = async () => {
             try {
@@ -434,7 +435,7 @@ function HomeScreen({ navigation }) {
                 const recentlyAddedProducts = await loadRecentlyAddedProducts();
                 setComboData(recentlyAddedProducts);
                 
-                // ALTERAÇÃO: Carregar promoções especiais
+                // ALTERAÇÃO: Carregar promoções especiais apenas uma vez
                 const promotionsData = await loadPromotionsSection();
                 setPromotionsData(promotionsData.products);
                 setPromoLongestExpiry(promotionsData.longestExpiry);
@@ -450,7 +451,9 @@ function HomeScreen({ navigation }) {
         };
 
         loadHomeSections();
-    }, [isFocused]);
+        // ALTERAÇÃO: Removido isFocused da dependência - carrega apenas uma vez ao montar
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // ALTERAÇÃO: Calcula tempo de expiração da promoção com maior validade
     const getPromoEndTime = () => {
