@@ -17,6 +17,7 @@ import { getAllCategories, getProductsByCategory } from '../services';
 import { filterProductsWithStock } from '../services/productService';
 import { getPromotionByProductId } from '../services/promotionService';
 import api from '../services/api';
+import { getProductImageSource, getProductImageUrl, preloadImages } from '../utils/imageUtils';
 
 
 export default function MenuCategory({
@@ -210,6 +211,30 @@ export default function MenuCategory({
             }
             
             setProducts(allProductsMap);
+            
+            // ALTERAÇÃO: Pré-carregar todas as imagens dos produtos de categoria
+            const allCategoryImageUrls = [];
+            
+            // Coletar URLs de imagens de todos os produtos em todas as categorias
+            Object.values(allProductsMap).forEach(categoryProducts => {
+                if (Array.isArray(categoryProducts)) {
+                    categoryProducts.forEach(product => {
+                        if (product?.id) {
+                            const imageUrl = getProductImageUrl(product);
+                            if (imageUrl) {
+                                allCategoryImageUrls.push(imageUrl);
+                            }
+                        }
+                    });
+                }
+            });
+            
+            // Pré-carregar todas as imagens em paralelo (sem bloquear a UI)
+            if (allCategoryImageUrls.length > 0) {
+                preloadImages(allCategoryImageUrls).catch(() => {
+                    // Erro silencioso - as imagens ainda serão carregadas normalmente quando exibidas
+                });
+            }
         } catch (error) {
              setProducts({});
         } finally {
@@ -341,9 +366,8 @@ export default function MenuCategory({
                     }
                 }
                 
-                const imageUrl = item?.id
-                    ? `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${item.id}`
-                    : null;
+                // ALTERAÇÃO: Usa função utilitária centralizada para construir URL da imagem
+                const imageSource = getProductImageSource(item);
                 
                 // ALTERAÇÃO: Calcular preço com desconto se houver promoção
                 const basePrice = parseFloat(item.price || 0);
@@ -379,7 +403,7 @@ export default function MenuCategory({
                     discountPercentage: discountPercentage ? Math.round(discountPercentage) : null, 
                     deliveryTime: `${item.preparation_time_minutes || 30} min`,
                     deliveryPrice: 'R$ 5,00', 
-                    imageSource: imageUrl ? { uri: imageUrl } : null,
+                    imageSource: imageSource, // ALTERAÇÃO: Usa função utilitária centralizada
                     categoryId: item.category_id,
                     promotion: promotion, 
                     isAvailable: true,

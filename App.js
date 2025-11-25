@@ -33,6 +33,7 @@ import { getAllPromotions } from "./services/promotionService";
 import { BasketProvider, useBasket } from "./contexts/BasketContext";
 import { RECENTLY_ADDED_DAYS } from "./config/constants";
 import api from "./services/api";
+import { getProductImageSource, getProductImageUrl, preloadImages } from "./utils/imageUtils";
 
 const Stack = createNativeStackNavigator();
 
@@ -210,24 +211,8 @@ function HomeScreen({ navigation }) {
         const priceFormatted = `R$ ${finalPrice.toFixed(2).replace('.', ',')}`;
         const originalPriceFormatted = `R$ ${basePrice.toFixed(2).replace('.', ',')}`;
         
-        // Monta URL da imagem - usa o baseURL da API
-        let imageUrl = null;
-        if (product.image_url) {
-            // Se a URL já contém http, usa direto
-            if (product.image_url.startsWith('http')) {
-                imageUrl = product.image_url;
-            } else if (product.id) {
-                // Usa o endpoint de imagem da API (igual ao MenuCategory)
-                const baseUrl = api.defaults.baseURL.replace('/api', '');
-                imageUrl = `${baseUrl}/api/products/image/${product.id}`;
-            } else {
-                // Fallback: constrói URL manualmente
-                const baseUrl = api.defaults.baseURL.replace('/api', '');
-                imageUrl = product.image_url.startsWith('/') 
-                    ? `${baseUrl}${product.image_url}` 
-                    : `${baseUrl}/api/${product.image_url}`;
-            }
-        }
+        // ALTERAÇÃO: Usa função utilitária centralizada para construir URL da imagem
+        const imageSource = getProductImageSource(product);
         
         // Limitar tamanho do nome e descrição como no web
         const MAX_NAME_LENGTH = 200;
@@ -246,7 +231,7 @@ function HomeScreen({ navigation }) {
             discountPercentage: discountPercentage ? Math.round(discountPercentage) : null, // Percentual de desconto arredondado
             deliveryTime: `${product.preparation_time_minutes || 30} - ${(product.preparation_time_minutes || 30) + 10} min`,
             deliveryPrice: "R$ 5,00", // Valor fixo por enquanto, pode vir das settings depois
-            imageSource: imageUrl ? { uri: imageUrl } : null,
+            imageSource: imageSource, // ALTERAÇÃO: Usa função utilitária centralizada
             expires_at: promotion?.expires_at || null, // Para o timer de promoção
             promotion: promotion, // ALTERAÇÃO: Passa objeto completo da promoção
             // ALTERAÇÃO: Produtos que passam por filterProductsWithStock são sempre disponíveis
@@ -384,6 +369,7 @@ function HomeScreen({ navigation }) {
                 setLoadingSections(true);
                 
                 // ALTERAÇÃO: Carregar produtos mais pedidos baseados em pedidos pagos reais do banco de dados
+                let formattedMostOrdered = [];
                 try {
                     // ALTERAÇÃO: Buscar produtos mais pedidos da API (já ordenados por quantidade de pedidos pagos)
                     const mostOrderedResponse = await getMostOrderedProducts({
@@ -394,9 +380,7 @@ function HomeScreen({ navigation }) {
                     const mostOrderedProducts = mostOrderedResponse?.items || (Array.isArray(mostOrderedResponse) ? mostOrderedResponse : []);
                     
                     // ALTERAÇÃO: Se não houver produtos mais pedidos no banco, não exibir a seção
-                    if (!mostOrderedProducts || mostOrderedProducts.length === 0) {
-                        setMostOrderedData([]);
-                    } else {
+                    if (mostOrderedProducts && mostOrderedProducts.length > 0) {
                         // ALTERAÇÃO: Filtrar apenas produtos ativos
                         const activeProducts = mostOrderedProducts.filter((product) => {
                             const isActive = 
@@ -414,13 +398,13 @@ function HomeScreen({ navigation }) {
                         
                         // ALTERAÇÃO: Remover busca de promoções - causa re-renderizações desnecessárias
                         // Produtos já mostram seu preço atual sem necessidade de verificar promoção aqui
-                        const formattedProducts = topProducts
+                        formattedMostOrdered = topProducts
                             .map(product => formatProductForCard(product, null))
                             .filter(product => product !== null);
-                        
-                        // ALTERAÇÃO: Só definir dados se houver produtos formatados (com estoque disponível)
-                        setMostOrderedData(formattedProducts);
                     }
+                    
+                    // ALTERAÇÃO: Definir estado com os produtos formatados
+                    setMostOrderedData(formattedMostOrdered);
                 } catch (error) {
                     // ALTERAÇÃO: Em caso de erro, não exibir a seção (array vazio)
                     // A API pode retornar erro se não houver pedidos pagos ainda
@@ -439,6 +423,44 @@ function HomeScreen({ navigation }) {
                 const promotionsData = await loadPromotionsSection();
                 setPromotionsData(promotionsData.products);
                 setPromoLongestExpiry(promotionsData.longestExpiry);
+                
+                // ALTERAÇÃO: Pré-carregar todas as imagens da home para garantir que estejam disponíveis
+                // Coletar URLs de imagens de todas as seções já carregadas
+                const allImageUrls = [];
+                
+                // Coletar dos produtos mais pedidos
+                if (formattedMostOrdered && formattedMostOrdered.length > 0) {
+                    formattedMostOrdered.forEach(product => {
+                        if (product?.imageSource?.uri) {
+                            allImageUrls.push(product.imageSource.uri);
+                        }
+                    });
+                }
+                
+                // Coletar das novidades
+                if (recentlyAddedProducts && recentlyAddedProducts.length > 0) {
+                    recentlyAddedProducts.forEach(product => {
+                        if (product?.imageSource?.uri) {
+                            allImageUrls.push(product.imageSource.uri);
+                        }
+                    });
+                }
+                
+                // Coletar das promoções
+                if (promotionsData.products && promotionsData.products.length > 0) {
+                    promotionsData.products.forEach(product => {
+                        if (product?.imageSource?.uri) {
+                            allImageUrls.push(product.imageSource.uri);
+                        }
+                    });
+                }
+                
+                // Pré-carregar todas as imagens em paralelo (sem bloquear a UI)
+                if (allImageUrls.length > 0) {
+                    preloadImages(allImageUrls).catch(() => {
+                        // Erro silencioso - as imagens ainda serão carregadas normalmente quando exibidas
+                    });
+                }
             } catch (error) {
                 // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
                 const isDev = __DEV__;

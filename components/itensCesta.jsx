@@ -88,8 +88,12 @@ export default function ItensCesta({
                         source={{ uri: item.image }}
                         style={styles.productImage}
                         resizeMode="cover"
-                        onError={(error) => {
-                            console.log('Erro ao carregar imagem:', error.nativeEvent.error);
+                        onError={() => {
+                            // ALTERAÇÃO: Log apenas em desenvolvimento
+                            const isDev = __DEV__;
+                            if (isDev) {
+                                console.log('Erro ao carregar imagem do produto:', item.image);
+                            }
                         }}
                     />
                 ) : (

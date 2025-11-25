@@ -792,17 +792,21 @@ import api from '../services/api';
                                 <ActivityIndicator size="large" color="#000" />
                             ) : (
                                 productData?.image_url ? (
-                                    <Image
-                                        source={{ uri: `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}` }}
-                                        style={styles.centerImage}
-                                        resizeMode="contain"
-                                    />
+                                    <View style={styles.imageWrapper}>
+                                        <Image
+                                            source={{ uri: `${api.defaults.baseURL.replace('/api', '')}/api/products/image/${productData.id}` }}
+                                            style={styles.centerImage}
+                                            resizeMode="cover"
+                                        />
+                                    </View>
                                 ) : produto?.imageSource ? (
-                                    <Image
-                                        source={produto.imageSource}
-                                        style={styles.centerImage}
-                                        resizeMode="contain"
-                                    />
+                                    <View style={styles.imageWrapper}>
+                                        <Image
+                                            source={produto.imageSource}
+                                            style={styles.centerImage}
+                                            resizeMode="cover"
+                                        />
+                                    </View>
                                 ) : (
                                     <View style={styles.centerImage} />
                                 )
@@ -1154,6 +1158,12 @@ import api from '../services/api';
             alignItems: 'center',
             justifyContent: 'center',
             paddingTop: 20,
+        },
+        imageWrapper: {
+            width: 280,
+            height: 230,
+            borderRadius: 16, // ALTERAÇÃO: bordas arredondadas na imagem
+            overflow: 'hidden', // ALTERAÇÃO: necessário para borderRadius funcionar
         },
         centerImage: {
             width: 280,

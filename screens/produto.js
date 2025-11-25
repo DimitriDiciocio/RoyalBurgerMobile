@@ -867,11 +867,20 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                         
                         <View style={styles.centerImageContainer}>
                             {productImageSource ? (
-                                <Image
-                                    source={productImageSource}
-                                    style={styles.centerImage}
-                                    resizeMode="contain"
-                                />
+                                <View style={styles.imageWrapper}>
+                                    <Image
+                                        source={productImageSource}
+                                        style={styles.centerImage}
+                                        resizeMode="cover"
+                                        onError={() => {
+                                            // ALTERAÇÃO: Log apenas em desenvolvimento
+                                            const isDev = __DEV__;
+                                            if (isDev) {
+                                                console.log('Erro ao carregar imagem do produto:', productImageSource?.uri);
+                                            }
+                                        }}
+                                    />
+                                </View>
                             ) : null}
                         </View>
                     </View>
@@ -1435,6 +1444,12 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
             alignItems: 'center',
             justifyContent: 'center',
             paddingTop: 20,
+        },
+        imageWrapper: {
+            width: 280,
+            height: 230,
+            borderRadius: 16, // ALTERAÇÃO: bordas arredondadas na imagem
+            overflow: 'hidden', // ALTERAÇÃO: necessário para borderRadius funcionar
         },
         centerImage: {
             width: 280,
