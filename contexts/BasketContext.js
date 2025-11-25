@@ -173,18 +173,27 @@ export const BasketProvider = ({ children }) => {
                         item_subtotal: item.item_subtotal
                     });
                     
-                    // Calcular total do item: preço do produto + extras + modificações base
+                    // ALTERAÇÃO: SEMPRE usar item_subtotal da API quando disponível
+                    // item_subtotal JÁ inclui: desconto de promoção + extras + modificações de base
+                    // Só calcular manualmente se item_subtotal não existir ou for inválido
+                    const apiSubtotal = parseFloat(item.item_subtotal || 0);
+                    
+                    // Preço unitário do produto (pode ser usado para display, mas não para cálculo de total)
                     const productPrice = parseFloat(item.product?.price || 0);
                     const itemQuantity = item.quantity || 1;
-                    const basePrice = productPrice * itemQuantity;
+                    
+                    // Se item_subtotal existe e é válido, usa ele diretamente
+                    // Caso contrário, calcula manualmente como fallback
+                    let finalTotal = apiSubtotal;
+                    
+                    if (apiSubtotal <= 0) {
+                        // Fallback: calcular manualmente apenas se API não forneceu subtotal
+                        const basePrice = productPrice * itemQuantity;
 
-                        // ALTERAÇÃO: Calcular preço dos extras (buscar preço de várias fontes possíveis + cache)
                         const extrasPrice = (item.extras || []).reduce((sum, extra) => {
                             const ingredientId = extra.ingredient_id || extra.id;
-                            // ALTERAÇÃO: Usar função melhorada que busca no cache
                             let extraPrice = findIngredientPrice(extra, ingredientId);
                             
-                            // Se não encontrou no cache, tentar campos específicos
                             if (extraPrice === 0) {
                                 const priceCandidates = [
                                     extra.unit_price,
@@ -210,57 +219,43 @@ export const BasketProvider = ({ children }) => {
                             return sum + (extraPrice * extraQuantity);
                         }, 0);
 
-                    // ALTERAÇÃO: Calcular preço das modificações base (buscar preço de várias fontes possíveis + cache)
-                    // IMPORTANTE: Apenas modificações positivas (adições) alteram o preço
-                    // Modificações negativas (remoções) não alteram o preço
-                    const baseModsPrice = (item.base_modifications || []).reduce((sum, mod) => {
-                        const delta = parseFloat(mod.delta || 0);
-                        
-                        // ALTERAÇÃO: Apenas processar se delta for positivo (adição)
-                        // Remoções (delta negativo) não alteram o preço
-                        if (delta <= 0) {
-                            return sum;
-                        }
-                        
-                        const ingredientId = mod.ingredient_id || mod.id;
-                        // ALTERAÇÃO: Usar função melhorada que busca no cache
-                        let modPrice = findIngredientPrice(mod, ingredientId);
-                        
-                        // Se não encontrou no cache, tentar campos específicos
-                        if (modPrice === 0) {
-                            const priceCandidates = [
-                                mod.unit_price,
-                                mod.ingredient_price,
-                                mod.price,
-                                mod.additionalPrice,
-                                mod.additional_price,
-                                mod.extra_price
-                            ];
+                        const baseModsPrice = (item.base_modifications || []).reduce((sum, mod) => {
+                            const delta = parseFloat(mod.delta || 0);
                             
-                            for (const candidate of priceCandidates) {
-                                if (candidate !== undefined && candidate !== null) {
-                                    const priceNum = parseFloat(candidate);
-                                    if (!isNaN(priceNum) && priceNum >= 0) {
-                                        modPrice = priceNum;
-                                        break;
+                            if (delta <= 0) {
+                                return sum;
+                            }
+                            
+                            const ingredientId = mod.ingredient_id || mod.id;
+                            let modPrice = findIngredientPrice(mod, ingredientId);
+                            
+                            if (modPrice === 0) {
+                                const priceCandidates = [
+                                    mod.unit_price,
+                                    mod.ingredient_price,
+                                    mod.price,
+                                    mod.additionalPrice,
+                                    mod.additional_price,
+                                    mod.extra_price
+                                ];
+                                
+                                for (const candidate of priceCandidates) {
+                                    if (candidate !== undefined && candidate !== null) {
+                                        const priceNum = parseFloat(candidate);
+                                        if (!isNaN(priceNum) && priceNum >= 0) {
+                                            modPrice = priceNum;
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                        }
-                        
-                        // ALTERAÇÃO: Usar delta positivo (já validado acima)
-                        const modDelta = parseInt(delta, 10);
-                        return sum + (modPrice * modDelta);
-                    }, 0);
+                            
+                            const modDelta = parseInt(delta, 10);
+                            return sum + (modPrice * modDelta);
+                        }, 0);
 
-                    // Total do item = preço base + extras + modificações
-                    const itemTotal = basePrice + extrasPrice + baseModsPrice;
-
-                    // ALTERAÇÃO: Priorizar item_subtotal da API se for válido e maior que 0
-                    // Se item_subtotal for 0 ou inválido, usar o cálculo manual
-                    // Isso evita somar extras que já estão incluídos no subtotal da API
-                    const apiSubtotal = parseFloat(item.item_subtotal || 0);
-                    const finalTotal = (apiSubtotal > 0) ? apiSubtotal : itemTotal;
+                        finalTotal = basePrice + extrasPrice + baseModsPrice;
+                    }
 
                     return {
                         id: item.id, // ID do item no carrinho
@@ -489,94 +484,89 @@ export const BasketProvider = ({ children }) => {
                     };
                     
                     const formattedItems = items.map(item => {
-                        // Calcular total do item: preço do produto + extras + modificações base
+                        // ALTERAÇÃO: SEMPRE usar item_subtotal da API quando disponível
+                        // item_subtotal JÁ inclui: desconto de promoção + extras + modificações de base
+                        // Só calcular manualmente se item_subtotal não existir ou for inválido
+                        const apiSubtotal = parseFloat(item.item_subtotal || 0);
+                        
+                        // Preço unitário do produto (pode ser usado para display, mas não para cálculo de total)
                         const productPrice = parseFloat(item.product?.price || 0);
                         const itemQuantity = item.quantity || 1;
-                        const basePrice = productPrice * itemQuantity;
+                        
+                        // Se item_subtotal existe e é válido, usa ele diretamente
+                        // Caso contrário, calcula manualmente como fallback
+                        let finalTotal = apiSubtotal;
+                        
+                        if (apiSubtotal <= 0) {
+                            // Fallback: calcular manualmente apenas se API não forneceu subtotal
+                            const basePrice = productPrice * itemQuantity;
 
-                        // ALTERAÇÃO: Calcular preço dos extras (buscar preço de várias fontes possíveis + cache)
-                        const extrasPrice = (item.extras || []).reduce((sum, extra) => {
-                            const ingredientId = extra.ingredient_id || extra.id;
-                            // ALTERAÇÃO: Usar função melhorada que busca no cache
-                            let extraPrice = findIngredientPrice(extra, ingredientId);
-                            
-                            // Se não encontrou no cache, tentar campos específicos
-                            if (extraPrice === 0) {
-                                const priceCandidates = [
-                                    extra.unit_price,
-                                    extra.ingredient_price,
-                                    extra.price,
-                                    extra.additional_price,
-                                    extra.extra_price,
-                                    extra.total_price ? parseFloat(extra.total_price) / parseInt(extra.quantity || 1, 10) : null
-                                ];
+                            const extrasPrice = (item.extras || []).reduce((sum, extra) => {
+                                const ingredientId = extra.ingredient_id || extra.id;
+                                let extraPrice = findIngredientPrice(extra, ingredientId);
                                 
-                                for (const candidate of priceCandidates) {
-                                    if (candidate !== undefined && candidate !== null) {
-                                        const priceNum = parseFloat(candidate);
-                                        if (!isNaN(priceNum) && priceNum >= 0) {
-                                            extraPrice = priceNum;
-                                            break;
+                                if (extraPrice === 0) {
+                                    const priceCandidates = [
+                                        extra.unit_price,
+                                        extra.ingredient_price,
+                                        extra.price,
+                                        extra.additional_price,
+                                        extra.extra_price,
+                                        extra.total_price ? parseFloat(extra.total_price) / parseInt(extra.quantity || 1, 10) : null
+                                    ];
+                                    
+                                    for (const candidate of priceCandidates) {
+                                        if (candidate !== undefined && candidate !== null) {
+                                            const priceNum = parseFloat(candidate);
+                                            if (!isNaN(priceNum) && priceNum >= 0) {
+                                                extraPrice = priceNum;
+                                                break;
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            
-                            const extraQuantity = parseInt(extra.quantity || 0, 10);
-                            return sum + (extraPrice * extraQuantity);
-                        }, 0);
+                                
+                                const extraQuantity = parseInt(extra.quantity || 0, 10);
+                                return sum + (extraPrice * extraQuantity);
+                            }, 0);
 
-                    // ALTERAÇÃO: Calcular preço das modificações base (buscar preço de várias fontes possíveis + cache)
-                    // IMPORTANTE: Apenas modificações positivas (adições) alteram o preço
-                    // Modificações negativas (remoções) não alteram o preço
-                    const baseModsPrice = (item.base_modifications || []).reduce((sum, mod) => {
-                        const delta = parseFloat(mod.delta || 0);
-                        
-                        // ALTERAÇÃO: Apenas processar se delta for positivo (adição)
-                        // Remoções (delta negativo) não alteram o preço
-                        if (delta <= 0) {
-                            return sum;
-                        }
-                        
-                        const ingredientId = mod.ingredient_id || mod.id;
-                        // ALTERAÇÃO: Usar função melhorada que busca no cache
-                        let modPrice = findIngredientPrice(mod, ingredientId);
-                        
-                        // Se não encontrou no cache, tentar campos específicos
-                        if (modPrice === 0) {
-                            const priceCandidates = [
-                                mod.unit_price,
-                                mod.ingredient_price,
-                                mod.price,
-                                mod.additionalPrice,
-                                mod.additional_price,
-                                mod.extra_price
-                            ];
-                            
-                            for (const candidate of priceCandidates) {
-                                if (candidate !== undefined && candidate !== null) {
-                                    const priceNum = parseFloat(candidate);
-                                    if (!isNaN(priceNum) && priceNum >= 0) {
-                                        modPrice = priceNum;
-                                        break;
+                            const baseModsPrice = (item.base_modifications || []).reduce((sum, mod) => {
+                                const delta = parseFloat(mod.delta || 0);
+                                
+                                if (delta <= 0) {
+                                    return sum;
+                                }
+                                
+                                const ingredientId = mod.ingredient_id || mod.id;
+                                let modPrice = findIngredientPrice(mod, ingredientId);
+                                
+                                if (modPrice === 0) {
+                                    const priceCandidates = [
+                                        mod.unit_price,
+                                        mod.ingredient_price,
+                                        mod.price,
+                                        mod.additionalPrice,
+                                        mod.additional_price,
+                                        mod.extra_price
+                                    ];
+                                    
+                                    for (const candidate of priceCandidates) {
+                                        if (candidate !== undefined && candidate !== null) {
+                                            const priceNum = parseFloat(candidate);
+                                            if (!isNaN(priceNum) && priceNum >= 0) {
+                                                modPrice = priceNum;
+                                                break;
+                                            }
+                                        }
                                     }
                                 }
-                            }
+                                
+                                const modDelta = parseInt(delta, 10);
+                                return sum + (modPrice * modDelta);
+                            }, 0);
+
+                            finalTotal = basePrice + extrasPrice + baseModsPrice;
                         }
-                        
-                        // ALTERAÇÃO: Usar delta positivo (já validado acima)
-                        const modDelta = parseInt(delta, 10);
-                        return sum + (modPrice * modDelta);
-                    }, 0);
-
-                    // Total do item = preço base + extras + modificações
-                    const itemTotal = basePrice + extrasPrice + baseModsPrice;
-
-                        // ALTERAÇÃO: Sempre usar o maior entre o calculado e o item_subtotal da API
-                        // Isso garante que se a API já calculou corretamente, usa o valor da API
-                        // Mas se o calculado for maior (incluindo adicionais), usa o calculado
-                        const apiSubtotal = parseFloat(item.item_subtotal || 0);
-                        const finalTotal = Math.max(itemTotal, apiSubtotal);
 
                         return {
                             id: item.id,

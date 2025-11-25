@@ -53,6 +53,7 @@ export default function ViewCardItem({
             deliveryPrice={item.deliveryPrice}
             imageSource={item.imageSource}
             onPress={() => handleCardPress(item)}
+            isAvailable={item.isAvailable !== false} // ALTERAÇÃO: passa disponibilidade para controlar overlay e estilos
             availabilityStatus={item.availability_status || item.availabilityStatus} // ALTERAÇÃO: passa status de disponibilidade para badges
             max_quantity={item.max_quantity} // ALTERAÇÃO: passa quantidade máxima para badges
         />

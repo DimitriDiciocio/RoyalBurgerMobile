@@ -29,7 +29,7 @@ import React, { useEffect, useState } from 'react';
 import { isAuthenticated, getStoredUserData, logout, getCurrentUserProfile } from "./services";
 import { getLoyaltyBalance, getCustomerAddresses } from "./services/customerService";
 import { getAllProducts, getMostOrderedProducts, getRecentlyAddedProducts, filterProductsWithStock } from "./services/productService";
-import { getAllPromotions, getPromotionByProductId } from "./services/promotionService";
+import { getAllPromotions } from "./services/promotionService";
 import { BasketProvider, useBasket } from "./contexts/BasketContext";
 import { RECENTLY_ADDED_DAYS } from "./config/constants";
 import api from "./services/api";
@@ -249,6 +249,8 @@ function HomeScreen({ navigation }) {
             imageSource: imageUrl ? { uri: imageUrl } : null,
             expires_at: promotion?.expires_at || null, // Para o timer de promoção
             promotion: promotion, // ALTERAÇÃO: Passa objeto completo da promoção
+            // ALTERAÇÃO: Produtos que passam por filterProductsWithStock são sempre disponíveis
+            isAvailable: true, // Todos os produtos formatados aqui já foram validados e têm estoque
             // ALTERAÇÃO: Preservar availability_status e max_quantity para badges
             availability_status: product.availability_status,
             availabilityStatus: product.availability_status, // Compatibilidade com diferentes nomes
@@ -272,28 +274,10 @@ function HomeScreen({ navigation }) {
             // Garante que apenas produtos com estoque disponível aparecem em novidades
             const validatedProducts = await filterProductsWithStock(allProducts);
             
-            // ALTERAÇÃO: Buscar promoções para os produtos de novidades (igual aos mais pedidos)
-            const productsWithPromotions = await Promise.allSettled(
-                validatedProducts.map(async (product) => {
-                    let promotion = null;
-                    try {
-                        if (product.id) {
-                            promotion = await getPromotionByProductId(product.id);
-                        }
-                    } catch (error) {
-                        // Ignora erros ao buscar promoção (produto pode não ter promoção)
-                    }
-                    return { product, promotion };
-                })
-            );
-            
-            // ALTERAÇÃO: Formatar produtos para exibição com suas promoções
-            const formattedProducts = productsWithPromotions
-                .filter(result => result.status === 'fulfilled')
-                .map(result => {
-                    const { product, promotion } = result.value;
-                    return formatProductForCard(product, promotion);
-                })
+            // ALTERAÇÃO: Remover busca de promoções - causa re-renderizações desnecessárias
+            // Produtos já mostram seu preço atual sem necessidade de verificar promoção aqui
+            const formattedProducts = validatedProducts
+                .map(product => formatProductForCard(product, null))
                 .filter(product => product !== null); // Remove produtos indisponíveis
             
             return formattedProducts;
@@ -427,28 +411,10 @@ function HomeScreen({ navigation }) {
                         // ALTERAÇÃO: Limitar a 6 produtos (mantendo ordem original da API - mais pedidos primeiro)
                         const topProducts = validatedProducts.slice(0, 6);
                         
-                        // ALTERAÇÃO: Buscar promoções para os produtos mais pedidos
-                        const productsWithPromotions = await Promise.allSettled(
-                            topProducts.map(async (product) => {
-                                let promotion = null;
-                                try {
-                                    if (product.id) {
-                                        promotion = await getPromotionByProductId(product.id);
-                                    }
-                                } catch (error) {
-                                    // Ignora erros ao buscar promoção (produto pode não ter promoção)
-                                }
-                                return { product, promotion };
-                            })
-                        );
-                        
-                        // ALTERAÇÃO: Formatar produtos para as seções com suas promoções
-                        const formattedProducts = productsWithPromotions
-                            .filter(result => result.status === 'fulfilled')
-                            .map(result => {
-                                const { product, promotion } = result.value;
-                                return formatProductForCard(product, promotion);
-                            })
+                        // ALTERAÇÃO: Remover busca de promoções - causa re-renderizações desnecessárias
+                        // Produtos já mostram seu preço atual sem necessidade de verificar promoção aqui
+                        const formattedProducts = topProducts
+                            .map(product => formatProductForCard(product, null))
                             .filter(product => product !== null);
                         
                         // ALTERAÇÃO: Só definir dados se houver produtos formatados (com estoque disponível)
