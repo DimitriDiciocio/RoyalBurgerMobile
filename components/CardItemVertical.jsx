@@ -11,6 +11,7 @@ export default function CardItemVertical({
                                      deliveryTime = "40 - 50 min",
                                      deliveryPrice = "R$5,00",
                                      imageSource = null,
+                                     isAvailable = true, // ALTERAÇÃO: adicionar verificação de disponibilidade
                                      onPress = () => {},
                                      availabilityStatus = null, // ALTERAÇÃO: status de disponibilidade para badges
                                      max_quantity = null // ALTERAÇÃO: quantidade máxima disponível
@@ -88,7 +89,11 @@ export default function CardItemVertical({
     }, [price]);
 
     return (
-        <TouchableOpacity style={styles.container} onPress={onPress}>
+        <TouchableOpacity 
+            style={[styles.container, !isAvailable && styles.unavailable]} 
+            onPress={onPress}
+            disabled={!isAvailable}
+        >
             <View style={styles.imageWrapper}>
                 {imageSource ? (
                     <CachedImage
@@ -100,33 +105,55 @@ export default function CardItemVertical({
                     <View style={styles.image} />
                 )}
                 {/* ALTERAÇÃO: Badge de desconto (prioridade sobre badge de estoque) */}
-                {renderDiscountBadge()}
+                {isAvailable && renderDiscountBadge()}
                 {/* ALTERAÇÃO: Badge de estoque (apenas se não houver badge de desconto) */}
-                {!discountPercentage && renderStockBadge()}
+                {isAvailable && !discountPercentage && renderStockBadge()}
+                {/* ALTERAÇÃO: Overlay de indisponível quando produto está sem estoque */}
+                {!isAvailable && (
+                    <View style={styles.unavailableOverlay}>
+                        <Text style={styles.unavailableText}>Indisponível</Text>
+                    </View>
+                )}
             </View>
             <View style={styles.container2}>
-                <Text style={styles.title} numberOfLines={1}
-                      ellipsizeMode="tail">{title}</Text>
-                <Text style={styles.description} numberOfLines={1}
-                      ellipsizeMode="tail">{description}</Text>
+                <Text 
+                    style={[styles.title, !isAvailable && styles.textUnavailable]} 
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                >
+                    {title}
+                </Text>
+                <Text 
+                    style={[styles.description, !isAvailable && styles.textUnavailable]} 
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                >
+                    {description}
+                </Text>
                 {/* ALTERAÇÃO: Exibir preço original riscado e novo preço em destaque quando houver promoção */}
                 {originalPrice ? (
                     <View style={styles.priceContainer}>
-                        <Text style={styles.originalPrice}>{originalPrice}</Text>
-                        <Text style={styles.priceWithDiscount}>
+                        <Text style={[styles.originalPrice, !isAvailable && styles.textUnavailable]}>
+                            {originalPrice}
+                        </Text>
+                        <Text style={[styles.priceWithDiscount, !isAvailable && styles.textUnavailable]}>
                             {typeof price === 'string' && price.startsWith('R$') 
                                 ? price 
                                 : formattedPrice}
                         </Text>
                     </View>
                 ) : (
-                    <Text style={styles.price}>{formattedPrice}</Text>
+                    <Text style={[styles.price, !isAvailable && styles.textUnavailable]}>
+                        {formattedPrice}
+                    </Text>
                 )}
-                <View style={styles.containerDelevery}>
-                    <Text style={styles.descriptionDel}>{deliveryTime}</Text>
-                    <View style={styles.circle}></View>
-                    <Text style={styles.descriptionDel}>{deliveryPrice}</Text>
-                </View>
+                {isAvailable && (
+                    <View style={styles.containerDelevery}>
+                        <Text style={styles.descriptionDel}>{deliveryTime}</Text>
+                        <View style={styles.circle}></View>
+                        <Text style={styles.descriptionDel}>{deliveryPrice}</Text>
+                    </View>
+                )}
             </View>
         </TouchableOpacity>
     );
@@ -203,6 +230,30 @@ const styles = StyleSheet.create({
         width: 4,
         height: 4,
         backgroundColor: '#888888',
+    },
+    // ALTERAÇÃO: Estilos para disponibilidade
+    unavailable: {
+        opacity: 0.6,
+    },
+    unavailableOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 5,
+    },
+    unavailableText: {
+        color: '#FFFFFF',
+        fontSize: 11,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+    },
+    textUnavailable: {
+        color: '#999',
     },
     // ALTERAÇÃO: Estilos para badges de estoque
     stockBadgeLimited: {
