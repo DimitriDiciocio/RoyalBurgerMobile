@@ -1017,59 +1017,10 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                              // TODO: integrar ao carrinho quando disponível
                          }}
                          onAddToBasket={async ({ quantity, total, unitPrice }) => {
-                             // Se estiver editando, remover o item antigo primeiro
-                             if (editItem?.id || editItem?.cartItemId) {
-                                 await removeFromBasket(editItem.cartItemId || editItem.id);
-                             }
+                             // ALTERAÇÃO: Preparar dados de forma otimizada (sem processamento pesado de modificações)
+                             const productId = productData?.id || produto?.id;
                              
-                             // Gerar lista de modificações para exibição
-                             const modifications = [];
-                             
-                             // Ingredientes padrão modificados
-                             defaultIngredients.forEach((ing, index) => {
-                                 const ingredientId = ing.id || ing.ingredient_id || index;
-                                 const currentQty = defaultIngredientsQuantities[ingredientId] || parseFloat(ing.portions || 0) || 0;
-                                 const initialQty = parseFloat(ing.portions || 0) || 0;
-                                 
-                                 if (currentQty > initialQty) {
-                                     const extra = findIngredientPrice(ing, ingredientId);
-                                     const additionalQty = currentQty - initialQty;
-                                     if (additionalQty > 0 && extra > 0) {
-                                         modifications.push({
-                                             name: ing.name || ing.nome || 'Ingrediente',
-                                             quantity: additionalQty,
-                                             additionalPrice: extra * additionalQty
-                                         });
-                                     }
-                                 }
-                             });
-                             
-                             // Extras adicionados (quantidade total, não apenas adicional)
-                             // IMPORTANTE: No web, os extras são enviados com a quantidade total, não apenas a adicional
-                             extraIngredients.forEach((ing, index) => {
-                                 // IMPORTANTE: Usar String() para garantir consistência nas chaves
-                                 const ingredientId = String(ing.id || ing.ingredient_id || `extra-${index}`);
-                                 const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
-                                 const currentQty = selectedExtras[ingredientId] !== undefined ? Number(selectedExtras[ingredientId]) : minQty;
-                                 
-                                 // Enviar apenas se quantidade atual é maior que o mínimo
-                                 if (currentQty > minQty) {
-                                     const extra = findIngredientPrice(ing, ingredientId);
-                                     // IMPORTANTE: Enviar quantidade total, não apenas a adicional
-                                     // A API espera a quantidade total de porções
-                                     if (extra > 0) {
-                                         modifications.push({
-                                             name: ing.name || ing.nome || 'Ingrediente',
-                                             quantity: currentQty, // Quantidade total
-                                             additionalPrice: extra * (currentQty - minQty) // Preço apenas da parte adicional
-                                         });
-                                     }
-                                 }
-                             });
-                             
-                             // ALTERAÇÃO: Converter defaultIngredientsQuantities para baseModifications
-                             // baseModifications representa mudanças em relação à receita padrão
-                             // IMPORTANTE: Filtrar apenas deltas diferentes de zero para evitar erro da API
+                             // ALTERAÇÃO: Preparar baseModifications de forma otimizada
                              const baseModifications = [];
                              Object.entries(defaultIngredientsQuantities).forEach(([ingredientId, currentQty]) => {
                                  const ing = defaultIngredients.find(ing => 
@@ -1077,21 +1028,10 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                  );
                                  if (ing) {
                                      const minQty = parseFloat(ing.portions || 0) || 0;
-                                     
-                                     // ALTERAÇÃO: Calcular currentQty corretamente baseado no tipo
-                                     let currentQtyNum = 0;
-                                     if (typeof currentQty === 'number') {
-                                         currentQtyNum = currentQty;
-                                     } else if (currentQty && typeof currentQty === 'object') {
-                                         // Se for objeto, usar current se existir
-                                         currentQtyNum = parseFloat(currentQty.current || currentQty || 0);
-                                     } else {
-                                         currentQtyNum = parseFloat(currentQty || 0);
-                                     }
-                                     
-                                     const delta = currentQtyNum - minQty; // Diferença em relação ao padrão
-                                     
-                                     // ALTERAÇÃO: Apenas incluir se delta for diferente de zero (evita erro "delta deve ser um número diferente de zero")
+                                     let currentQtyNum = typeof currentQty === 'number' 
+                                         ? currentQty 
+                                         : (currentQty?.current !== undefined ? parseFloat(currentQty.current || 0) : parseFloat(currentQty || 0));
+                                     const delta = currentQtyNum - minQty;
                                      if (!isNaN(delta) && delta !== 0) {
                                          baseModifications.push({
                                              ingredient_id: Number(ingredientId),
@@ -1101,151 +1041,74 @@ const safeCheckProductAvailability = async (productId, quantity = 1) => {
                                  }
                              });
                              
-                            // Função auxiliar para adicionar ao carrinho
-                            const addItemToCart = async () => {
-                                // IMPORTANTE: Converter selectedExtras para formato da API
-                                // A API espera apenas extras com quantity > min_quantity
-                                // Validar cada extra antes de enviar
-                                const extrasArray = [];
-                                
-                                Object.entries(selectedExtras || {}).forEach(([ingredientId, qty]) => {
-                                    const id = Number(ingredientId);
-                                    let quantity = Number(qty);
-                                    
-                                    // Validar ID e quantidade
-                                    if (isNaN(id) || id <= 0 || isNaN(quantity) || quantity <= 0) {
-                                        return; // Pula extras inválidos
-                                    }
-                                    
-                                    // Encontrar o ingrediente para validar min/max
-                                    const ing = extraIngredients.find(ing => 
-                                        String(ing.id || ing.ingredient_id) === String(ingredientId)
-                                    );
-                                    
-                                    if (!ing) {
-                                        // ALTERAÇÃO: log removido ao ignorar extra inexistente
-                                        return; // Pula se não encontrado
-                                    }
-                                    
-                                    const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
-                                    const maxQty = ing.max_quantity; // Já calculado pela API considerando estoque
-                                    
-                                    // Validar quantidade mínima
-                                    if (quantity < minQty) {
-                                        // ALTERAÇÃO: log removido ao validar quantidade mínima
-                                        return; // Pula se abaixo do mínimo
-                                    }
-                                    
-                                    // Validar quantidade máxima (se houver limite)
-                                    if (maxQty !== null && maxQty !== undefined && maxQty > 0 && quantity > maxQty) {
-                                        // ALTERAÇÃO: log removido ao ajustar quantidade máxima
-                                        // Ajusta para o máximo disponível
-                                        quantity = maxQty;
-                                    }
-                                    
-                                    // IMPORTANTE: Adiciona se quantidade >= min_quantity
-                                    // A quantidade enviada é a quantidade TOTAL (incluindo min_quantity)
-                                    // Se minQty = 1 e quantity = 1, ainda deve ser salvo (é o mínimo permitido)
-                                    if (quantity >= minQty) {
-                                        extrasArray.push({
-                                            ingredient_id: id,
-                                            quantity: quantity // Quantidade total (incluindo min_quantity)
-                                        });
-                                    } else {
-                                        // ALTERAÇÃO: log removido ao ignorar extra abaixo do mínimo
-                                    }
-                                });
-                                
-                                // ALTERAÇÃO: log de depuração do carrinho removido para evitar ruído
-                                
-                                // IMPORTANTE: O BasketContext espera selectedExtras no formato { ingredientId: quantity }
-                                // Mas também aceita extras já convertidos no formato da API
-                                // Vamos enviar ambos para garantir compatibilidade
-                                const result = await addToBasket({
-                                    productId: productData?.id || produto?.id,
-                                    quantity: quantity,
-                                    observacoes: observacoes,
-                                    selectedExtras: selectedExtras, // Mantém formato original para compatibilidade
-                                    baseModifications: baseModifications,
-                                    // Envia também extras já validados no formato da API
-                                    extras: extrasArray
-                                });
-                                
-                                return result; // ALTERAÇÃO: Retornar resultado para tratamento externo
-                            };
+                             // ALTERAÇÃO: Preparar extras de forma otimizada
+                             const extrasArray = [];
+                             Object.entries(selectedExtras || {}).forEach(([ingredientId, qty]) => {
+                                 const id = Number(ingredientId);
+                                 let qtyNum = Number(qty);
+                                 if (isNaN(id) || id <= 0 || isNaN(qtyNum) || qtyNum <= 0) return;
+                                 
+                                 const ing = extraIngredients.find(ing => 
+                                     String(ing.id || ing.ingredient_id) === String(ingredientId)
+                                 );
+                                 if (!ing) return;
+                                 
+                                 const minQty = parseInt(ing.min_quantity || ing.minQuantity || 0, 10) || 0;
+                                 const maxQty = ing.max_quantity;
+                                 
+                                 if (qtyNum < minQty) return;
+                                 if (maxQty !== null && maxQty !== undefined && maxQty > 0 && qtyNum > maxQty) {
+                                     qtyNum = maxQty;
+                                 }
+                                 
+                                 if (qtyNum >= minQty) {
+                                     extrasArray.push({
+                                         ingredient_id: id,
+                                         quantity: qtyNum
+                                     });
+                                 }
+                             });
                              
-                             // ALTERAÇÃO: Validação preventiva usando simulateProductCapacity
-                             const productId = productData?.id || produto?.id;
-                             if (productId) {
+                             // ALTERAÇÃO: Navegação otimista - navegar imediatamente após preparar dados
+                             // A adição será feita em background para melhor UX (não bloqueia navegação)
+                             navigation.navigate('Home');
+                             
+                             // ALTERAÇÃO: Processar adição em background (não bloqueia navegação)
+                             // Usar setTimeout para garantir que a navegação aconteça primeiro
+                             setTimeout(async () => {
                                  try {
-                                     // ALTERAÇÃO: Validar capacidade antes de adicionar
-                                     const capacityResult = await updateProductCapacity(false, true); // Imediato para validação crítica
+                                     // Se estiver editando, remover o item antigo primeiro
+                                     if (editItem?.id || editItem?.cartItemId) {
+                                         await removeFromBasket(editItem.cartItemId || editItem.id);
+                                     }
                                      
-                                    if (capacityResult && capacityResult.max_quantity < quantity) {
-                                        // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
-                                        setAlertType('warning');
-                                        setAlertTitle('Estoque Insuficiente');
-                                        setAlertMessage(`Quantidade solicitada (${quantity}) excede o disponível (${capacityResult.max_quantity}). Ajuste a quantidade ou remova alguns extras.`);
-                                        setAlertButtons([{ text: 'OK' }]);
-                                        setAlertVisible(true);
-                                        return;
-                                    }
-                                    
-                                    if (capacityResult && !capacityResult.is_available) {
-                                        // ALTERAÇÃO: Usar CustomAlert ao invés de Alert.alert
-                                        setAlertType('delete');
-                                        setAlertTitle('Produto Indisponível');
-                                        setAlertMessage(capacityResult.limiting_ingredient?.message || 'Produto temporariamente indisponível. Tente novamente mais tarde.');
-                                        setAlertButtons([{ text: 'OK' }]);
-                                        setAlertVisible(true);
-                                        return;
-                                    }
-                                 } catch (capacityError) {
-                                     // ALTERAÇÃO: Removido console.error em produção - logging condicional apenas em dev
+                                     // Adicionar ao carrinho (a API já valida estoque)
+                                     const result = await addToBasket({
+                                         productId: productId,
+                                         quantity: quantity,
+                                         observacoes: observacoes,
+                                         selectedExtras: selectedExtras,
+                                         baseModifications: baseModifications,
+                                         extras: extrasArray
+                                     });
+                                     
+                                     // ALTERAÇÃO: Se houver erro, será tratado pelo backend no checkout
+                                     // Não bloqueamos o usuário com validações aqui
+                                     if (!result.success) {
+                                         const isDev = __DEV__;
+                                         if (isDev) {
+                                             console.warn('Erro ao adicionar item ao carrinho:', result.error);
+                                         }
+                                         // O erro será validado quando o usuário tentar finalizar o pedido
+                                     }
+                                 } catch (error) {
+                                     // ALTERAÇÃO: Erro silencioso em background - será validado no checkout
                                      const isDev = __DEV__;
                                      if (isDev) {
-                                         console.error('Erro ao verificar capacidade:', capacityError);
+                                         console.error('Erro ao adicionar item ao carrinho:', error);
                                      }
-                                    // ALTERAÇÃO: Se falhar a verificação, permite continuar mas mostra aviso com CustomAlert
-                                    setAlertType('warning');
-                                    setAlertTitle('Atenção');
-                                    setAlertMessage('Não foi possível verificar a disponibilidade completa. O item será adicionado, mas pode não estar disponível no momento da finalização do pedido.');
-                                    setAlertButtons([
-                                        { text: 'Cancelar', style: 'cancel' },
-                                        { 
-                                            text: 'Continuar', 
-                                            onPress: addItemToCart
-                                        }
-                                    ]);
-                                    setAlertVisible(true);
-                                    return;
                                  }
-                             }
-                             
-                             // Adiciona à cesta via API (só chega aqui se capacidade estiver OK)
-                             const result = await addItemToCart();
-                             
-                             if (result.success) {
-                                 // Navegar para home após sucesso
-                                 navigation.navigate('Home');
-                             } else {
-                                // ALTERAÇÃO: Tratamento específico para erro de estoque com CustomAlert
-                                if (result.errorType === 'INSUFFICIENT_STOCK') {
-                                    setAlertType('warning');
-                                    setAlertTitle('Estoque Insuficiente');
-                                    setAlertMessage(getFriendlyErrorMessage(result.error || 'Estoque insuficiente'));
-                                    setAlertButtons([{ text: 'OK' }]);
-                                    setAlertVisible(true);
-                                    // Atualizar capacidade para refletir mudanças
-                                    await updateProductCapacity(false, true);
-                                } else {
-                                    setAlertType('delete');
-                                    setAlertTitle('Erro');
-                                    setAlertMessage(getFriendlyErrorMessage(result.error || 'Erro ao adicionar à cesta'));
-                                    setAlertButtons([{ text: 'OK' }]);
-                                    setAlertVisible(true);
-                                }
-                             }
+                             }, 50); // Pequeno delay para garantir que navegação aconteceu primeiro
                          }}
                          style={{ marginBottom: 24 }}
                      />

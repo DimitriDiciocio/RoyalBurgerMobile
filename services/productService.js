@@ -616,19 +616,36 @@ export const getProductCapacity = async (productId, extras = []) => {
 /**
  * Valida se um produto tem estoque disponível e retorna dados de capacidade
  * ALTERAÇÃO: Verifica capacidade/estoque antes de exibir e retorna dados completos
+ * ALTERAÇÃO: Considera itens já no carrinho do usuário ao validar estoque
  * @param {Object} product - Dados do produto
+ * @param {Array} cartItems - Itens já no carrinho do usuário (opcional)
  * @returns {Promise<Object|null>} { isValid: boolean, capacityData: Object } ou null em caso de erro
  */
-export const validateProductStockWithCapacity = async (product) => {
+export const validateProductStockWithCapacity = async (product, cartItems = []) => {
   if (!product || !product.id) {
     return { isValid: false, capacityData: null };
   }
 
   try {
+    // ALTERAÇÃO: Verificar se o produto já está no carrinho
+    // Se estiver, não deve aparecer na listagem (estoque já foi "reservado")
+    const isInCart = cartItems.some(item => {
+      const productId = item.originalProductId || item.productId || item.product?.id;
+      return productId === product.id;
+    });
+    
+    if (isInCart) {
+      // ALTERAÇÃO: Produto já está no carrinho, não deve aparecer na listagem
+      return { isValid: false, capacityData: null, reason: 'already_in_cart' };
+    }
+
     // Verificar capacidade do produto (quantidade 1, sem extras, sem modificações)
+    // ALTERAÇÃO: A API já considera o carrinho do usuário ao validar estoque
     const capacityData = await simulateProductCapacity(product.id, [], 1, []);
     
-    // Produto está disponível se is_available é true e max_quantity >= 1
+    // ALTERAÇÃO: Produto está disponível se is_available é true e max_quantity >= 1
+    // Isso garante que produtos que precisam de mais porções do que disponível não aparecem
+    // Exemplo: se há 50g de queijo e produto precisa de 100g (2 porções), max_quantity será 0
     const isValid = capacityData?.is_available === true && (capacityData?.max_quantity ?? 0) >= 1;
     
     return { isValid, capacityData };
@@ -645,17 +662,48 @@ export const validateProductStockWithCapacity = async (product) => {
 /**
  * Filtra produtos que têm estoque disponível e adiciona availability_status
  * ALTERAÇÃO: Valida estoque de múltiplos produtos em paralelo e adiciona status de disponibilidade
+ * ALTERAÇÃO: Considera itens já no carrinho do usuário ao validar estoque
  * @param {Array} products - Lista de produtos para validar
+ * @param {Array} cartItems - Itens já no carrinho do usuário (opcional, será buscado automaticamente se não fornecido)
  * @returns {Promise<Array>} Lista de produtos com estoque disponível e availability_status
  */
-export const filterProductsWithStock = async (products) => {
+export const filterProductsWithStock = async (products, cartItems = null) => {
   if (!products || products.length === 0) {
     return [];
   }
 
+  // ALTERAÇÃO: Buscar itens do carrinho se não foram fornecidos
+  let currentCartItems = cartItems;
+  if (currentCartItems === null) {
+    try {
+      // Importar dinamicamente para evitar dependência circular
+      const { getCart } = require('./cartService');
+      const cartResult = await getCart();
+      if (cartResult?.success) {
+        const items = cartResult.data?.cart?.items || cartResult.data?.items || [];
+        // Converter para formato simplificado para comparação
+        currentCartItems = items.map(item => ({
+          originalProductId: item.product?.id || item.product_id,
+          productId: item.product?.id || item.product_id,
+          product: item.product,
+          quantity: item.quantity || 1
+        }));
+      } else {
+        currentCartItems = [];
+      }
+    } catch (error) {
+      // Em caso de erro ao buscar carrinho, continuar sem considerar carrinho
+      const isDev = __DEV__;
+      if (isDev) {
+        console.warn('Erro ao buscar carrinho para validação de estoque:', error);
+      }
+      currentCartItems = [];
+    }
+  }
+
   // Validar estoque de todos os produtos em paralelo
   const stockValidations = await Promise.allSettled(
-    products.map(product => validateProductStockWithCapacity(product))
+    products.map(product => validateProductStockWithCapacity(product, currentCartItems))
   );
 
   // Filtrar apenas produtos com estoque disponível e adicionar availability_status

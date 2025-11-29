@@ -5,6 +5,8 @@ import Input from "../components/Input";
 import {login, registerCustomer} from "../services";
 import { requestEmailVerification } from "../services/customerService";
 import { useBasket } from "../contexts/BasketContext";
+// ALTERAÇÃO: Importar função para registrar token de notificação após login
+import { registerPendingToken } from "../services/notificationService";
 
 export default function Login({navigation}) {
     const [email, setEmail] = useState('');
@@ -67,6 +69,16 @@ export default function Login({navigation}) {
                 } catch (cartError) {
                     // Erro silencioso - não bloqueia o login
                     console.log('Erro ao reivindicar carrinho:', cartError);
+                }
+                // ALTERAÇÃO: Registrar token de notificação pendente após login
+                try {
+                    await registerPendingToken();
+                } catch (notificationError) {
+                    // Erro silencioso - não bloqueia o login
+                    const isDev = __DEV__;
+                    if (isDev) {
+                        console.log('Erro ao registrar token de notificação:', notificationError);
+                    }
                 }
                 navigation.navigate('Home');
             } else {

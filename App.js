@@ -25,7 +25,7 @@ import Acompanhar from "./screens/acompanhar";
 import Config from "./screens/config";
 import Cesta from "./screens/cesta";
 import Pagamento from "./screens/pagamento";
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { isAuthenticated, getStoredUserData, logout, getCurrentUserProfile } from "./services";
 import { getLoyaltyBalance, getCustomerAddresses } from "./services/customerService";
 import { getAllProducts, getMostOrderedProducts, getRecentlyAddedProducts, filterProductsWithStock } from "./services/productService";
@@ -34,6 +34,12 @@ import { BasketProvider, useBasket } from "./contexts/BasketContext";
 import { RECENTLY_ADDED_DAYS } from "./config/constants";
 import api from "./services/api";
 import { getProductImageSource, getProductImageUrl, preloadImages } from "./utils/imageUtils";
+// ALTERAÇÃO: Importar serviço de notificações
+import { 
+  initializeNotifications, 
+  setupNotificationListeners, 
+  registerPendingToken 
+} from "./services/notificationService";
 
 const Stack = createNativeStackNavigator();
 
@@ -645,9 +651,85 @@ function HomeScreen({ navigation }) {
 }
 
 export default function App() {
+    // ALTERAÇÃO: Refs para armazenar funções de remoção dos listeners de notificação e navegação
+    const notificationListenersRef = useRef([]);
+    const navigationRef = useRef(null);
+
+    // ALTERAÇÃO: Inicializar notificações ao montar o app
+    useEffect(() => {
+        let isMounted = true;
+
+        const setupNotifications = async () => {
+            try {
+                // Solicitar permissão e inicializar notificações
+                const initialized = await initializeNotifications();
+                
+                if (initialized && isMounted) {
+                    // Configurar listeners para notificações
+                    const removeListeners = setupNotificationListeners(
+                        // Callback quando notificação é recebida (app em foreground)
+                        (notification) => {
+                            const isDev = __DEV__;
+                            if (isDev) {
+                                console.log('[App] Notificação recebida:', notification);
+                            }
+                            // A notificação será exibida automaticamente pelo handler configurado
+                        },
+                        // Callback quando usuário toca na notificação
+                        (response) => {
+                            const isDev = __DEV__;
+                            if (isDev) {
+                                console.log('[App] Notificação tocada:', response);
+                            }
+                            
+                            // ALTERAÇÃO: Navegar para tela de pedidos se a notificação for sobre mudança de status
+                            const data = response.notification.request.content.data;
+                            const orderId = data?.orderId || data?.order_id;
+                            
+                            if (orderId && navigationRef.current) {
+                                // Navegar para tela de pedidos ou acompanhar pedido específico
+                                if (data?.screen === 'acompanhar' || data?.screen === 'Acompanhar') {
+                                    navigationRef.current.navigate('Acompanhar', { orderId });
+                                } else {
+                                    navigationRef.current.navigate('Pedidos');
+                                }
+                            }
+                        }
+                    );
+
+                    notificationListenersRef.current = removeListeners;
+                }
+
+                // Se usuário já está logado, tentar registrar token pendente
+                const authenticated = await isAuthenticated();
+                if (authenticated) {
+                    await registerPendingToken();
+                }
+            } catch (error) {
+                const isDev = __DEV__;
+                if (isDev) {
+                    console.error('[App] Erro ao configurar notificações:', error);
+                }
+            }
+        };
+
+        setupNotifications();
+
+        // Cleanup: remover listeners ao desmontar
+        return () => {
+            isMounted = false;
+            notificationListenersRef.current.forEach(removeListener => {
+                if (typeof removeListener === 'function') {
+                    removeListener();
+                }
+            });
+            notificationListenersRef.current = [];
+        };
+    }, []);
+
     return (
         <BasketProvider>
-            <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
                 <Stack.Navigator 
                     initialRouteName="Home"
                     screenOptions={{
