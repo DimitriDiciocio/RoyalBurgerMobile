@@ -96,9 +96,13 @@ export default function Cesta({ navigation }) {
     // Para calcular pontos ganhos: valor gasto (sem taxa de entrega) / valor de cada ponto
     // Ex: R$ 10,00 / R$ 0,10 = 100 pontos
     // IMPORTANTE: A taxa de entrega NÃO conta para ganhar pontos
+    // NOTA: Este cálculo é uma estimativa no carrinho e não considera desconto de pontos
+    // que será aplicado no checkout (se o usuário decidir usar pontos). O cálculo final
+    // será feito na tela de pagamento considerando desconto proporcional ao subtotal.
     const calculateEarnedPoints = () => {
         if (loyaltyRates.gain_rate <= 0) return 0;
         // Calcula apenas o total dos produtos (sem taxa de entrega e sem descontos de promoção)
+        // Não considera desconto de pontos pois ainda não foi decidido se o usuário vai usar
         const productsTotal = calculateTotal() - calculatePromotionDiscounts();
         return Math.floor(productsTotal / loyaltyRates.gain_rate);
     };

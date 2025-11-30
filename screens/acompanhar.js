@@ -614,13 +614,91 @@ export default function Acompanhar({ navigation, route }) {
                 <Text style={styles.pontosText}>
                   Nessa compra, você ganhou <Text style={styles.pontosDestaque}>
                     {(() => {
-                      // ALTERAÇÃO: Calcular pontos corretamente: (Total - Taxa de entrega) / taxa de conversão
+                      // CORREÇÃO: Calcular pontos corretamente considerando desconto proporcional ao subtotal
+                      // Alinhado com a API e o web: pontos são calculados sobre subtotal (sem taxa de entrega)
+                      // com desconto proporcional ao subtotal se houver desconto aplicado
                       if (loyaltyRates.gain_rate <= 0) return '0';
                       
-                      // Pegar o total do pedido
-                      const total = parseFloat(order.total_amount || order.total || 0);
+                      // Função para buscar preço do ingrediente (reutilizar lógica do subtotal)
+                      const findIngredientPrice = (ingredientData, ingredientId) => {
+                        if (!ingredientData || !ingredientId) return 0;
+                        
+                        if (ingredientsCache) {
+                          const id = String(ingredientId);
+                          const cached = ingredientsCache[id];
+                          if (cached && cached.additional_price > 0) {
+                            return cached.additional_price;
+                          }
+                        }
+                        
+                        const price = parseFloat(
+                          ingredientData.additional_price || 
+                          ingredientData.price || 
+                          ingredientData.unit_price || 
+                          0
+                        );
+                        return price > 0 ? price : 0;
+                      };
                       
-                      // Calcular taxa de entrega (do pedido ou da API)
+                      // Calcular subtotal somando todos os itens (produto + extras + modificações positivas)
+                      let subtotal = 0;
+                      if (order.items && Array.isArray(order.items)) {
+                        subtotal = order.items.reduce((sum, item) => {
+                          const unitPrice = parseFloat(item.unit_price || item.price || item.product?.price || 0);
+                          const quantity = parseInt(item.quantity || 1, 10);
+                          let itemTotal = unitPrice * quantity;
+                          
+                          // Somar extras
+                          if (item.extras && Array.isArray(item.extras) && item.extras.length > 0) {
+                            item.extras.forEach(extra => {
+                              const ingredientId = extra.ingredient_id || extra.id;
+                              const extraPrice = findIngredientPrice(extra, ingredientId);
+                              const extraQuantity = parseInt(extra.quantity || extra.qty || 1, 10);
+                              if (extraPrice > 0 && extraQuantity > 0) {
+                                itemTotal += extraPrice * extraQuantity;
+                              }
+                            });
+                          }
+                          
+                          // Somar modificações positivas (adições)
+                          if (item.base_modifications && Array.isArray(item.base_modifications)) {
+                            item.base_modifications.forEach(mod => {
+                              const delta = parseFloat(mod.delta || 0);
+                              if (delta > 0) {
+                                const modPrice = findIngredientPrice(mod, mod.ingredient_id);
+                                if (modPrice > 0) {
+                                  itemTotal += modPrice * Math.abs(delta);
+                                }
+                              }
+                            });
+                          }
+                          
+                          // Priorizar item_subtotal da API se for válido
+                          const apiSubtotal = parseFloat(item.item_subtotal || item.subtotal || 0);
+                          if (apiSubtotal > itemTotal) {
+                            itemTotal = apiSubtotal;
+                          }
+                          
+                          return sum + itemTotal;
+                        }, 0);
+                      } else {
+                        // Fallback: tentar usar subtotal do pedido ou calcular
+                        subtotal = parseFloat(order.subtotal || 0);
+                        if (subtotal <= 0) {
+                          const total = parseFloat(order.total_amount || order.total || 0);
+                          const isPickup = order.order_type === 'pickup';
+                          const orderDeliveryFee = order.delivery_fee !== undefined ? order.delivery_fee : 
+                            (order.fees !== undefined ? order.fees : null);
+                          const finalDeliveryFee = isPickup ? 0 : (orderDeliveryFee !== null && orderDeliveryFee !== undefined 
+                            ? parseFloat(orderDeliveryFee) 
+                            : deliveryFee);
+                          const discount = parseFloat(order.discount || 0);
+                          // Estimar subtotal: total + desconto - taxa de entrega
+                          subtotal = total + discount - finalDeliveryFee;
+                        }
+                      }
+                      
+                      // Calcular taxa de entrega
                       const isPickup = order.order_type === 'pickup';
                       const orderDeliveryFee = order.delivery_fee !== undefined ? order.delivery_fee : 
                         (order.fees !== undefined ? order.fees : null);
@@ -628,12 +706,26 @@ export default function Acompanhar({ navigation, route }) {
                         ? parseFloat(orderDeliveryFee) 
                         : deliveryFee);
                       
-                      // Valor para cálculo de pontos: Total - Taxa de entrega
-                      const totalForPoints = total - finalDeliveryFee;
+                      // Calcular desconto aplicado
+                      const total = parseFloat(order.total_amount || order.total || 0);
+                      const discount = parseFloat(order.discount || 0);
                       
-                      // Calcular pontos: valor gasto / valor de cada ponto
+                      // Calcular desconto proporcional ao subtotal (como a API faz)
+                      // Desconto é distribuído proporcionalmente entre subtotal e taxa de entrega
+                      const totalBeforeDiscount = subtotal + finalDeliveryFee;
+                      let baseForPoints = subtotal;
+                      
+                      if (discount > 0 && totalBeforeDiscount > 0) {
+                        // Proporção do subtotal no total
+                        const subtotalRatio = subtotal / totalBeforeDiscount;
+                        // Desconto proporcional aplicado ao subtotal
+                        const discountProportionalSubtotal = discount * subtotalRatio;
+                        baseForPoints = Math.max(0, subtotal - discountProportionalSubtotal);
+                      }
+                      
+                      // Calcular pontos: base para pontos / valor de cada ponto
                       // gain_rate = quanto vale 1 ponto em reais (ex: 0.1 = 10 centavos por ponto)
-                      const pointsEarned = Math.floor(totalForPoints / loyaltyRates.gain_rate);
+                      const pointsEarned = Math.floor(baseForPoints / loyaltyRates.gain_rate);
                       
                       return pointsEarned > 0 ? pointsEarned : '0';
                     })()}
