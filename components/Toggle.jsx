@@ -12,9 +12,16 @@ export default function Toggle({ value, onValueChange, disabled = false }) {
         }).start();
     }, [value]);
 
+    const handlePress = () => {
+        if (!disabled && onValueChange) {
+            // ALTERAÇÃO: Passa o novo valor (oposto do valor atual) para o handler
+            onValueChange(!value);
+        }
+    };
+
     return (
         <TouchableOpacity 
-            onPress={onValueChange}
+            onPress={handlePress}
             disabled={disabled}
             activeOpacity={0.7}
         >

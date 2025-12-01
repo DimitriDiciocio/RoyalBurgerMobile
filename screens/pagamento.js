@@ -130,11 +130,9 @@ export default function Pagamento({ navigation }) {
                                     '0';
                             setPointsAvailable(parseInt(points));
                             
-                            // ALTERAÇÃO: Verifica se o Clube Royal está ativo
-                            // O programa só está ativo se houver uma propriedade explícita is_active = true
-                            // Não considera apenas ter pontos, pois pode ter pontos sem ter ativado o programa
-                            const hasActiveFlag = loyaltyData?.is_active === true || loyaltyData?.active === true;
-                            setIsLoyaltyActive(hasActiveFlag);
+                            // ALTERAÇÃO: Sempre ativar Clube Royal se for customer (comportamento igual ao Web)
+                            // O toggle deve aparecer sempre que o usuário for customer, independente de ter pontos ou flag is_active
+                            setIsLoyaltyActive(true);
                         } catch (error) {
                             // ALTERAÇÃO: Removido console.log em produção - logging condicional apenas em dev
                             const isDev = __DEV__;
@@ -143,6 +141,8 @@ export default function Pagamento({ navigation }) {
                             }
                             points = user.points || '0';
                             setPointsAvailable(parseInt(user.points || '0'));
+                            // ALTERAÇÃO: Mesmo em caso de erro, se for customer, mostrar o toggle
+                            setIsLoyaltyActive(user && user.role === 'customer');
                         } finally {
                             setLoadingPoints(false);
                         }
@@ -413,8 +413,9 @@ export default function Pagamento({ navigation }) {
         }
     };
 
-    const handleTogglePoints = () => {
-        setUsePoints(!usePoints);
+    const handleTogglePoints = (newValue) => {
+        // ALTERAÇÃO: Toggle agora passa o novo valor diretamente
+        setUsePoints(newValue);
     };
 
     const handleReviewOrder = async () => {
